@@ -2,7 +2,7 @@
 
 | Symptom | Read |
 |---|---|
-| `commits …, which the unit tests create`; a test's output file (an index, `.fai`) left in a worktree | `references/repo-mode.md`, *The unit-test gate* (Artifacts) |
+| `commits …, which the unit tests create`; a test's output file (an index, a cache) left in a worktree | `references/repo-mode.md`, *The unit-test gate* (Artifacts) |
 | `CUDA_VISIBLE_DEVICES is unset, so this run holds no GPU lease` | `references/step2-baseline.md`, *GPU leases* |
 | `metrics.json has no numeric value for the gate "…"` | `references/layout.md`, *metrics.json* |
 | `config.json "command" must contain both {seed} and {out}`, `has {…}, which is not a placeholder` | `references/layout.md`, *config.json* |
@@ -54,12 +54,11 @@
 | `over the cap` or `over cap` from the paired timing in `end` or `final` | `references/step4-final.md`, *What it does, in order* |
 | `readme` or `finish`: `notes.md lacks ## Change` / `## Commit message` | a kept iteration writes both: `references/subagent.md`, *The README* |
 | `promote`: `fails the preflight` | `references/promotion.md`, *The preflight* |
-| `config --set after.X=V` refuses: `'after.X' cannot be set here` for a key that is another skill's; a search with no `after` block | `references/layout.md`, *config.json*, `after` row: `config --set` creates the block, never `init --force` for it; another skill's key is set with that skill's own command |
+| `config --set after.X=V` refuses: `'after.X' cannot be set here` for a key this skill does not define; a search with no `after` block | `references/layout.md`, *config.json*, `after` row: `config --set` creates the block, never `init --force` for it; a key this skill does not define is kept as it is |
 | `has uncommitted changes that were never measured` naming a file the build writes (`configure.log`, a stamp) | `after.build_outputs`: `references/step0-interview.md`, *The questions* |
 | `end --reopen`: `the search cannot be reopened` | `references/step4-final.md`, *Reopening* |
 | `the search ended on …: only an iteration made after the end`; `refusing to fork an iteration` after `end` | `references/step4-final.md`, *An iteration made after the end* |
 | A search is running and this session knows nothing about it | `references/resume.md` |
 | `has no git checkout: it was pruned, or made by hand`; the search directory has grown to tens of GB | `references/step5-finish.md`, *Reclaim the disk* |
 | `the harness changed since …`, `the winner relies on the toolchain` | `references/subagent.md`, *Toolchain*; `autoopt.py harness --accept --reason` for a change that is meant |
-| `build_env: config.json has none` in `status` | `references/layout.md`, *config.json*; `autoopt.py config $WORK --set build_env.CC=gcc --reason "..."` |
 | Start the ideas over without re-running the baseline | `references/changes.md`, *Starting the ideas over* |

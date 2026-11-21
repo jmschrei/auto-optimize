@@ -1,7 +1,7 @@
 # Optimizing an algorithm implementation
 
 The search changes how a function computes its answer, not the answer itself:
-a faster sequence scanner, a leaner pileup, a kernel rewritten in numba. When
+a faster parser, a leaner aggregation, a kernel rewritten in numba. When
 the code is in a git repository, set the search up in repository mode first
 (`references/repo-mode.md`). `$AO` and `$WORK` are as in `SKILL.md`.
 
@@ -50,7 +50,7 @@ tracemalloc.stop()
 
 | Measure | Sees | Misses |
 |---|---|---|
-| `tracemalloc` peak | Python and numpy allocations, and arrays numba allocates inside `@njit`, including per-thread scratch in a `prange` (checked: 400 MB in `@njit` traced as 400 MB; eight 100 MB `prange` scratch arrays traced) | memory allocated by C, C++ or Fortran libraries outside Python's allocator |
+| `tracemalloc` peak | Python and numpy allocations, and arrays numba allocates inside `@njit`, including per-thread scratch in a `prange` | memory allocated by C, C++ or Fortran libraries outside Python's allocator |
 | `resource.getrusage(RUSAGE_SELF).ru_maxrss` | everything the process ever held, in kB on Linux | cannot be reset; it includes imports and numba's compiler, so it cannot isolate one call |
 | `torch.cuda.max_memory_allocated()` | GPU tensors, after `torch.cuda.reset_peak_memory_stats()` | the caching allocator's reserve (`max_memory_reserved`) |
 
@@ -127,16 +127,16 @@ observers show what each change did to small, large and irregular inputs. A
 change that wins at the benchmark size and loses 3x on a single-element
 input shows up here and nowhere else.
 
-**Mine the unit tests for the cases**: they hold the inputs the author
+**Mine the unit tests for the cases**: they hold the inputs the package's authors
 worried about. Read `tests/` for fixtures, parametrize lists and regression
 cases, and turn each class into a generated dataset:
 
-| Class | What it covers | Example: motif comparison |
+| Class | What it covers | Example: comparing queries with targets |
 |---|---|---|
-| tiny | the smallest input the API accepts | one motif, one short sequence |
-| much larger | several times the benchmark along each axis that scales: 10x for a linear algorithm, less when the baseline is super-linear | 10x the sequences or the targets |
-| irregular | sizes at both extremes, and mismatched shapes | motif widths 1 and 30+, sequences shorter than the motif |
-| degenerate | inputs that create ties or repeated work | all-identical motifs, one-hot motifs |
+| tiny | the smallest input the API accepts | one query, one short target |
+| much larger | several times the benchmark along each axis that scales: 10x for a linear algorithm, less when the baseline is super-linear | 10x the queries or the targets |
+| irregular | sizes at both extremes, and mismatched shapes | query lengths 1 and 30+, targets shorter than the query |
+| degenerate | inputs that create ties or repeated work | all-identical queries, queries of one repeated symbol |
 
 A class the API rejects (an empty target that raises) is a unit test's job,
 not a timing: leave it out and say so in `spec.md`.
@@ -150,7 +150,7 @@ not a timing: leave it out and say so in `spec.md`.
   `seconds_wide_inputs`) and put the dataset's shape in `spec.md`.
 - Budget it: the suite runs on every run, so its cost multiplies by
   `runs_per_iteration`. Keep the large cases no larger than the question
-  needs, and tell the user the per-run cost at step 0.
+  needs; setup reports the per-run cost at step 2.
 - Put the same identity gate on each dataset's output only if the user
   wants the gate to cover all of them; ask at step 0.
 
@@ -167,15 +167,15 @@ the thread pinning a timing search needs are in `references/repo-mode.md`,
 
 ## What this adds to the interview
 
-Rows for call 4 of `references/step0-interview.md`, *The questions*; record
+Rows for group 4 of `references/step0-interview.md`, *The questions*; record
 "algorithm implementation" on `spec.md`'s *Kind of search* line, which makes
 `setup --done` require the task's checks.
 
-| Call | Question | Options to offer | Default | Fills, in `spec.md` |
+| Group | Question | Options to offer | Default | Fills, in `spec.md` |
 |---|---|---|---|---|
-| 4 | Is the objective time or memory, and which memory measure? | seconds (Recommended); `peak_traced_mb`; `max_rss_mb` | seconds, with memory an observer | Objective, Observers |
-| 4 | At what thread count is the objective timed? | the count users run; 1 | none: always asked, since the code's own default is never taken | Thread counts timed |
-| 4 | Track the synthetic dataset classes above, and gate their outputs too? | the classes proposed from the tests, with their per-run cost (Recommended); fewer; gate them as well | observe, do not gate | Thread counts timed, tracking inputs |
+| 4 | Which memory measure is recorded: as the observer when the objective is time, as the objective when it is memory? | `max_rss_mb`, which any program has (Recommended for compiled code); `peak_traced_mb` (Recommended for Python) | the recommended one for the language | Objective, Observers |
+| 4 | At what thread count is the objective timed? This is also group 2's worker count: ask once | the count users run; 1 | none: always asked, since the code's own default is never taken | Thread counts timed; `init --workers` |
+| 4 | Track the synthetic dataset classes above, and gate their outputs too? | the classes proposed from the tests (Recommended); fewer; gate them as well | observe, do not gate | Thread counts timed, tracking inputs |
 | 4 | Observe a second thread count? | yes, where the code has a parallel path (Recommended); no | yes, where it applies | Observers; Thread counts timed |
 
 The unit-test command and whether the baseline passes it belong to repository

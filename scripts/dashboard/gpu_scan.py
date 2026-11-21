@@ -62,8 +62,8 @@ def _int(x):
 	return None if x is None else int(x)
 
 
-# Seconds one nvidia-smi call may take. Forty calls at once on an 8-GPU host
-# took 13-18 s each; a call cut short publishes no reading at all.
+# Seconds one nvidia-smi call may take. Many calls at once on one host take
+# over ten seconds each; a call cut short publishes no reading at all.
 SMI_TIMEOUT = 30
 
 

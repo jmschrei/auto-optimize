@@ -48,7 +48,7 @@ Show the user the report (what goes, the disk it frees, how many checkouts go). 
 
 Without `--all`, the frontier path, every root, anything running and the 20 most recent (`--keep-recent N`) are protected; with it only a running iteration is spared. Each run keeps `metrics.json`, `log.txt` and `commit`; its artifacts, the iteration's `cache/` and the trees under `check/` go. `--worktrees` also removes the checkouts and carries the record (`meta.json`, `result.json`, `README.md`, `notes.md`, kept run files) out and back, so `status` and the dashboard still show every iteration; `restore --id A7` brings a checkout back. The branch still holds a pruned iteration's code. `prune` touches only `autooptimize/`.
 
-**Saved output arrays are deleted from every settled iteration, protected ones included**: the files ending in `--outputs-ext` (default `.npy,.npz`; add `.h5` or `.bigwig` for a benchmark that saves those), except:
+**Saved output arrays are deleted from every settled iteration, protected ones included**: the files ending in `--outputs-ext` (default `.npy,.npz`; add `.h5` or `.parquet` for a benchmark that saves those), except:
 
 | Kept | Why |
 |---|---|
@@ -58,6 +58,6 @@ Without `--all`, the frontier path, every root, anything running and the 20 most
 
 `--keep-outputs` keeps them all.
 
-Stop the dashboard publisher last, naming the search: `autoopt_monitor.py $WORK/autooptimize --stop`. `$WORK/scratch/` holds anything disposable: remove it, with the user's yes, once the winner is copied out.
+Stop the dashboard publisher last, naming the search: `python3 $AO/dashboard/autoopt_monitor.py $WORK/autooptimize --stop`. `$WORK/scratch/` holds anything disposable: remove it, with the user's yes, once the winner is copied out.
 
 `repo.git/` plus the records reproduce any iteration (`restore --id N`, then `run_iteration.py`); the saved outputs and checkouts that are gone regenerate from them.

@@ -389,8 +389,8 @@ def run_tests(config, iteration, checkout, commit, rerun, parent_commit=None,
 
 
 def measured_commit(run_dir):
-	"""The commit a stored run measured, or None for a run from before this
-	was recorded."""
+	"""The commit a stored run measured, or None when the run directory has
+	no `commit` file."""
 
 	try:
 		with open(os.path.join(run_dir, 'commit')) as infile:
@@ -585,20 +585,7 @@ def commit_worktree(iteration, meta):
 	trust.
 	"""
 
-	# In plain mode the worktree is the iteration directory, so `{cache}`
-	# and a subagent's `probe/` land inside it. A search made before they
-	# joined its exclude list would otherwise commit compiled binaries and
-	# scratch copies on the next edit.
-	# Only a directory git does not already ignore: `git add` refuses an
-	# exclude pathspec that names an ignored one.
-	skip = [':(exclude){}'.format(name) for name, folder in (('cache', True),
-		('probe', True), ('check', True), ('check.json', False),
-		('cold.json', False))
-		if os.path.exists(os.path.join(iteration, name))
-		and subprocess.run(['git', '-C', iteration, 'check-ignore', '-q',
-			name + ('/' if folder else '')], capture_output=True).returncode
-			!= 0] \
-		if os.path.exists(os.path.join(iteration, 'meta.json')) else []
+	skip = []
 	root = os.path.dirname(os.path.dirname(os.path.abspath(os.path.dirname(
 		iteration) if os.path.basename(iteration) == 'src' else iteration)))
 	known = autoopt.test_artifacts(root) if os.path.isdir(os.path.join(root,
@@ -949,11 +936,6 @@ def main(argv=None):
 			'Restore it with:\n\n  python3 {} restore {} --id {}\n'.format(
 				checkout, os.path.join(HERE, 'autoopt.py'), root,
 				meta['id']))
-
-	# The checks' records sit in a plain-mode worktree; a search made before
-	# they joined the exclude list gets them now, before the commit.
-	for name in ('check/', 'check.json', 'cold.json'):
-		autoopt.ensure_excluded(root, config, name)
 
 	meta['commit'] = commit_worktree(checkout, meta)
 	autoopt.write_meta(root, meta['id'], meta)

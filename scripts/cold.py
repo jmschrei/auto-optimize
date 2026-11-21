@@ -13,8 +13,8 @@ The sides alternate order each repetition, so a slow moment does not land on
 one side.
 
 The command prints the first call's seconds as the last number on its last
-line of stdout. A single cold run varied by 3-5 s in one search: take two or
-more repetitions.
+line of stdout. A single cold run is noisy by seconds: take two or more
+repetitions.
 """
 
 import os

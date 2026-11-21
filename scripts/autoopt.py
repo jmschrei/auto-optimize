@@ -153,8 +153,8 @@ if os.environ.get('AUTOOPT_TMPDIR'):
 		pass
 
 # This script's own answers. A script that imports this one adds the answers
-# it reads with `register_after`; a key no table names is another skill's
-# and is kept as it is.
+# it reads with `register_after`; a key no table names is kept as it is (it
+# belongs to whatever extension wrote it).
 AFTER_DEFAULTS = {'stop': 'ask', 'budget_hours': None, 'disk': 'ask',
 	'oldest_toolchain_command': None, 'tests_driver_edit': 'ask',
 	'commit_trailer': None, 'pair_cap_hours': 4, 'setup_questions': 'ask',
@@ -384,9 +384,6 @@ SUBAGENT_MODELS = ('opus', 'sonnet', 'haiku', 'fable')
 # Who promotes in tree mode: the runner, on the default keep rule (auto), or
 # the orchestrator, for a keep rule the user wrote in their own words.
 PROMOTE_MODES = ('auto', 'orchestrator')
-# Config keys 4.x wrote; the search is one iteration at a time on a moving
-# root, so they are dropped on load.
-REMOVED_CONFIG_KEYS = ('mode', 'round_size', 'subagents')
 # Untried ideas below which the next idea-miner stage is called for.
 MIN_UNTRIED = 2
 
@@ -553,8 +550,8 @@ def skill_commit():
 def skill_notice(root, mark=True):
 	"""One line when the skill changed since this search began, or since the
 	change last reported: nothing stops, and the user is told. `mark` records
-	the change as reported. A search begun before commits were recorded takes
-	the current one as its start."""
+	the change as reported. A search whose config.json records no commit
+	takes the current one as its start."""
 
 	path = os.path.join(root, 'skill-seen.json')
 	current = skill_commit() if os.path.isdir(root) else None
@@ -631,10 +628,12 @@ def hold_lease(config, argv=None):
 	"""On a GPU search, make sure this process holds a GPU lease before it
 	runs the benchmark. With `CUDA_VISIBLE_DEVICES` set it returns the
 	devices. Without, it runs this script again under `gpu_command` (the
-	machine's allocator, e.g. `gpu-alloc run -n 1 --`) and exits with that
-	run's code; while the allocator has no GPU free it tries again every
-	minute, for a day at most. It refuses when no `gpu_command` is recorded:
-	unleased, a run sees every GPU and lands on another job's."""
+	words placed before a command: the machine's allocator, e.g. `gpu-alloc
+	run -n 1 --`, or `env CUDA_VISIBLE_DEVICES=<index>` on a machine with
+	none) and exits with that run's code; while the allocator has no GPU
+	free it tries again every minute, for a day at most. It refuses when no
+	`gpu_command` is recorded: unleased, a run sees every GPU and lands on
+	another job's."""
 
 	if not config.get('gpu', True):
 		return None
@@ -655,11 +654,17 @@ def hold_lease(config, argv=None):
 		fail('CUDA_VISIBLE_DEVICES is unset, so this run holds no GPU lease, '
 			'and no `gpu_command` is recorded. Record the command that '
 			'allocates this search\'s GPUs and runs what follows it under the '
-			'lease:\n\n  python3 {} config WORK --set gpu_command="gpu-alloc '
-			'run -n {} --" --reason "<why>"\n\nor start this with '
-			'CUDA_VISIBLE_DEVICES=<the indices you hold>. If the benchmark '
-			'needs no GPU, set "gpu": false.'.format(os.path.join(SCRIPTS,
-			'autoopt.py'), config.get('gpus_per_agent', 1) or 1))
+			'lease:\n\n  python3 {script} config WORK --set '
+			'gpu_command="gpu-alloc run -n {count} --" --reason "<why>"\n\n'
+			'(`gpu-alloc` stands for this machine\'s allocator). On a machine '
+			'with no allocator, record the GPU to use: `gpu_command` is the '
+			'words placed before a command, so this works:\n\n  python3 '
+			'{script} config WORK --set gpu_command="env '
+			'CUDA_VISIBLE_DEVICES=<index>" --reason "<why>"\n\nor start this '
+			'with CUDA_VISIBLE_DEVICES=<the indices you hold>. If the '
+			'benchmark needs no GPU, set "gpu": false.'.format(
+				script=os.path.join(SCRIPTS, 'autoopt.py'),
+				count=config.get('gpus_per_agent', 1) or 1))
 
 	if mark:
 		fail('`gpu_command` ({}) ran this without setting '
@@ -768,12 +773,6 @@ def check_config(config):
 		if not observer.get('name'):
 			fail('every observer needs a "name"')
 
-	if config.get('mode', 'tree') != 'tree':
-		fail('"mode" is "{}": leaf mode was removed in auto-optimize 5.0.0, '
-			'and every search is a tree search. Finish this search with '
-			'auto-optimize-v4.1.0, or delete the "mode" line to continue it '
-			'as a tree search'.format(config['mode']))
-
 	if int(config.get('gpus_per_agent', 1) or 1) < 1:
 		fail('"gpus_per_agent" must be at least 1')
 
@@ -782,9 +781,6 @@ def check_config(config):
 	config.setdefault('runs_per_iteration', 3)
 	config.setdefault('confirm_runs', 10)
 	config.setdefault('staged', True)
-	# Written by 4.x; the loop is one iteration at a time on a moving root.
-	for key in REMOVED_CONFIG_KEYS:
-		config.pop(key, None)
 	config.setdefault('seed_base', 0)
 	config.setdefault('gpus_per_agent', 1)
 	config.setdefault('timeout_seconds', 0)
@@ -863,22 +859,6 @@ def load_state(root):
 		state = read_json(state_path(root))
 	except FileNotFoundError:
 		state = {'root': 0, 'round': 1, 'roots': [{'round': 1, 'id': 0}]}
-
-	# 4.x and 5.0 kept the root, round and history in a `phases` block, and
-	# mirrored them at the top level; the mirror is the state.
-	if len(state.get('phases') or {}) > 1:
-		fail('state.json holds several search trees ({}): they were removed '
-			'in auto-optimize 5.0.0, so a search with more than one has to be '
-			'finished with auto-optimize-v4.1.0'.format(
-				', '.join(sorted(state['phases']))))
-
-	state.pop('phases', None)
-	state.pop('phase', None)
-
-	# 4.x called the loop's counter `stint`.
-	for key in ('loop',):
-		if 'stint' in (state.get(key) or {}):
-			state[key]['phase'] = state[key].pop('stint')
 
 	return state
 
@@ -1639,6 +1619,9 @@ unanswered. Mark an answer the user did not give yourself as
 - Thread counts timed, tracking inputs: TODO (or "none")
 - Plan: {runs} runs per iteration{confirm}; one iteration at a time on
   {devices}
+- Machine and environment: TODO (whose machine this is and what else runs
+  on it; the CPU cores and memory the search may use; the environment or
+  command that runs the code, and whether packages may be installed into it)
 - Width measured: TODO (step 2, before the baseline: for a CPU benchmark,
   the concurrency table and the width it supports; for a GPU benchmark,
   "one run per GPU")
@@ -1914,27 +1897,6 @@ def idea_counts(root):
 		sum(1 for line in lines if TRIED_LINE.match(line)))
 
 
-def ensure_excluded(root, config, name):
-	"""Add `name` to a plain-mode search's shared exclude list if a search
-	made before it was listed lacks it. Repository mode keeps records
-	outside the worktree, so it needs nothing."""
-
-	if config.get('repo'):
-		return
-
-	path = os.path.join(root, 'repo.git', 'info', 'exclude')
-
-	try:
-		with open(path) as infile:
-			lines = infile.read().splitlines()
-	except OSError:
-		return
-
-	if name not in lines:
-		with open(path, 'a') as out:
-			out.write(name + '\n')
-
-
 def write_spec_template(root, config):
 	path = spec_path(root)
 
@@ -2192,8 +2154,6 @@ def new(args):
 		if after_end:
 			meta['after_end'] = True
 		write_meta(root, identifier, meta)
-
-	ensure_excluded(root, config, 'notes.md')
 
 	# The directory and nothing else, on either stream: callers take it with
 	# `DIR=$(autoopt.py new ...)` or read the last line of the output. The
@@ -2907,8 +2867,8 @@ def setup_prompt(root, config, state, continuing=None):
 		'## Rules from `{}`, quoted verbatim'.format(spec_path(root)), '']
 
 	for field in ('Gates', 'Keep rule', 'Plan', 'Thread counts timed, '
-			'tracking inputs', 'External validation', 'Off limits',
-			'Portability'):
+			'tracking inputs', 'Machine and environment',
+			'External validation', 'Off limits', 'Portability'):
 		lines.append('- {}: {}'.format(field, spec_field(spec, field)
 			or '(none written)'))
 
@@ -5805,8 +5765,8 @@ def promote(args):
 				iteration_dir(root, args.id)))
 
 	# The runner runs the task's compare on every iteration whose runs pass
-	# their gates; one that never ran it (made before the checks existed) has not
-	# shown its outputs agree on the inputs the benchmark never times.
+	# their gates; one with no passing compare on record has not shown its
+	# outputs agree on the inputs the benchmark never times.
 	if ((load_config(root).get('checks') or {}).get('compare')
 			and ((result.get('check') or {}).get('compare') or {}).get(
 				'verdict') != 'pass'):
@@ -6680,12 +6640,6 @@ def status(args):
 				('the idea miner\'s S1', bool((state.get('mining') or {}).get(
 					'done')))) if not ready)))
 
-	if 'build_env' not in config:
-		print('build_env: config.json has none (a search from before the '
-			'scrub), so no CC or CFLAGS reaches a run. If a build needs one: '
-			'`autoopt.py config {} --set build_env.CC=gcc --reason "..."`'
-			.format(os.path.dirname(root)))
-
 	if hasattr(os, 'getloadavg'):
 		load, cores = os.getloadavg()[0], os.cpu_count() or 1
 		print('machine: load {:.1f} on {} cores, {:.0f}% busy, this search\'s '
@@ -7213,7 +7167,6 @@ def readme(args):
 			fail('{} already exists; edit it, then run `autoopt.py readme` '
 				'without --template'.format(notes))
 		result = load_result(root, identifier) or {}
-		ensure_excluded(root, config, 'notes.md')
 		with open(notes, 'w') as out:
 			out.write(NOTES_TEMPLATE)
 		print(notes)
@@ -9551,8 +9504,7 @@ def agent_role(description):
 	"""An agent's role in a search, from its Agent-call description."""
 
 	text = (description or '').strip()
-	# 4.x transcripts name the same role `Orchestrator: stint N`.
-	if text.startswith(('Orchestrator: phase', 'Orchestrator: stint')):
+	if text.startswith('Orchestrator: phase'):
 		return 'phases'
 	if text.lower().startswith('setup subagent'):
 		return 'setup'
@@ -10235,9 +10187,10 @@ def build_parser():
 		'many threads running at once, or setup does not close')
 	one.add_argument('--gpu-command', help='the machine\'s GPU allocator, as '
 		'the words that go before a command and run it under a lease with '
-		'CUDA_VISIBLE_DEVICES set (e.g. "gpu-alloc run -n 1 --"): `end`, '
-		'`final` and anything run on this search afterwards start under it '
-		'when they hold no lease')
+		'CUDA_VISIBLE_DEVICES set (e.g. "gpu-alloc run -n 1 --", where '
+		'gpu-alloc stands for the allocator; on a machine with none, "env '
+		'CUDA_VISIBLE_DEVICES=<index>"): `end`, `final` and anything run on '
+		'this search afterwards start under it when they hold no lease')
 	one.add_argument('--validation-command', help='optional external '
 		'validation, run once a round against the root; must contain '
 		'{iteration} and {out}, and {src} is the iteration\'s code checkout. '

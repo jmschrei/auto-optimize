@@ -327,25 +327,13 @@ def main():
 
 	search = tr.make_search(os.path.join(base, 'template-search'), staged=False)
 
-	# A search from before the scrub has no build_env: status says so, and
-	# `config --set build_env.CC=` is the way to give it one.
 	config_path = os.path.join(search, 'config.json')
-	data = json.load(open(config_path))
-	data.pop('build_env', None)
-	json.dump(data, open(config_path, 'w'))
-	status = subprocess.run([sys.executable, tr.AUTOOPT, 'status', search],
-		capture_output=True, text=True).stdout
-	suite.check('status warns when config.json has no build_env',
-		'build_env: config.json has none' in status, status[-300:])
 	done = subprocess.run([sys.executable, tr.AUTOOPT, 'config', search,
 		'--set', 'build_env.CC=gcc', '--reason', 'test'], capture_output=True,
 		text=True)
-	status = subprocess.run([sys.executable, tr.AUTOOPT, 'status', search],
-		capture_output=True, text=True).stdout
-	suite.check('config --set build_env.CC= records it and the warning goes',
+	suite.check('config --set build_env.CC= records it',
 		done.returncode == 0 and json.load(open(config_path))['build_env']
-		== {'CC': 'gcc'} and 'build_env: config.json' not in status,
-		done.stderr + status[-200:])
+		.get('CC') == 'gcc', done.stderr)
 	done = subprocess.run([sys.executable, tr.AUTOOPT, 'config', search,
 		'--set', 'build_env.NOPE=1', '--reason', 'test'], capture_output=True,
 		text=True)

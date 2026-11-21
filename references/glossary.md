@@ -28,7 +28,7 @@ two words that look interchangeable are not.
 | **subagent** | runs one iteration by `references/subagent.md`, writes its README and stops |
 | **brief** | everything a subagent knows about its iteration, written by `autoopt.py brief` into `briefs/<id>.md`; the Agent call carries only a short prompt that has the subagent read it (`references/writing-briefs.md`) |
 | **lease** | the GPUs one command holds while it runs, named by `CUDA_VISIBLE_DEVICES`: taken by the scripts themselves through `gpu_command`, the machine's allocator, or given as indices where there is none (`references/step2-baseline.md`, *GPU leases*) |
-| **`gpu_command`** | the machine's GPU allocator, as the words that go before a command and run it with `CUDA_VISIBLE_DEVICES` set (`gpu-alloc run -n 1 --`); see **lease** |
+| **`gpu_command`** | the machine's GPU allocator, as the words that go before a command and run it with `CUDA_VISIBLE_DEVICES` set (`srun --gres=gpu:1`); see **lease** |
 | **`workers`** | the worker, rank or thread count the task names; A0's runs must show that many threads running at once (`references/step2-baseline.md`, *The price of the base*) |
 | **floor** | a minimized objective's smallest value worth measuring (`config.json` `floor`, the user's at step 0): at it the search stops (`references/step3-rounds.md`, *When to stop*) |
 | **price of the base** | what each later step that runs the base costs, from A0's seconds a run (`autoopt.py price`; `references/step2-baseline.md`, *The price of the base*) |
@@ -38,7 +38,7 @@ two words that look interchangeable are not.
 
 | Term | Meaning |
 |---|---|
-| `<work>`, `$WORK` | the search's directory, chosen at step 0 (default offered: `~/auto-optimization/<YYYY-MM-DD>-<name>/`). Holds `autooptimize/` and later work on the search (`references/layout.md`, *The search directory*) |
+| `<work>`, `$WORK` | the search's directory, chosen at step 0 (default offered: `~/auto-optimize/<YYYY-MM-DD>-<name>/`). Holds `autooptimize/` and later work on the search (`references/layout.md`, *The search directory*) |
 | `$AO` | this skill's `scripts/` directory |
 | `autooptimize/` | the search's record: `config.json`, `spec.md`, `state.json`, `ideas.md`, `knowledge.md`, `tools/`, `briefs/`, `setup/`, `reference/`, `repo.git/`, `iterations/`, `rounds/` (`references/layout.md`). `autoopt.py` accepts `<work>` or this directory |
 | `$DIR` | one iteration's directory, `autooptimize/iterations/<id>/`, which `autoopt.py new` prints |
@@ -67,7 +67,7 @@ two words that look interchangeable are not.
 | **objective** | the one number per run being improved, with a direction (`max` or `min`) |
 | **gate** | a hard constraint checked on every run; one violating run fails the iteration. `{"name", "op", "threshold", "tol"}` |
 | **observer** | a number recorded on every run, never optimized and never gated |
-| **tracking measure** | an observer that is the objective on other inputs (`seconds_tiny`, the metric on a second split) |
+| **tracking measure** | an observer that is the objective on other inputs (`seconds_tiny`, the seconds on a second input) |
 | **external validation** | a check on inputs the search never measures, run once a round, or by a subagent on its own iteration when a brief asks. Chooses nothing; runs only after the user signs off (`references/external-validation.md`) |
 | **unit-test gate** | the package's tests, run once per iteration after its first run passes its gates. A failure is `gate-failed`. With `{selected}`, the runner runs a **subset**, the files for the changed modules, and then the full suite when the median passes the keep rule; `promote` refuses a subset-only pass |
 | **noise band** | the wider of the reference spread (the standard deviation across the root's runs, re-measured each time a phase opens; A0's before the first) and this iteration's: the margin the default keep rule asks a median to beat its parent's by |

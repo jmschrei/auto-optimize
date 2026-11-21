@@ -2,8 +2,7 @@
 
 Subagents start cold: unless the search keeps what each learned, every
 iteration re-reads the same code, re-measures the same premises and rewrites
-the same helpers. In one 15-iteration search, 14 rebuilt the same alternate
-build by hand and 10 wrote their own side-by-side checker.
+the same helpers: the same alternate build, the same side-by-side checker.
 
 `init` starts three shared files under `autooptimize/`, outside every
 worktree. None of them is the harness, and none changes a measurement.

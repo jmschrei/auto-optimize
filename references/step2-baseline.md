@@ -225,12 +225,12 @@ have the benchmark and every probe load that:
 ```python
 # once, before the baseline: AUTOOPT_REF=$WORK/autooptimize/reference python3 parse_once.py
 import os, numpy
-motifs = parse_input_file('inputs.meme')                  # the slow parser
-numpy.savez(os.path.join(os.environ['AUTOOPT_REF'], 'inputs.npz'), *motifs)
+arrays = parse_input_file('inputs.txt')                   # the slow parser
+numpy.savez(os.path.join(os.environ['AUTOOPT_REF'], 'inputs.npz'), *arrays)
 
 # in bench.py and in every probe
 with numpy.load(os.path.join(os.environ['AUTOOPT_REF'], 'inputs.npz')) as data:
-	motifs = [data['arr_{}'.format(i)] for i in range(len(data.files))]
+	arrays = [data['arr_{}'.format(i)] for i in range(len(data.files))]
 ```
 
 Check the loaded arrays are byte-identical to what the parser returns
@@ -407,7 +407,7 @@ writes checks only for paths they cannot reach:
 | `time_one.py` | `{src}` | imports from the tree, warms up at full size, times one benchmark call, prints the seconds last; what `autoopt.py final` pairs, A0 against the winner (`references/measuring.md`, *Paired separate processes: `paired.py`*) | 0, or non-zero on a wrong output |
 | `first_call.py` | `{src}` | compiled code only: one small call, which the runner times with `cold.py` on empty caches before each iteration's runs | 0 |
 | `checks.build` | `{src}` | compiled code only: a command (not a file under `checks/`) that builds that exported tree in place exactly as the harness builds a worktree, the same compiler, flags and toolchain; what `variant` builds a subagent's copies with and what a checker's `{parent}` and `{child}` are built with | 0 |
-| `profile.py` | `{src}`, `{out}` (a scratch directory) | prints where one benchmark call spends its time on that tree: one line per function or stage, `<share of the call>  <file>:<function>`, largest first, at most 60 lines. Python: cProfile's cumulative time over the call's total; compiled code: a sampler (where perf is blocked, an `LD_PRELOAD` `SIGPROF` sampler); numba: wrap a dispatcher to time it only after the warm-up call, since a jitted caller compiled later sees the wrapper, a Python object, and fails to type, which breaks the profile on every new jitted helper. What `promote` runs on each new root, so the miner's *Gain* and each brief's premise come from the root being changed, not from A0 | 0 |
+| `profile.py` | `{src}`, `{out}` (a scratch directory) | prints where one benchmark call spends its time on that tree: one line per function or stage, `<share of the call>  <file>:<function>`, largest first, at most 60 lines. Python: cProfile's cumulative time over the call's total; compiled code: a sampling profiler (`perf`, or one that needs no privileges where `perf` is blocked); numba: wrap a dispatcher to time it only after the warm-up call, since a jitted caller compiled later sees the wrapper, a Python object, and fails to type, which breaks the profile on every new jitted helper. What `promote` runs on each new root, so the miner's *Gain* and each brief's premise come from the root being changed, not from A0 | 0 |
 
 The public functions are the second group because the benchmark calls one
 entry point: a change to a shared helper can keep its output identical and
@@ -522,7 +522,8 @@ halve each one's `gpus_per_agent`.
 
 ## Check the machine is quiet
 
-On a CPU benchmark, before A0 runs: `python3 $AO/autoopt.py busy $WORK`
+Size every thread and worker count inside what `spec.md`'s *Machine and
+environment* line allows. On a CPU benchmark, before A0 runs: `python3 $AO/autoopt.py busy $WORK`
 samples every process for two seconds and names each one outside this search
 above about 100% CPU, with its user, its share and its command (exit 1 when
 there is one). A busy machine is the user's decision (*Decisions that are the
@@ -560,22 +561,25 @@ pool. `pcpu` well above 100 is a run using more of the machine than planned.
 
 ## GPU leases
 
-Two iterations never hold the same GPU, and nobody picks a device from
-`nvidia-smi`. Which of two rules applies is read from `config.json`:
+Two iterations never hold the same GPU, and no subagent picks a device from
+`nvidia-smi` for itself. Which of two rules applies is read from `config.json`:
 
 | `gpu_command` | The scripts | Everything else that runs the code |
 |---|---|---|
-| recorded (`init --gpu-command`, `config --set gpu_command=...`): the machine's allocator, as the words before a command (`gpu-alloc run -n 1 --`) | run them bare. `run_iteration.py`, `check_seeding.py`, `prove`, `end` and `final` start themselves again under it when `CUDA_VISIBLE_DEVICES` is unset, and wait while no GPU is free (a try a minute, a day at most) | put the allocator's words before it: `paired.py`, `cold.py`, `width`, `check`, `validate`, a probe |
+| recorded (`init --gpu-command`, `config --set gpu_command=...`): the machine's allocator, as the words before a command (`srun --gres=gpu:1`) | run them bare. `run_iteration.py`, `check_seeding.py`, `prove`, `end` and `final` start themselves again under it when `CUDA_VISIBLE_DEVICES` is unset, and wait while no GPU is free (a try a minute, a day at most) | put the allocator's words before it: `paired.py`, `cold.py`, `width`, `check`, `validate`, a probe |
 | none: a machine with no allocator | prefix each with `CUDA_VISIBLE_DEVICES=<indices>`: the orchestrator reads `nvidia-smi` once, gives each brief its own indices (`brief --gpus`) and reuses one only after that iteration settles; the setup subagent takes free cards, since nothing else in the search holds a GPU before the first iteration | the same prefix |
 
 `gpus_per_agent` = 1 is one card, seeds one after another; with 4, the lease
-is four cards (`CUDA_VISIBLE_DEVICES=2,3,4,5`, or `-n 4` in `gpu_command`) and
+is four cards (`CUDA_VISIBLE_DEVICES=2,3,4,5`, or four in `gpu_command`) and
 four seeds run at once. The runner pins each run to one index and says so
 when fewer were given than `gpus_per_agent`.
 
 In repository mode `setup --done` refuses a GPU search with no `gpu_command`:
 `end` takes its lease through it, and so does anything run on the search
-afterwards. `error: CUDA_VISIBLE_DEVICES is unset, so this run holds no
+afterwards. On a machine with no allocator that the user has to themselves,
+record `env CUDA_VISIBLE_DEVICES=<index>` with the index they named: it sets
+the variable for the command after it, which is all the scripts ask of an
+allocator. `error: CUDA_VISIBLE_DEVICES is unset, so this run holds no
 GPU lease` means neither rule was met; an allocator that does not set
 `CUDA_VISIBLE_DEVICES` for the command after it is refused. A benchmark that
 needs no GPU is initialized with `init --no-gpu`, which lifts the check.
@@ -614,8 +618,8 @@ repository mode, a re-measurement of the base outside the search. A line of an h
 timing is marked when `end` would refuse it under `after.pair_cap_hours` (4).
 
 With `floor` set (step 0), the table also says how many times A0 is above
-it, marked under 20: searches have gained 10x to 70x, and one that reaches the
-floor stops there with nothing left to resolve.
+it, marked under 20: a search can gain more than tenfold, and one that reaches
+the floor stops there with nothing left to resolve.
 
 With a marked line, ask the user before step 2 closes (`setup --ask`), with
 the table: a smaller input for the timing probe (`checks.time`), the cap
@@ -671,19 +675,19 @@ nothing more:
 The reference gate and the parse-once load are the snippets above.
 
 ```python
-count_kmers(reads)                               # warmup on the full input
+count_words(lines)                               # warmup on the full input
 start = time.perf_counter()
-counts = count_kmers(reads)                      # the one timed call
+counts = count_words(lines)                      # the one timed call
 seconds = time.perf_counter() - start
 
-times = []                                       # latency gate: one read is too short to time alone
+times = []                                       # latency gate: one line is too short to time alone
 for i in range(200):
 	start = time.perf_counter()
-	count_kmers(reads[i:i + 1])
+	count_words(lines[i:i + 1])
 	times.append((time.perf_counter() - start) * 1000)
 
 json.dump({'objective': seconds,
-	'gates': {'single_read_ms': float(numpy.median(times)), 'n_mismatch_vs_base': n_mismatch},
+	'gates': {'single_line_ms': float(numpy.median(times)), 'n_mismatch_vs_base': n_mismatch},
 	'observers': {'peak_rss_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024}},
 	open(os.path.join(args.out, 'metrics.json'), 'w'))
 ```

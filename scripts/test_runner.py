@@ -465,7 +465,7 @@ def task_checks(suite, base):
 		out = call([RUNNER, directory], expect=expect)
 		return autoopt.load_result(search, identifier), out
 
-	# An iteration from before the checks existed has none to show.
+	# An iteration run while no check is configured has none to show.
 	before, _ = iteration(1, 0.60)
 	out = call([AUTOOPT, 'config', search, '--set',
 		'checks.compare=python3 {} {{src}} {{reference}} {{nope}}'.format(cmp),
@@ -1557,7 +1557,8 @@ def spec_gate(suite, base):
 		flagged and all(line.lstrip('- ').split(':')[0] in ('Asked on',
 			'Kind of search', 'New unit tests', 'Gates', 'Gate proof',
 			'Keep rule', 'Thread counts timed, tracking inputs',
-			'Width measured', 'Benchmark', 'External validation', 'Off limits',
+			'Machine and environment', 'Width measured', 'Benchmark',
+			'External validation', 'Off limits',
 			'Portability', 'TODO')
 			for line in flagged), flagged)
 
@@ -1807,28 +1808,10 @@ def plain_excludes(suite, base):
 		and not os.path.exists(os.path.join(directory, '.git')),
 		os.listdir(directory))
 
-	# The worktree is the iteration directory, so cache/ sits inside it. A search made before cache/ joined the exclude list
-	# must not commit it either.
 	plain = make_search(os.path.join(base, 'plain-cache'))
-	first = add(plain, 1, 0.55)
-	directory = autoopt.iteration_dir(plain, 1)
 	exclude = os.path.join(plain, 'repo.git', 'info', 'exclude')
 	suite.check('a new plain-mode search excludes cache/',
 		'cache/' in open(exclude).read().split(), '')
-	with open(exclude) as infile:
-		kept = [line for line in infile if line.strip() != 'cache/']
-	with open(exclude, 'w') as out:
-		out.writelines(kept)
-	with open(os.path.join(directory, 'cache', first['commit'][:12],
-		'kernel.nbc'), 'w') as out:
-		out.write('compiled')
-	bench(directory, 0.56)
-	call([RUNNER, directory, '--rerun'])
-	tree = git('-C', os.path.join(plain, 'repo.git'), 'ls-tree', '-r',
-		'--name-only', 'autoopt/1').split()
-	suite.check('and one made before that commits no cache either',
-		not any(name.startswith('cache/') for name in tree)
-		and 'bench.py' in tree, tree)
 
 
 DEVICE_BENCH = """\
@@ -2293,67 +2276,10 @@ def abandoned_ids(suite, base):
 		and not os.path.exists(directory), out[-300:])
 
 
-def removed_options(suite, base):
-	"""What 5.0.0 removed: leaf mode and the width. Their flags and
-	commands are refused, and a 4.x search's config.json still loads."""
+def off_root_promote(suite, base):
+	"""`promote` takes only an iteration that descends from the root."""
 
-	search = make_search(os.path.join(base, 'removed'))
-	config = autoopt.load_config(search)
-	suite.check('init writes no mode, round_size or subagents',
-		not any(key in json.load(open(os.path.join(search, 'config.json')))
-			for key in autoopt.REMOVED_CONFIG_KEYS), config)
-	for flag in ('--mode', '--round-size', '--subagents'):
-		out = call([AUTOOPT, 'init', os.path.join(base, 'removed-init'),
-			'--task', 'test', '--command', 'true', '--objective', 'score',
-			'--direction', 'max', flag, 'tree'], expect=(2,))
-		suite.check('init refuses {}'.format(flag), 'unrecognized arguments'
-			in out, out[-200:])
-	for command in ('leftovers', 'next-round'):
-		out = call([AUTOOPT, command, search], expect=(2,))
-		suite.check('{} is no longer a command'.format(command),
-			'invalid choice' in out, out[-200:])
-
-	path = os.path.join(search, 'config.json')
-	saved = open(path).read()
-	raw = json.loads(saved)
-	raw.update(mode='tree', round_size=20, subagents=4)
-	with open(path, 'w') as out:
-		json.dump(raw, out)
-	config = autoopt.load_config(search)
-	suite.check('a 4.x tree config loads, its removed keys dropped',
-		not any(key in config for key in autoopt.REMOVED_CONFIG_KEYS), config)
-	raw['mode'] = 'leaf'
-	with open(path, 'w') as out:
-		json.dump(raw, out)
-	out = call([AUTOOPT, 'status', search], expect=(1,))
-	suite.check('a leaf config is refused, naming the release that has it',
-		'leaf mode was removed' in out and 'auto-optimize-v4.1.0' in out,
-		out[-300:])
-	with open(path, 'w') as out:
-		out.write(saved)
-
-	state_file = os.path.join(search, 'state.json')
-	saved_state = open(state_file).read() if os.path.exists(state_file) \
-		else None
-	raw = {'root': 0, 'round': 1, 'roots': [{'round': 1, 'id': 0}],
-		'phase': 'B', 'phases': {'A': {'name': 'A'}, 'B': {'name': 'B'}}}
-	with open(state_file, 'w') as out:
-		json.dump(raw, out)
-	out = call([AUTOOPT, 'status', search], expect=(1,))
-	suite.check('a state with two search trees is refused, naming the '
-		'release that has them', 'several search trees' in out
-		and 'auto-optimize-v4.1.0' in out, out[-300:])
-	raw['phases'].pop('B')
-	raw['phase'] = 'A'
-	with open(state_file, 'w') as out:
-		json.dump(raw, out)
-	suite.check('a state with one is read, its phase keys dropped',
-		not {'phase', 'phases'} & set(autoopt.load_state(search)), raw)
-	if saved_state is None:
-		os.remove(state_file)
-	else:
-		with open(state_file, 'w') as out:
-			out.write(saved_state)
+	search = make_search(os.path.join(base, 'off-root'))
 
 	add(search, 1, 0.60)
 	call([AUTOOPT, 'promote', search, '--id', '1'])
@@ -2364,8 +2290,7 @@ def removed_options(suite, base):
 	out = call([AUTOOPT, 'promote', search, '--id', '2'], expect=(1,))
 	suite.check('promote refuses an iteration that does not descend from the '
 		'root and says to fork from the current root',
-		'Fork from the current root' in out and 'merge' not in out,
-		out[-300:])
+		'Fork from the current root' in out, out[-300:])
 
 
 def suite_squashed(suite, base):
@@ -2656,11 +2581,6 @@ def reporting(suite, base):
 		'--reason', 'r'], expect=(1,))
 	suite.check('a value check_config rejects leaves config.json alone',
 		autoopt.load_config(search)['gpus_per_agent'] == 1, out[-200:])
-	for key in ('mode=tree', 'subagents=2', 'round_size=5'):
-		out = call([AUTOOPT, 'config', search, '--set', key, '--reason', 'r'],
-			expect=(1,))
-		suite.check('{} was removed in 5.0.0 and is refused'.format(key),
-			'cannot be set here' in out, out[-300:])
 	out = call([AUTOOPT, 'config', search, '--set', 'gpus_per_agent=2',
 		'--set', 'gates.cost.threshold=1.5', '--add-observer', 'rss',
 		'--reason', 'the user asked for two GPUs'])
@@ -4309,10 +4229,6 @@ def main(argv=None):
 		results = autoopt.all_results(multi)
 		suite.equal('the frontier is seeded by the baseline',
 			autoopt.search_frontier(multi, results, 'max')[1], 2)
-		suite.check('new records carry no phase key and state.json none',
-			all('phase' not in autoopt.load_result(multi, i) for i in (1, 2))
-			and not {'phase', 'phases'} & set(json.load(open(os.path.join(
-				multi, 'state.json')))), 'phase in a record or the state')
 
 		named = make_search(os.path.join(base, 'labels'))
 		add(named, 1, 0.60)
@@ -4337,10 +4253,6 @@ def main(argv=None):
 			'--title', 'x', '--category', 'MISC'])
 		suite.equal('new takes labels for --id and --parent',
 			autoopt.load_meta(named, 9)['parent'], 3)
-		out = call([AUTOOPT, 'new', named, '--id', 'A10', '--merges', 'A1',
-			'--title', 'x', '--category', 'MISC'], expect=(2,))
-		suite.check('--merges is no longer a flag', 'unrecognized arguments'
-			in out, out[-200:])
 		out = call([AUTOOPT, 'path', named, '--id', 'A3'])
 		suite.check('path prints labels', 'A0 -> A2 -> A3' in out,
 			out.splitlines()[0])
@@ -4697,8 +4609,8 @@ def main(argv=None):
 		print('\ncontrols')
 		leftover_controls(suite, base)
 
-		print('\nremoved options')
-		removed_options(suite, base)
+		print('\npromoting off the root')
+		off_root_promote(suite, base)
 
 		print('\nthe unit-test suite is one commit')
 		suite_squashed(suite, base)

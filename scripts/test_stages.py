@@ -34,7 +34,7 @@ def status(work):
 
 
 def handoffs(suite):
-	"""Each point where the session used to remember the next command."""
+	"""Each point where the next command is handed to the session."""
 
 	work = tempfile.mkdtemp(prefix='stages-handoffs-')
 	root = os.path.join(work, 'autooptimize')
@@ -159,7 +159,7 @@ def main():
 	suite.check('the final row reads the medians', 'A0 2.5 -> 1' in
 		rows['final'][1], rows['final'])
 
-	suite.equal('five stages, and none of another skill', [name for name, _,
+	suite.equal('five stages, and no others', [name for name, _,
 		_, _ in stages.collect(work)], ['interview', 'setup', 'search', 'final',
 		'finish'])
 	name, kind, text = stages.next_action(work, stages.collect(work))

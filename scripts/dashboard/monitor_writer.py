@@ -189,25 +189,22 @@ def install_assets(out_dir):
 				'render and the page will say so')
 
 
-# Payloads now live beside the run they describe, so there is no single
+# Payloads live beside the run they describe, so there is no single
 # directory to list to find them. One small file per live writer, here, keeps
 # discovery a directory listing. It is read by Python only and never served to
 # the browser, so a hidden path is safe for it.
 INDEX = '~/.cache/autoopt-monitor'
 
 
-def index_path(out_dir, legacy=False):
+def index_path(out_dir):
 	"""The index entry naming `out_dir`, one file per payload directory.
 
 	The readable slug alone collides (`/a/b-c` and `/a-b/c`), so a hash of
-	the whole path follows it. `legacy` is the name before the hash, which
-	`forget` also removes."""
+	the whole path follows it."""
 
 	path = os.path.abspath(os.path.expanduser(out_dir))
 	slug = re.sub(r'[^A-Za-z0-9._-]+', '-', path.strip(os.sep)).strip('-')
-
-	if not legacy:
-		slug += '-' + hashlib.sha1(path.encode()).hexdigest()[:8]
+	slug += '-' + hashlib.sha1(path.encode()).hexdigest()[:8]
 
 	return os.path.join(os.path.expanduser(INDEX), slug + '.writer')
 
@@ -234,11 +231,10 @@ def index_entries():
 def forget(out_dir):
 	"""Drop the index entry for `out_dir`, if any."""
 
-	for legacy in (False, True):
-		try:
-			os.unlink(index_path(out_dir, legacy))
-		except OSError:
-			pass
+	try:
+		os.unlink(index_path(out_dir))
+	except OSError:
+		pass
 
 
 def read_heartbeat(out_dir):
@@ -538,7 +534,7 @@ def writer_info(out_dir):
 
 	The run is part of the answer: a live writer watching a different run is
 	the one case that silently shows the wrong numbers under the right name.
-	A writer that predates the code stamp reports none, which reads as stale.
+	A pidfile with no code stamp reports none, which reads as stale.
 
 	The PID must still be a writer: its command line names
 	`monitor_writer.py` and its start time matches the one recorded, where

@@ -30,8 +30,7 @@ fills:
 A flag given beside `--next` replaces what it would fill (with `--count 1`,
 since it applies to every brief written); `--note`, `--checks`, `--gpus`,
 `--validate` and `--predict` pass through. `--count 0` prints the status and
-the new summaries and briefs nothing. On a search that predates the record
-of summaries shown, the first call marks every existing summary as shown. Add a `--note` for what the records
+the new summaries and briefs nothing. Add a `--note` for what the records
 do not hold, such as a premise a report corrected.
 
 ## Every flag
@@ -63,7 +62,7 @@ subagent that takes the iteration over.
 | the parent's `result.json` | how long its runner call took, and whether the subagent runs the runner in the foreground or the background |
 | `config.json` and `status` | the objective and its direction, where the search stands (the root and its median, the keep rule's reference, and any better median outside the root's path), every gate with its threshold, the observers, the runs per iteration, the unit-test command, the GPUs (for every command that runs the code) or "needs no GPU" |
 | `spec.md`, verbatim | the keep rule, the off-limits line, the thread counts timed, the portability line, every rule under *Rules added during the search*, and the path of `spec.md` itself |
-| the mode and the code | a *Checks* section: what the runner runs, when the search has the task's checks, and the checks the subagent owes (`references/subagent.md`, *Your own checks*); with `promote: auto`, a *Promotion* section; the repository-mode limits; a numba note when the parent's branch imports numba |
+| the mode and the code | a *Checks* section: what the runner runs, when the search has the task's checks, and the checks the subagent owes (`references/subagent.md`, *Checks beyond the runner*); with `promote: auto`, a *Promotion* section; the repository-mode limits; a numba note when the parent's branch imports numba |
 | `config.json`'s `subagent_model` | not in the prompt: a stderr line naming the Agent call's description and model |
 
 It makes `new`'s checks before writing anything (the parent exists and is

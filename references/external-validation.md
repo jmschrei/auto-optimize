@@ -72,7 +72,7 @@ is shown bare.
 ```bash
 python3 $AO/autoopt.py validate $WORK --round 3              # promote: orchestrator; with auto the runner runs it
 python3 $AO/autoopt.py validate $WORK --dry-run              # print the command
-python3 $AO/autoopt.py validate $WORK --id B57 --out $DIR/validation   # a subagent, on its own iteration
+python3 $AO/autoopt.py validate $WORK --id A57 --out $DIR/validation   # a subagent, on its own iteration
 ```
 
 | Flag | Meaning |

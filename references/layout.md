@@ -28,15 +28,11 @@ Rules:
   names do not appear in `$WORK`).
 - **`autooptimize/` is the search's own record** and is not reorganized:
   its contents are already uniform and it holds the git worktrees.
-- **Other tools write in folders of their own.** The license terms of the
-  search's inputs (`TERMS.md`, `terms_raw/`) go in `interview/`. A tool that
-  takes the ended search further keeps its files in a folder of its own
-  under `$WORK`; no search command reads it.
+- **A folder no step lists is left alone.** No search command reads, moves
+  or prunes a folder under `$WORK` that is not in the tree above.
 - **Disposable means `scratch/`.** `prune` touches only `autooptimize/`;
   `scratch/` is what step 5 removes with the user's yes, and nothing there is
   referenced by a record.
-- A search made under an earlier layout is not moved by any command; its
-  folders are named in the old places, and the scripts look only in the new.
 
 ## The `autooptimize/` tree
 
@@ -158,10 +154,6 @@ into each `meta.json` as `mining_stage`.
 `roots` each promotion in order. `band` is the noise band's reference: the
 sample standard deviation of the runs of the root as it stood when the last
 phase opened (`loop`); before the first phase the baseline's spread is used.
-`state.json` files written by 4.x hold a top-level `phase` key and a `phases`
-block (the search trees 5.0 removed) and a `loop` counter named `stint`: they
-are read with the first two dropped and the counter renamed `phase`, and a file
-with more than one entry in `phases` is refused.
 
 ## config.json
 
@@ -169,7 +161,7 @@ Written by `autoopt.py init`, changed mid-search by `autoopt.py config`.
 
 ```json
 {
-	"task": "Make the k-mer counter faster without changing its counts.",
+	"task": "Make the word counter faster without changing its counts.",
 	"command": "python3 bench.py --seed {seed} --out {out}",
 	"objective": {"name": "seconds", "direction": "min", "unit": "s"},
 	"gates": [{"name": "n_mismatch_vs_base", "op": "==", "threshold": 0}],
@@ -200,13 +192,13 @@ Written by `autoopt.py init`, changed mid-search by `autoopt.py config`.
 | `skill` | `commit`: the skill's last commit when `init` ran. `stages.py next` and `stages.py status` print one `NOTICE` line for each later change (`autooptimize/skill-seen.json` holds the one last reported); nothing stops |
 | `floor` | a minimized objective's smallest value worth measuring, or null. At or under it the search stops with the reason `floor`; the price table marks an A0 under 20 times it (`references/step2-baseline.md`, *The price of the base*) |
 | `workers` | the worker, rank or thread count the task names, or null. Each run's process tree is sampled every 0.1 s for threads the kernel shows running; `result.json` `workers` holds the most seen at once, and `setup --done` refuses while A0's is lower |
-| `gpu_command` | the machine's GPU allocator as the words before a command, which it runs with `CUDA_VISIBLE_DEVICES` set and releases at exit (`gpu-alloc run -n 1 --`). `run_iteration.py`, `check_seeding.py`, `prove`, `end` and `final` start under it when they hold no lease (`references/step2-baseline.md`, *GPU leases*) |
-| `promote` | `auto` (`init`'s default) or `orchestrator`: with `auto` each iteration's runner promotes it when it passes the default keep rule while its parent is still the root, then runs the closed round's approved validation; `orchestrator` for a keep rule in the user's words (`init --promote`, `config --set`). A config without the key is `orchestrator` |
+| `gpu_command` | the machine's GPU allocator as the words before a command, which it runs with `CUDA_VISIBLE_DEVICES` set and releases at exit (`srun --gres=gpu:1`). `run_iteration.py`, `check_seeding.py`, `prove`, `end` and `final` start under it when they hold no lease (`references/step2-baseline.md`, *GPU leases*) |
+| `promote` | `auto` (`init`'s default) or `orchestrator`: with `auto` each iteration's runner promotes it when it passes the default keep rule while its parent is still the root, then runs the closed round's approved validation; `orchestrator` for a keep rule in the user's words (`init --promote`, `config --set`). |
 | `subagent_model` | `opus` (default), `sonnet`, `haiku` or `fable`: the model every iteration subagent is spawned with (`init --subagent-model`, `config --set`); `brief` names it on stderr |
 | `checks` | optional. `compare` (a command with `{src}` and `{reference}`), `time`, `first_call` (with `{src}`), `threads` (an int), set by `config --set checks.<key>=…` (`references/step2-baseline.md`, *Write the checks*). With `compare` set, the runner checks every iteration whose runs pass their gates, and `promote` needs a pass |
 | `tests` | optional. `{"command", "timeout_seconds", "path"}`, set by `init --tests` and `--tests-path` (default `tests`). `{src}`, `{iteration}`, `{out}`, `{cache}`, `{selected}` substituted (`references/repo-mode.md`, *The unit-test gate*) |
 | `repo` | repository mode only, written by `init --repo`: `path`, `branch` and `commit` of the original at the copy, `remote` and `remote_url`, `dirty_at_copy` |
-| `after` | the answers about everything after the search (`init --after JSON`, `config --set after.X=V`; `null` unsets a text or number). This skill's nine keys: `stop` (`ask`, `auto`), `budget_hours`, `disk` (`ask`, `keep`, `prune`), `pair_cap_hours` (4), `setup_questions` (`ask`, `recommended`), `oldest_toolchain_command`, `commit_trailer`, `tests_driver_edit` (`ask`, `yes`, `no`), `build_outputs` (`[]`); each is defined in `references/step0-interview.md`, *The questions*. `config --set after.X=V` creates the block when a config has none (`init --force` would drop the rest of the config); `autoopt.py config` prints it. A choice outside a key's is refused. Any other key is another skill's: it is kept as it is, and `config --set` on it is refused |
+| `after` | the answers about everything after the search (`init --after JSON`, `config --set after.X=V`; `null` unsets a text or number). This skill's nine keys: `stop` (`ask`, `auto`), `budget_hours`, `disk` (`ask`, `keep`, `prune`), `pair_cap_hours` (4), `setup_questions` (`ask`, `recommended`), `oldest_toolchain_command`, `commit_trailer`, `tests_driver_edit` (`ask`, `yes`, `no`), `build_outputs` (`[]`); each is defined in `references/step0-interview.md`, *The questions*. `config --set after.X=V` creates the block when a config has none (`init --force` would drop the rest of the config); `autoopt.py config` prints it. A choice outside a key's is refused. Any other key is kept as it is, and `config --set` on it is refused |
 | `external_validation` | optional. `{"command", "measures", "note", "approved"}`, and `"units"` added by hand. `approved` starts false and only `validate --approve` sets it (`references/external-validation.md`) |
 
 ## metrics.json — the contract every benchmark meets
@@ -259,7 +251,7 @@ rate until a run at the full count overwrites it. The frontier, the frontier pat
 
 ## `autoopt.py` — the search tree
 
-`--id` names an existing iteration; `new` and `brief` take `--new-id` for the one they create (`--id` still works there). `--id` defaults to the winner (`best`) in `path`, `final`, `end` and `archive`, to the root in `check`, `profile` and `validate`, and is required where one iteration is acted on (`finish`, `readme`, `promote`, `variant`, `restore`, `checkers`).
+`--id` names an existing iteration; `new` and `brief` take `--new-id` (or `--id`) for the one they create. `--id` defaults to the winner (`best`) in `path`, `final`, `end` and `archive`, to the root in `check`, `profile` and `validate`, and is required where one iteration is acted on (`finish`, `readme`, `promote`, `variant`, `restore`, `checkers`).
 
 ```bash
 python3 $AO/autoopt.py init <work> --task … --command … --objective … --direction max|min [--unit U] [--gates JSON] [--observers a,b]

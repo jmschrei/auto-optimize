@@ -126,7 +126,7 @@ to `$DIR/probe/faults.txt`, the old text copied exactly:
 
 ```
 ## nomirror
-file: seqstats/distance.py
+file: textstats/distance.py
 <<<
         G[start:end, :start] = G[:start, start:end].T
 ===
@@ -441,9 +441,8 @@ README.
   parent's code) to `$DIR/probe/v1/`, and `--parent` the parent's code. In a
   search with `checks.build` it also builds the copy as the harness builds a
   worktree (log `probe/v1.build.log`), so no build flags need finding.
-- **Never search the filesystem** with `find /` or over `/home`, a network
-  filesystem: such a scan ran for 30 to 80 minutes after its subagent had
-  finished. Locate a jar or library through the build tool's cache or your
+- **Never search the filesystem** with `find /` or over a home directory:
+  on a large or network filesystem such a scan outlives the iteration. Locate a jar or library through the build tool's cache or your
   brief.
 - **Delete nothing**: no `rm -rf` on your worktree, scratch copies,
   `__pycache__` or compiler caches, and never on a path built from a

@@ -1,5 +1,4 @@
-/* dashboard.css -- the auto-optimize monitor: the monitor template's sections, then the gallery's lineage-tree
- * and expandable-log, then this dashboard's own.
+/* dashboard.css -- the auto-optimize monitor.
  *
  * Dark only. Every rule is scoped under .autoopt-root, this dashboard's root
  * class, so two dashboards in one Lab page cannot restyle each other.
@@ -116,7 +115,7 @@
 	--div-high-muted: var(--cyan-muted);
 	--div-high: var(--cyan);
 
-	/* A baseline or reference series (unedited templates): grey, and drawn
+	/* A baseline or reference series: grey, and drawn
 	   as `x` markers so it cannot be read as the catch-all group. */
 	--baseline: var(--text-faint);
 
@@ -245,9 +244,8 @@
 
 /* Sections are separated by space and a hairline under each head. Every
    block of content under a head is a filled panel with --space-3 inside
-   each edge, so no text sits on the first or last pixel of its box: the
-   one departure from the template's "no boxes", asked for on
-   2026-09-26. A scroller (the GPU row, the log) sits inside a `.panel`
+   each edge, so no text sits on the first or last pixel of its box.
+   A scroller (the GPU row, the log) sits inside a `.panel`
    rather than being one, so its content scrolls inside the padding instead
    of under the border. Anything drawn inside a panel that paints its own background
    (Plotly, sticky table and log headers, the density's floor) paints

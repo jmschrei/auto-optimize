@@ -77,7 +77,7 @@ STRICT = (
 PATHS = (
 	('local path', r'(?<![\w/.\-])(?:~/|/home/|/tmp/|/scratch/|/mnt/|/Users/|'
 		r'/dev/shm/|/var/tmp/)\S*|(?<![\w/.\-])/tmp\b|\$WORK\b|'
-		r'\bautooptimize/|\bauto-optimization/', 'a path on this machine means '
+		r'\bautooptimize/', 'a path on this machine means '
 		'nothing to a reader'),
 )
 

@@ -167,7 +167,7 @@ runs in the iteration directory.
 | Resume | a result for the same commit is reused; `--rerun` runs the suite again |
 | Placeholders | `{src}`, `{iteration}`, `{out}` (the `unit-tests/` directory), `{cache}` (shared with the runs of the same commit), `{selected}` (below) |
 | GPU | inherits the iteration's GPUs |
-| Artifacts | untracked files the run writes into the worktree (an index such as `rna.fasta.fai`) are removed after it, listed in the log's last line and `result.json["tests"]["removed"]`, and recorded in `autooptimize/test-artifacts.txt`. The runner's commit leaves a recorded artifact out, a recorded artifact is no unmeasured change, and `promote` refuses a commit that adds one: `git rm --cached` it and measure again. The runner's own `.autoopt-build.lock` and `.autoopt-build.log` (`autoopt.RUNNER_FILES`) are never committed or counted as unmeasured; any other untracked file outside `after.build_outputs` (`references/step0-interview.md`, *The questions*) is an unmeasured change |
+| Artifacts | untracked files the run writes into the worktree (an index such as `data.csv.idx`) are removed after it, listed in the log's last line and `result.json["tests"]["removed"]`, and recorded in `autooptimize/test-artifacts.txt`. The runner's commit leaves a recorded artifact out, a recorded artifact is no unmeasured change, and `promote` refuses a commit that adds one: `git rm --cached` it and measure again. The runner's own `.autoopt-build.lock` and `.autoopt-build.log` (`autoopt.RUNNER_FILES`) are never committed or counted as unmeasured; any other untracked file outside `after.build_outputs` (`references/step0-interview.md`, *The questions*) is an unmeasured change |
 
 **Run only the tests for the changed code, and the whole suite only on a
 possible winner.** Put `{selected}` where the test paths go:
@@ -201,12 +201,12 @@ search is most likely to break.
 
 ## What this mode adds to the interview
 
-Rows for call 4 of `references/step0-interview.md`, *The questions*. The
+Rows for group 4 of `references/step0-interview.md`, *The questions*. The
 first is asked in these words, and never assumed.
 
-| Call | Question | Options to offer | Default | Fills, in `spec.md` |
+| Group | Question | Options to offer | Default | Fills, in `spec.md` |
 |---|---|---|---|---|
-| 4 | "Do you want to add new unit tests?" | no; yes | none: always asked | New unit tests |
+| 4 | "Do you want to add new unit tests?" | no; yes, which needs the original's branch committed and pushed to its remote (`references/step1-unit-tests.md`) | none: always asked | New unit tests |
 | 4 | On a yes: for the functions being optimized, or the whole repository? | the functions being optimized (Recommended); the whole repository | none: always asked, though one option is recommended (step 0's one exception) | New unit tests |
 | 4 | Which command runs the repository's tests, and with how many threads? | the command its CI runs, with thread pools pinned | from CI | the `--tests` flag |
 

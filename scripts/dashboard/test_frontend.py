@@ -1292,8 +1292,8 @@ def ended_copy(root, work):
 
 	put('ended.json', {'ended_at': '2026-11-05T10:00:00',
 		'reason': {'criterion': 'stalled', 'text': 'stalled-reason-3a'},
-		'winner': {'id': 3, 'label': 'A3'}, 'medians': {'A0': 16.66,
-		'winner': 5.377, 'objective': 'throughput', 'unit': 's'},
+		'winner': {'id': 3, 'label': 'A3'}, 'medians': {'A0': 12.5,
+		'winner': 4.25, 'objective': 'throughput', 'unit': 's'},
 		'counts': {'rounds': 2, 'iterations': 11, 'winning_iterations': 3}})
 	put('final.json', {'summary': 'paired-9of9'})
 
@@ -1318,7 +1318,7 @@ def check_after_payload(root, work):
 	equal('the snapshot key holds the ending, the stages and nothing else',
 		sorted(after), ['ended', 'stages'])
 	equal('the ending', (after['ended']['winner'], after['ended']['zero_median'],
-		after['ended']['reason']), ('A3', 16.66, 'stalled-reason-3a'))
+		after['ended']['reason']), ('A3', 12.5, 'stalled-reason-3a'))
 	equal('the five stages', [name for name, _, _ in after['stages']],
 		['interview', 'setup', 'search', 'final', 'finish'])
 	by_id = {row['id']: row for row in snapshot['iterations']}
@@ -1369,7 +1369,7 @@ def check_after_page(root, work, args=None):
 
 			line = page.inner_text('#ended-line')
 			check('the topbar says when it ended, the winner against A0 and why',
-				line.startswith('ended 2026-11-05 · A3 5.377 s vs A0 16.66 s · ')
+				line.startswith('ended 2026-11-05 · A3 4.25 s vs A0 12.5 s · ')
 				and 'stalled-reason-3a' in line, line)
 			check('its tooltip carries the paired timing',
 				'paired-9of9' in (page.get_attribute('#ended-line', 'title') or ''))

@@ -56,13 +56,12 @@ A round ends when an iteration is promoted.
 |---|---|
 | everything | Linux, Python 3.8 or later, git. The core scripts use only the standard library |
 | the orchestration | Claude Code's Agent (subagents) and AskUserQuestion tools; SendMessage and Monitor where available |
-| a GPU search | `CUDA_VISIBLE_DEVICES`, set by the machine's GPU allocator; its command recorded as `gpu_command` |
+| a GPU search | `CUDA_VISIBLE_DEVICES`, set by the machine's GPU allocator, or by `env CUDA_VISIBLE_DEVICES=<index>` on a machine with none; either is recorded as `gpu_command` |
 | the dashboard in a notebook | JupyterLab, IPython and plotly; psutil for the host and process panels |
 | a static dashboard (`--export`) | plotly |
 | the task's checks and the preflight, which export an iteration's tree | `tar` |
 
-Linux-only commands (`flock`, `/proc`, `/sys`, cgroups, `systemd-run`) are
-marked where used.
+Linux-only commands (`flock`, `/proc`, `/sys`) are marked where used.
 
 ## Paths in every command
 
@@ -131,7 +130,7 @@ as `not started`, `running` or `complete`, with the next command; `render`
 writes the file, and `end` calls it.
 
 **The search directory is chosen at step 0 and never moved.** Ask, offering
-`~/auto-optimization/<YYYY-MM-DD>-<name>/` as the default. Moving it breaks
+`~/auto-optimize/<YYYY-MM-DD>-<name>/` as the default. Moving it breaks
 the absolute paths in git's worktree records, `config.json` and the harness.
 
 **A running search MUST NOT wait on the user.** Once iterations are in
@@ -173,7 +172,7 @@ quiet*).
 
 **No call lasts longer than four minutes**, for any agent: the prompt cache
 lives five, and the turn after a longer call writes the whole context to it
-again, at 25 times the price of reading it. A foreground command takes the Bash tool's `timeout: 240000`; one that may pass that starts in the
+again, at many times the price of reading it. A foreground command takes the Bash tool's `timeout: 240000`; one that may pass that starts in the
 background and is watched with `autoopt.py wait <log>` (it returns within 200 s with the new lines), repeated until it prints `wait: finished`.
 `end`, `final`, `validate`, `run_iteration.py`, `width` and `prove` take
 `--background`; anything else is `autoopt.py bg $WORK <log> '<command>'` in the
@@ -182,8 +181,9 @@ main session and `(<command>; echo "exit $?") > <log> 2>&1 &` in a subagent.
 next call is `autoopt.py wait <log>`.
 
 **The dashboard publisher MUST start with the first iteration**, asked for or not
-(`references/dashboard.md`), and the user is told the notebook path,
-`$WORK/dashboard.ipynb`.
+(`references/dashboard.md`), and the user is told how to see it: the notebook,
+`$WORK/dashboard.ipynb`, or what that file gives for a machine without
+JupyterLab.
 
 **Every iteration of a GPU search holds its own GPUs for its whole length**,
 and two iterations never share one (`references/step3-rounds.md`, *GPUs for

@@ -4,8 +4,8 @@
 	python3 paired.py --a DIR_A --b DIR_B --cmd 'python3 probe.py --src {src}'
 
 Each pair runs the command once for each side, in a fresh process, alternating
-which side goes first (the side run first in a pair was 0.01-0.04 s slower in
-one search, so a fixed order hands the second a fake win). Each side keeps its
+which side goes first (the side run first in a pair can be the slower one,
+so a fixed order hands the second a fake win). Each side keeps its
 own compiler cache, `<DIR>/.paired-cache`, warmed by one unrecorded run before
 the first pair, so no pair times a compile.
 

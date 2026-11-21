@@ -170,10 +170,9 @@ available.
 
 Before a mismatch, a failure or a slow run is attributed to the code, and
 before any count is written into a summary or a report, scan every
-stderr for errors the harness itself raised: a process that never started
-(`Failed to start transient scope unit`), a timeout the runner imposed, a
-missing input the job list named wrongly, an option the job generator
-combined illegally. One unstarted run otherwise reads as an output
+stderr for errors the harness itself raised: a process that never started,
+a timeout the runner imposed, a missing input, an illegal combination of
+options. One unstarted run otherwise reads as an output
 difference. Give those their own outcome category and re-run them once
 fixed; never count them as `mismatch` or as the program's failure.
 

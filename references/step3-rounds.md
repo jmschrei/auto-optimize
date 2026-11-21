@@ -25,9 +25,8 @@ in its round but does not count toward the iterations the user budgeted.
 
 From the first iteration on, *The loop* is run by an orchestrator subagent, not
 the main session. The main session carries the whole conversation, and every
-wake-up after a quiet spell rewrites it: in one search it held 864k tokens
-during the first rounds, against 291k after a compaction, and each wake-up
-cost 1.06M against 0.37M. What the main session does from the first iteration
+wake-up after a quiet spell writes all of it to the prompt cache again, so
+the rounds run in a context that holds only the search. What the main session does from the first iteration
 on is `references/main-session.md`.
 
 The orchestrator subagent reads its prompt (`briefs/loop-<n>.md`), `SKILL.md`
@@ -154,7 +153,9 @@ never picks one, since two launches seconds apart take the same free card.
 
 ## The machine during the search
 
-Before every iteration, read `status`'s `machine:` line, the load against the
+`spec.md`'s *Machine and environment* line says how many cores and how much
+memory the search may use: keep the runs at once, and each run's threads,
+inside it. Before every iteration, read `status`'s `machine:` line, the load against the
 cores with this search's runs included: an iteration that starts quiet can
 finish contended. `gpus_per_agent` processes at about 100% are the iteration
 working; anything above that is somebody else (`autoopt.py busy $WORK` names
@@ -340,5 +341,6 @@ Stop and tell the user when one of these is reached. `autoopt.py end
 | `noise` | the frontier's improvements are smaller than the noise band |
 | `floor` | a minimized objective's root is at or under `floor`, the smallest value the user called worth measuring (step 0). `stages.py next` stops for the user even under `after.stop=auto`: end, or a new search on a larger input seeded from this root (`references/changes.md`) |
 
-The user's own words are a sixth reason. Then step 4, which ends the search on
+The user's own words are a reason too, and so is a target they named at
+step 0 (`spec.md`, *Goal and scope*) once the root reaches it. Then step 4, which ends the search on
 the record (`references/step4-final.md`).

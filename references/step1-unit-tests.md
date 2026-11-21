@@ -81,7 +81,7 @@ counted. Keep these few, because they also pin the bugs.
   messages changed between Python 3.12 patch releases; a Cython 3.0 build can
   behave differently from a 3.1 build of the same source. A test that fails in
   one CI configuration is dropped or made to hold in all of them.
-- **Optional dependencies skip, never error.** A helper that needs pysam uses
+- **Optional dependencies skip, never error.** A helper that needs an optional package uses
   `pytest.importorskip`, so a CI that installs only `pytest` and
   `requirements.txt` skips those tests. Run the suite once with the dependency
   uninstalled, the way CI lacks it: since pytest 8.2, `importorskip` warns when

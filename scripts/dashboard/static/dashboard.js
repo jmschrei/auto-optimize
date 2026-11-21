@@ -1,7 +1,6 @@
 'use strict';
 
-/* dashboard.js -- the auto-optimize monitor: a monitor template with the lineage-tree and expandable-log widgets
-   pasted in.
+/* dashboard.js -- the auto-optimize monitor.
 
    One entry point, `window.startAutoopt(root, transport, options)`. The mount
    supplies the transport: the notebook passes one that reads published JSON
@@ -14,9 +13,7 @@
    code never runs, and the old copy keeps serving a stale page silently.
 
    Sections are delimited by `==== SECTION: <name> ====` and match the ones in
-   dashboard.css and index.html. core through gpu are the template's;
-   lineage-tree and expandable-log are the gallery's widgets; search
-   through sidebar-autoopt are this dashboard's own. */
+   dashboard.css and index.html. */
 
 /* ==== SECTION: core ==== */
 
