@@ -145,7 +145,7 @@ def one_hot_encode(sequence, alphabet='ACGT', dtype=numpy.int8):
 
 **The prompt**, in Claude Code, from that folder:
 
-![The prompt in Claude Code](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/01-prompt.png)
+![The prompt in Claude Code](docs/walkthrough/01-prompt.png)
 
 **The interview.** Three rounds of questions pinned the search down. Every
 answer, and each default taken without asking, went into the search's
@@ -185,14 +185,14 @@ stages refilled the ideas as they ran out.
 
 The dashboard in JupyterLab, after the search ended:
 
-![The dashboard in JupyterLab](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/02-dashboard.png)
+![The dashboard in JupyterLab](docs/walkthrough/02-dashboard.png)
 
 The objective by iteration, on a log axis. Each point is one iteration's
 median over its 5 runs, colored by the kind of idea; the dotted pink
 staircase is the best so far, and the dashed purple lines mark each new batch
 of ideas:
 
-![Objective by iteration](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/03-objective.png)
+![Objective by iteration](docs/walkthrough/03-objective.png)
 
 Three changes were kept, each forking the next generation: A1, the numba
 kernel; A3, which reads an ASCII string's own buffer in place of an `encode`
@@ -206,13 +206,13 @@ is the winner.
 change against its parent: the loops became a kernel over the sequence's
 bytes, with the original loop kept for the inputs the kernel does not handle.
 
-![A1's code change, opened from the chart](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/04-diff-a1.png)
+![A1's code change, opened from the chart](docs/walkthrough/04-diff-a1.png)
 
 A click on A7 in the search tree opens its README: the idea, what happened,
 every run, and its notes, which say that the one-thread time rose by 0.5 ms
 and that the cause was not found.
 
-![The search tree with A7's README open](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/05-tree-a7.png)
+![The search tree with A7's README open](docs/walkthrough/05-tree-a7.png)
 
 **The end.** At the 15-iteration budget, `end` timed A7 against A0 in
 alternating separate processes and wrote `ended.md`:
