@@ -112,7 +112,8 @@ code per iteration. Then, without you:
 5. the winner is copied out with a final report, and the disk is reclaimed
    once you agree.
 
-`examples/word-count/` is a slow, correct word counter to try this on.
+`examples/one-hot/` is a slow, correct one-hot encoder to try this on;
+the walkthrough below is a search on it.
 
 **What it costs.** Every iteration is a subagent session, and so is each
 setup, mining and orchestration phase, so a search of a few dozen iterations
@@ -176,7 +177,7 @@ src/auto_optimize/       the installer (standard library only)
 tests/
   code/                  the skill's script suites; dashboard/ holds the browser tests
   package/               the installer and the shipped files (pytest)
-examples/word-count/     a slow program to try a first search on
+examples/one-hot/        the slow function the walkthrough optimizes
 ```
 
 ## Development
