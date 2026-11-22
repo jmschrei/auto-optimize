@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.0]
 
 The first public release: the `auto-optimize-code` skill, a Claude Code
 plugin that carries it, and `auto-optimize` on PyPI, a command that installs
