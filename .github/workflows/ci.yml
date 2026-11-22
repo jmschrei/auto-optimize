@@ -1,0 +1,111 @@
+# The skill's script suites and the installer, on the oldest and newest Python
+# the package supports; the dashboard's browser tests on request.
+
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      dashboard:
+        description: "Also run the dashboard's browser tests"
+        type: boolean
+        default: false
+
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: A git identity for the searches the tests build
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.invalid"
+
+      - name: Script suites
+        run: python tests/code/run_tests.py --jobs 4
+
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Installer and shipped-file tests
+        run: |
+          python -m pip install --upgrade pip build pytest
+          python -m pytest -q tests/package
+
+      - name: Build
+        run: python -m build --outdir "$RUNNER_TEMP/dist"
+
+      - name: The wheel holds the skill and no test code
+        run: |
+          python -m zipfile -l "$RUNNER_TEMP"/dist/*.whl > "$RUNNER_TEMP/wheel.txt"
+          grep -q 'auto_optimize/skills/auto-optimize-code/SKILL.md' "$RUNNER_TEMP/wheel.txt"
+          if grep -E '/test_[a-z_]+\.py|__pycache__|make_fixture' "$RUNNER_TEMP/wheel.txt"; then
+            exit 1
+          fi
+
+      - name: Install the wheel and drive the installer in a fresh home
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install "$RUNNER_TEMP"/dist/*.whl
+          tool="$RUNNER_TEMP/venv/bin/auto-optimize"
+          export HOME="$(mktemp -d)"
+          cd "$(mktemp -d)"
+          "$tool" install
+          test -f "$HOME/.claude/skills/auto-optimize-code/SKILL.md"
+          "$tool" list
+          "$tool" doctor
+          "$tool" uninstall
+          if "$tool" path; then
+            exit 1
+          fi
+
+  dashboard:
+    if: github.event_name == 'workflow_dispatch' && inputs.dashboard
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Browser, notebook server and plotting
+        run: |
+          python -m pip install --upgrade pip playwright plotly psutil ipython jupyterlab
+          python -m playwright install --with-deps chromium
+
+      - name: A git identity for the searches the tests build
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.invalid"
+
+      - name: Dashboard in headless Chromium
+        run: python tests/code/dashboard/test_frontend.py
+
+      - name: Dashboard mounted in JupyterLab
+        run: python tests/code/dashboard/test_notebook.py
