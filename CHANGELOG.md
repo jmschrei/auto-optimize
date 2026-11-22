@@ -11,7 +11,10 @@ it.
 - The skill lives in `skills/auto-optimize-code/`, a self-contained folder
   with its own `LICENSE` and `VERSION`. Every install method places that
   folder and nothing else; the repository root held the skill before, which a
-  Claude Code plugin cannot load.
+  Claude Code plugin cannot load. A clone of this repository made inside a
+  skills folder, as the earlier README said to install it, stops loading
+  once it pulls this change, since `SKILL.md` is no longer at its top:
+  remove that clone and install with one of the methods in the README.
 - The repository is a Claude Code plugin and its own marketplace
   (`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`):
   `/plugin marketplace add jmschrei/auto-optimize`, then
