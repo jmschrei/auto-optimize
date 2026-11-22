@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>auto-optimize-code monitor</title>
+<link rel="stylesheet" href="dashboard.css">
+</head>
+<body class="autoopt-root" data-standalone>
+
+<header class="topbar">
+	<div class="topbar-id">
+		<h1 class="title-gradient">auto-optimize-code</h1>
+		<code id="run-root">&nbsp;</code>
+		<div class="muted" id="ended-line" hidden></div>
+	</div>
+	<div class="topbar-controls">
+		<button class="ghost small" id="clear-selection" hidden
+			type="button">Clear selection</button>
+		<span class="pulse" id="pulse" title="Live"></span>
+		<span class="muted updated" id="updated">connecting…</span>
+	</div>
+</header>
+
+<div class="shell">
+<main>
+
+<!-- ==== SECTION: summary ==== -->
+<section id="section-summary">
+	<div class="summary">
+		<figure class="hero">
+			<figcaption>Iterations settled</figcaption>
+			<div class="hero-value" id="hero-value">–</div>
+			<div class="hero-sub" id="hero-sub">&nbsp;</div>
+		</figure>
+		<div class="tiles" id="tiles"></div>
+	</div>
+	<div class="chips" id="catbar"></div>
+	<p class="muted" id="stage-strip" hidden></p>
+</section>
+
+<!-- ==== SECTION: gpu ==== -->
+<section id="section-hardware">
+	<div class="section-head">
+		<h2>GPUs</h2>
+		<p class="muted" id="host-summary">&nbsp;</p>
+		<button class="ghost small" id="toggle-live" aria-pressed="false"
+			type="button" hidden title="Sample the GPUs every second while this tab is open">Live</button>
+	</div>
+	<div class="panel">
+		<div id="gpu-cards" class="gpu-cards"></div>
+		<div id="gpu-scroll" class="dragbar" hidden>
+			<div class="thumb" id="gpu-scroll-thumb"></div>
+		</div>
+	</div>
+</section>
+
+<!-- ==== SECTION: objective ==== -->
+<section id="section-frontier">
+	<div class="section-head">
+		<h2>Objective</h2>
+		<p class="muted" id="objective-note">&nbsp;</p>
+	</div>
+	<figure class="card">
+		<figcaption>
+			<span>Objective by iteration</span>
+			<span class="figcaption-aside">
+				<button class="ghost small" id="toggle-runs"
+					aria-pressed="false" type="button">All runs</button>
+				<button class="ghost small" id="toggle-failed"
+					aria-pressed="true" type="button">Gate failures</button>
+				<button class="ghost small" id="toggle-stair"
+					aria-pressed="true" type="button">Frontier line</button>
+				<button class="ghost small" id="toggle-stages"
+					aria-pressed="true" type="button">Stage boundaries</button>
+				<button class="ghost small" id="toggle-ci"
+					aria-pressed="false" type="button">Confidence intervals</button>
+			</span>
+		</figcaption>
+		<div class="panel-headline" id="main-headline"></div>
+		<div id="main-chart" class="plot tall"></div>
+		<div class="plot-scales" id="scales-main"></div>
+		<div class="legend" id="main-legend"></div>
+	</figure>
+
+	<!-- ==== SECTION: diff ==== -->
+	<figure class="card" id="diff-card" hidden>
+		<figcaption>
+			<span id="diff-title">Code change</span>
+			<span class="figcaption-aside">
+				<button class="ghost small" id="diff-close" type="button">close</button>
+			</span>
+		</figcaption>
+		<div class="diff-summary" id="diff-summary"></div>
+		<div id="diff-files"></div>
+	</figure>
+
+	<!-- ==== SECTION: run-table ==== -->
+	<figure class="card" id="run-card">
+		<figcaption>
+			<span>Every run</span>
+			<span class="figcaption-aside muted" id="run-note"></span>
+		</figcaption>
+		<div id="run-table"></div>
+	</figure>
+</section>
+
+<!-- ==== SECTION: observers ==== -->
+<section id="section-observers" hidden>
+	<div class="section-head">
+		<h2>Observer measures</h2>
+		<p class="muted">Recorded for every iteration, never optimized and
+			never gated. Lasso any chart to select the same iterations
+			everywhere; drag a panel by its grip to reorder.</p>
+	</div>
+	<div id="observer-charts" class="reorder-grid"></div>
+</section>
+
+<!-- ==== SECTION: validation ==== -->
+<section id="section-validation" hidden>
+	<div class="section-head">
+		<h2>External validation</h2>
+		<p class="muted" id="validation-note">&nbsp;</p>
+	</div>
+	<div id="validation-charts" class="validation-grid"></div>
+</section>
+
+<!-- ==== SECTION: tree ==== -->
+<section id="section-tree">
+	<div class="section-head">
+		<h2>Search tree</h2>
+		<p class="muted" id="tree-note">&nbsp;</p>
+	</div>
+	<figure class="card">
+		<figcaption>
+			<span>Lineage</span>
+		</figcaption>
+		<div class="tree-wrap">
+			<div id="tree-holder" class="tree-holder"></div>
+		</div>
+		<div id="tree-resize" class="tree-resize" role="separator"
+			aria-orientation="horizontal"
+			title="Drag to resize the tree; double-click for the default height"></div>
+		<div class="legend" id="tree-legend"></div>
+		<div id="tree-node" class="tree-node" hidden></div>
+	</figure>
+</section>
+
+<!-- ==== SECTION: log ==== -->
+<section id="section-log">
+	<div class="section-head">
+		<h2>Iteration log</h2>
+		<p class="muted">Newest first; a frontier iteration's id is at full
+			strength. Click an entry for its README and everything recorded
+			about it.</p>
+	</div>
+	<div class="panel"><div class="log" id="log"></div></div>
+</section>
+
+<!-- ==== SECTION: gpu ==== -->
+<section id="section-processes">
+	<figure class="card" id="process-card" hidden>
+		<figcaption>Processes of this search
+			<span class="figcaption-aside muted" id="process-note"></span>
+		</figcaption>
+		<div class="table-scroll">
+			<table>
+				<thead><tr>
+					<th class="num">PID</th><th>Kind</th><th>Target</th>
+					<th class="num">CPU %</th><th class="num">RSS</th>
+					<th class="num">Elapsed</th>
+				</tr></thead>
+				<tbody id="process-body"></tbody>
+			</table>
+		</div>
+	</figure>
+</section>
+
+</main>
+
+<aside id="sidebar"></aside>
+</div>
+
+<div class="tip" id="tip"></div>
+<footer id="footer"></footer>
+<footer class="credit"><a href="https://programmable-genomics.github.io" target="_blank" rel="noopener">Programmable Genomics Laboratory @ UMass Chan Medical School</a></footer>
+
+<script src="plotly.min.js"></script>
+<script type="module" src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+	"name": "auto-optimize",
+	"version": "0.1.0",
+	"description": "Search for a faster, leaner or smaller implementation of code by running many small measured experiments, each in its own git worktree, and keeping what survives.",
+	"author": {
+		"name": "Jacob Schreiber",
+		"url": "https://programmable-genomics.github.io"
+	},
+	"homepage": "https://github.com/jmschrei/auto-optimize",
+	"repository": "https://github.com/jmschrei/auto-optimize",
+	"license": "MIT",
+	"keywords": ["optimization", "performance", "benchmarking", "speedup", "subagents"]
+}

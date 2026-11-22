@@ -1,0 +1,449 @@
+#!/usr/bin/env python3
+"""The stages of a search, read from the files it already writes.
+
+	python3 stages.py render WORK     # write WORK/NOTES.md
+	python3 stages.py status WORK     # print the same table
+	python3 stages.py next WORK       # the one command (or question) that is next
+
+Five stages, in order: interview, setup, search, final, finish. Each is
+`not started`, `running` or `complete`, derived from state files
+(`state.json`, `ended.json`, `finish/`); nothing is typed into NOTES.md by
+hand, so a render of the same state is the same bytes. `autoopt.py end` calls
+`render`; it is also safe to run at any time.
+
+Standard library only, Python 3.9 or later.
+"""
+
+import os
+import re
+import sys
+import glob
+import json
+import argparse
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import autoopt
+
+NOT_STARTED, RUNNING, COMPLETE = 'not started', 'running', 'complete'
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def read(path, default=None):
+	try:
+		with open(path, encoding='utf-8') as handle:
+			return json.load(handle)
+	except (OSError, ValueError):
+		return default
+
+
+def exists(*parts):
+	return os.path.exists(os.path.join(*parts))
+
+
+def mtime(path):
+	"""The date a file last changed, `YYYY-MM-DD`, or None."""
+
+	try:
+		import time
+		return time.strftime('%Y-%m-%d', time.localtime(os.path.getmtime(
+			path)))
+	except OSError:
+		return None
+
+
+def number(value, digits=4):
+	return '{:.{}g}'.format(value, digits) if isinstance(value,
+		(int, float)) else '?'
+
+
+def interview(work, root, state):
+	path = os.path.join(root, 'spec.md')
+
+	if not exists(root, 'config.json'):
+		return NOT_STARTED, '', {}
+
+	# The three lines step 2 answers do not hold the interview open.
+	problems = [p for p in autoopt.spec_problems(root) if not re.search(
+		r'Gate proof|Width measured|Benchmark', p)]
+
+	if problems:
+		return RUNNING, 'spec.md still has TODO lines', {}
+
+	return COMPLETE, mtime(path) or '', {'spec': path}
+
+
+def setup(work, root, state):
+	record = state.get('setup') or {}
+	status = record.get('status')
+
+	if not status:
+		return NOT_STARTED, '', {}
+
+	zero = (read(os.path.join(root, 'iterations', '0', 'result.json'), {})
+		.get('objective') or {}).get('median')
+	text = 'A0 {}'.format(number(zero)) if zero is not None else ''
+
+	if status == 'waiting':
+		text = 'a question waits for the user: {}'.format(record.get(
+			'question', '?'))
+
+	if status != 'done':
+		return RUNNING, text, {}
+
+	return COMPLETE, (record.get('finished') or '')[:10] + (
+		'; ' if text else '') + text, {'readme': os.path.join(root,
+		'iterations', '0', 'README.md')}
+
+
+def search(work, root, state):
+	if (state.get('setup') or {}).get('status') != 'done':
+		return NOT_STARTED, '', {}
+
+	ended = autoopt.load_ended(root)
+	results = glob.glob(os.path.join(root, 'iterations', '*', 'result.json'))
+	count = len([r for r in results if os.path.basename(os.path.dirname(r))
+		!= '0'])
+	text = '{} iterations settled'.format(count)
+
+	if ended:
+		counts = ended.get('counts') or {}
+		return COMPLETE, '{}; {} rounds, {} iterations, {} winning'.format(
+			(ended.get('ended_at') or '')[:10], counts.get('rounds', '?'),
+			counts.get('iterations', '?'), counts.get('winning_iterations',
+			'?')), {'rounds': os.path.join(root, 'rounds')}
+
+	if not count and not (state.get('loop') or {}).get('open'):
+		return NOT_STARTED, 'waiting for the idea miner\'s S1' if (
+			state.get('mining') or {}).get('done') is None else '', {}
+
+	return RUNNING, text, {'rounds': os.path.join(root, 'rounds')}
+
+
+def final(work, root, state):
+	ended = autoopt.load_ended(root)
+
+	if not ended:
+		return NOT_STARTED, '', {}
+
+	medians = ended.get('medians') or {}
+	paired = ended.get('paired') or {}
+	text = '{} {}: A0 {} -> {}'.format(medians.get('objective', ''),
+		medians.get('unit') or '', number(medians.get('A0')),
+		number(medians.get('winner')))
+
+	if isinstance(paired, dict) and paired.get('summary'):
+		text += '; paired ' + str(paired['summary'])[:60]
+
+	return COMPLETE, (ended.get('ended_at') or '')[:10] + '; ' + text, {
+		'ended': os.path.join(root, 'ended.md')}
+
+
+def finish(work, root, state):
+	report = autoopt.work_path(work, 'finish', 'final-report.md')
+
+	if exists(report):
+		return COMPLETE, mtime(report) or '', {'report': report}
+
+	return NOT_STARTED, '', {}
+
+
+STAGES = (('interview', interview), ('setup', setup), ('search', search),
+	('final', final), ('finish', finish))
+
+
+def load_state(root):
+	return read(os.path.join(root, 'state.json'), {})
+
+
+def collect(work):
+	"""`[(stage, status, text, links)]` for the five stages."""
+
+	root = os.path.join(work, 'autooptimize')
+	state = load_state(root)
+
+	return [(name,) + function(work, root, state) for name, function in STAGES]
+
+
+def render_text(work, rows):
+	config = read(os.path.join(work, 'autooptimize', 'config.json'), {})
+	lines = ['# NOTES', '', '*Generated by `stages.py render`: the stages of '
+		'this search, read from its state files. Do not edit.*', '',
+		'**Task.** ' + (config.get('task') or '(no config.json yet)'), '',
+		'| Stage | Status | Detail |', '|---|---|---|']
+
+	for name, status, text, links in rows:
+		lines.append('| {} | {} | {} |'.format(name, status, text.replace(
+			'|', '/')))
+
+	links = [(name, key, path) for name, _, _, found in rows
+		for key, path in sorted(found.items()) if os.path.exists(path)]
+
+	if links:
+		lines += ['', '## Files', ''] + ['- {} {}: `{}`'.format(name, key,
+			os.path.relpath(path, work)) for name, key, path in links]
+
+	lines += ['', '## Next', '', next_text(work, rows), '']
+
+	return '\n'.join(lines)
+
+
+# The command or question that follows each stage once the one before is
+# complete. `{w}` is the search directory.
+NEXT = {
+	'interview': 'finish the interview: fill in spec.md (references/'
+		'step0-interview.md)',
+	'setup': 'python3 {ao}/autoopt.py setup {w}; spawn the setup subagent '
+		'and the idea miner',
+	'search': 'python3 {ao}/autoopt.py loop {w}; spawn the orchestrator',
+	'final': 'python3 {ao}/autoopt.py end {w} --background; autoopt.py wait '
+		'<log>',
+	'finish': 'references/step5-finish.md: the final report, then prune',
+}
+
+
+def after_of(work):
+	config = read(os.path.join(work, 'autooptimize', 'config.json'), {})
+	return dict(autoopt.AFTER_DEFAULTS, **(config.get('after') or {}))
+
+
+def hours_since(stamp):
+	"""Hours from a `YYYY-MM-DDTHH:MM:SS` stamp to now, or None."""
+
+	import time
+
+	try:
+		return (time.time() - time.mktime(time.strptime(str(stamp)[:19],
+			'%Y-%m-%dT%H:%M:%S'))) / 3600
+	except ValueError:
+		return None
+
+
+def stop_word(root, config, state, after):
+	"""The When-to-stop criterion that is reached, or None: `stalled` (the
+	open round holds a phase's worth of settled iterations) or `budget`
+	(wall clock since step 2 began passes `after.budget_hours`)."""
+
+	derived = autoopt.end_reason(root, config, state, None)['criterion']
+
+	if derived:
+		return derived
+
+	spent = hours_since((state.get('setup') or {}).get('started'))
+
+	if after['budget_hours'] and spent is not None and spent >= after[
+			'budget_hours']:
+		return 'budget'
+
+	return None
+
+
+def log_running(path):
+	"""A detached command's log that has no `exit N` line yet, while its
+	process lives: one that died without the line is not running."""
+
+	try:
+		with open(path) as handle:
+			lines = handle.read().splitlines()
+	except OSError:
+		return False
+
+	if lines and lines[-1].startswith('exit '):
+		return False
+
+	jobs = dict((log, what) for log, what, _ in autoopt.background_jobs(
+		os.path.dirname(path)))
+
+	return jobs.get(path) != 'died'
+
+
+def search_action(work, root, state, config, after, rows):
+	"""The next move before the search has ended."""
+
+	status = dict((name, st) for name, st, _, _ in rows)
+	ao = os.path.join(HERE, 'autoopt.py')
+
+	if status['interview'] != COMPLETE:
+		return 'agent', ('finish the interview: fill in spec.md (references/'
+			'step0-interview.md), then python3 {} init if it has not run'
+			.format(ao))
+
+	setup = state.get('setup') or {}
+
+	if not setup:
+		return 'agent', ('python3 {0} setup {1}; spawn the setup subagent '
+			'from that prompt. The idea miner starts after setup, when A0\'s '
+			'profile exists'.format(ao, work))
+
+	if setup.get('status') == 'waiting':
+		return 'stop', ('the setup subagent asked the user: {}. Ask them in '
+			'one call, then python3 {} setup {} --answer "<their words>" and '
+			'send the message it prints to the setup subagent (SendMessage); '
+			'if it is gone, spawn the prompt printed after the message'.format(
+			setup.get('question'), ao, work))
+
+	if setup.get('status') != 'done':
+		return 'agent', ('wait for the setup subagent (its notes: '
+			'autooptimize/setup/notes.md); if it died, python3 {} setup {} '
+			'--force'.format(ao, work))
+
+	mining = state.get('mining') or {}
+
+	if not mining.get('done'):
+		if not mining.get('stage'):
+			return 'agent', ('python3 {0} mine {1}; spawn the idea miner for '
+				'S1 from its prompt (A0\'s profile is written now)'
+				.format(ao, work))
+
+		return 'agent', ('wait for the idea miner\'s S1 (python3 {} status '
+			'{}); if it died, python3 {} mine {} --force'.format(ao, work,
+			ao, work))
+
+	if log_running(os.path.join(root, 'end.log')):
+		return 'agent', ('`end` is running: `python3 {} wait {}`, again '
+			'until it prints `wait: finished`'.format(ao, os.path.join(root,
+			'end.log')))
+
+	if (state.get('loop') or {}).get('open'):
+		return 'agent', ('the orchestrator phase {} is open: wait for its '
+			'report (it closes the phase itself) and show the round tables. '
+			'If it died without one: python3 {} loop {} --force'.format((
+			state['loop'] or {}).get('phase', '?'), ao, work))
+
+	word = stop_word(root, config, state, after)
+
+	if word is None:
+		return 'agent', ('python3 {} loop {}; spawn the orchestrator from '
+			'its prompt'.format(ao, work))
+
+	if after['stop'] == 'auto' and word != 'floor':
+		return 'run', 'python3 {} end {} --reason {} --background'.format(
+			ao, work, word)
+
+	if word == 'floor':
+		return 'stop', ('the root reached the floor the user set ({0}): this '
+			'benchmark cannot resolve a gain. Ask the user: end here '
+			'(python3 {1} end {2} --reason floor --background), a new search '
+			'on a larger input seeded from this root (references/changes.md), '
+			'or go on here with a lower floor or none (python3 {1} config {2} '
+			'--set floor=<lower, or 0> --reason "<their words>", then '
+			'`stages.py next` again)'.format(config.get('floor'), ao, work))
+
+	return 'stop', ('the search reached `{}`: ask the user whether to end '
+		'it (after.stop is ask), then python3 {} end {} --reason {} '
+		'--background'.format(word, ao, work, word))
+
+
+def next_action(work, rows):
+	"""`(stage, kind, text)`: `run` is a command `--run` may start, `agent`
+	is for the session to do, `wait` is a command still running, `stop` is a
+	decision the step 0 interview did not make."""
+
+	after = after_of(work)
+	root = os.path.join(work, 'autooptimize')
+	state = load_state(root)
+	config = read(os.path.join(root, 'config.json'), {})
+	ended = autoopt.load_ended(root)
+
+	if not ended:
+		kind, text = search_action(work, root, state, config, after, rows)
+		stage = 'search' if (state.get('setup') or {}).get('status') == \
+			'done' else ('interview' if kind == 'agent' and text.startswith(
+			'finish the') else 'setup')
+		return stage, kind, text
+
+	# `end` wrote ended.json and is still cleaning up.
+	if log_running(os.path.join(root, 'end.log')):
+		return 'final', 'wait', '`end` is finishing ({})'.format(os.path.join(
+			root, 'end.log'))
+
+	for name, status, text, _ in rows:
+		if status == COMPLETE:
+			continue
+
+		if name == 'finish' and not config.get('repo') and not exists(
+				autoopt.work_path(work, 'finish', 'archive', 'idea.patch')):
+			return name, 'run', '{} archive {}'.format(os.path.join(HERE,
+				'autoopt.py'), work)
+
+		return name, 'agent', NEXT[name].format(ao=HERE, w=work)
+
+	return None, 'done', 'every stage is complete'
+
+
+def next_text(work, rows):
+	name, kind, text = next_action(work, rows)
+
+	if name is None:
+		return text
+
+	return '**{}** ({}): `{}`'.format(name, kind, text) if kind != 'stop' \
+		else '**{}** stops: {}'.format(name, text)
+
+
+def render(work):
+	rows = collect(work)
+	path = os.path.join(work, 'NOTES.md')
+
+	# Whole or not at all.
+	with open(path + '.tmp', 'w', encoding='utf-8', newline='\n') as out:
+		out.write(render_text(work, rows))
+
+	os.replace(path + '.tmp', path)
+
+	return rows
+
+
+def main(argv=None):
+	parser = argparse.ArgumentParser(description=__doc__,
+		formatter_class=argparse.RawDescriptionHelpFormatter)
+	parser.add_argument('command', choices=('render', 'status', 'next'))
+	parser.add_argument('work')
+	parser.add_argument('--run', action='store_true', help='with `next`: '
+		'run the command when the stage\'s command is mechanical and the '
+		'step 0 answers allow it')
+	args = parser.parse_args(argv)
+	work = os.path.abspath(os.path.expanduser(args.work))
+
+	if os.path.basename(work) == 'autooptimize':
+		work = os.path.dirname(work)
+
+	if not os.path.isdir(os.path.join(work, 'autooptimize')):
+		sys.stderr.write('stages: {} has no autooptimize/\n'.format(work))
+		return 1
+
+	if args.command == 'render':
+		render(work)
+		print(os.path.join(work, 'NOTES.md'))
+		return 0
+
+	rows = collect(work)
+
+	if args.command in ('next', 'status'):
+		# `status` is read by anyone; only `next`, the main session's, marks
+		# the change as told.
+		notice = autoopt.skill_notice(os.path.join(work, 'autooptimize'),
+			mark=args.command == 'next')
+
+		if notice:
+			print(notice)
+
+	if args.command == 'next':
+		print(next_text(work, rows))
+		name, kind, text = next_action(work, rows)
+
+		if args.run and kind == 'run':
+			import shlex
+			import subprocess
+			code = subprocess.run(shlex.split(text)).returncode
+			render(work)
+			return code
+
+		return 0
+
+	print(render_text(work, rows))
+	return 0
+
+
+if __name__ == '__main__':
+	sys.exit(main())

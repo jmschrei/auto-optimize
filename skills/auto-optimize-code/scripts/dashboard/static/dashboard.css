@@ -1,0 +1,775 @@
+/* dashboard.css -- the auto-optimize-code monitor.
+ *
+ * Dark only. Every rule is scoped under .autoopt-root, this dashboard's root
+ * class, so two dashboards in one Lab page cannot restyle each other.
+ * Sections are delimited by `==== SECTION: <name> ====`. */
+
+/* ==== SECTION: tokens ==== */
+
+.autoopt-root {
+	color-scheme: dark;
+
+	--bg: #0f0d17;
+	--panel: #171423;
+	--panel-2: #1e1a2d;
+	--line: #2c2641;
+	--line-soft: #231e35;
+	--track: #201b30;
+	--text: #ece8f6;
+	--text-dim: #9b93ba;
+	--text-faint: #6d6589;
+
+	/* The hues at full strength: emphasis only (the headline or
+	   frontier value, the frontier line, selection, this run's GPU, done).
+	   Pink is never a categorical slot: it is the number the search exists
+	   to move. */
+	--pink: #ff4fa3;
+	--cyan: #00e5ff;
+	--purple: #a06bff;
+	--orange: #ff9f43;
+	--green: #57d9a3;
+	--yellow: #ffd166;
+
+	--good: var(--green);
+	--warn: var(--orange);
+	--bad: #ff5c7a;
+	/* Muted tones for a verdict grouping's bulk (verdictColour). */
+	--good-muted: var(--green-muted);
+	--warn-muted: var(--orange-muted);
+	--bad-muted: #c87988;
+
+	/* Muted versions (about 45% of the saturation) for the bulk: ordinary
+	   categorical groups and traces. */
+	--cyan-muted: #5fb8c4;
+	--pink-muted: #c77a9f;
+	--purple-muted: #9585c4;
+	--orange-muted: #c9a075;
+	--green-muted: #7fb39a;
+	--yellow-muted: #c9b27d;
+
+	/* Categorical slots, in assignment order, then the catch-all. No pink. */
+	--cat-0: var(--cyan-muted);
+	--cat-1: var(--purple-muted);
+	--cat-2: var(--orange-muted);
+	--cat-3: var(--green-muted);
+	/* Four more for the idea miner's eight categories:
+	   shape already carries an iteration's status here, so a category needs
+	   its own hue rather than the rule's shape past four. Matched to
+	   the muted four's saturation and lightness, and clear of pink (emphasis)
+	   and the reds (verdicts). */
+	--blue-muted: #779ccf;
+	--olive-muted: #b4b766;
+	--lime-muted: #88b672;
+	--orchid-muted: #b986c1;
+	--blue: #4c90f0;
+	--olive: #ebf04c;
+	--lime: #83f04c;
+	--orchid: #db4cf0;
+	/* Two more for IO and ALGORITHM: a clay brown and a grey
+	   steel blue, clear of pink, the reds and the eight above. */
+	--clay-muted: #b98a76;
+	--steel-muted: #8fa3b8;
+	--clay: #f08a5c;
+	--steel: #7fb0e0;
+	--cat-8: var(--clay-muted);
+	--cat-9: var(--steel-muted);
+	--cat-4: var(--blue-muted);
+	--cat-5: var(--olive-muted);
+	--cat-6: var(--lime-muted);
+	--cat-7: var(--orchid-muted);
+	--cat-other: #7b7399;
+	/* The catch-all at full strength, for an emphasised catch-all point. */
+	--cat-other-strong: #b5aed0;
+	/* ROOT, the baseline's own category: a light neutral, clear of the
+	   catch-all grey and of every hue. */
+	--cat-root: #d9d4ea;
+	--cat-root-strong: #ffffff;
+
+	/* An iteration's code change in GitHub's diff colours (its dark theme's
+	   foregrounds): lines and files added, deleted, and files modified. */
+	--diff-add: #3fb950;
+	--diff-del: #f85149;
+	--diff-mod: #d29922;
+	--diff-add-bg: rgba(46, 160, 67, 0.15);
+	--diff-add-gutter: rgba(46, 160, 67, 0.30);
+	--diff-del-bg: rgba(248, 81, 73, 0.15);
+	--diff-del-gutter: rgba(248, 81, 73, 0.30);
+	/* The kind of a detail row, as a capitalised label: a gate, an observer,
+	   a seed. Muted hues, clear of green and red, which read as verdicts. */
+	--tag-gate: var(--yellow-muted);
+	--tag-obs: var(--cyan-muted);
+	--tag-seed: var(--purple-muted);
+
+	/* Line traces past the four slots take these before repeating; marker
+	   shape cannot separate lines. */
+	--line-4: var(--yellow-muted);
+	--line-5: var(--cat-other);
+
+	/* Heatmap scales. Sequential dark to cyan; diverging orange (below the
+	   reference) to cyan (above), centred on zero or a named reference. */
+	--seq-0: var(--panel);
+	--seq-1: #2f5a66;
+	--seq-2: var(--cyan-muted);
+	--seq-3: var(--cyan);
+	--div-low: var(--orange);
+	--div-low-muted: var(--orange-muted);
+	--div-mid: var(--panel);
+	--div-high-muted: var(--cyan-muted);
+	--div-high: var(--cyan);
+
+	/* A baseline or reference series: grey, and drawn
+	   as `x` markers so it cannot be read as the catch-all group. */
+	--baseline: var(--text-faint);
+
+	/* Task states, all flat: running is done's cyan at 45% over the track,
+	   two values of one hue. `skipped` is muted so a settled decision never
+	   reads as in progress, and clears --track by a 148 max-channel
+	   difference so a fully skipped bar is not empty. */
+	--done: var(--cyan);
+	--running: color-mix(in srgb, var(--cyan) 45%, var(--track));
+	--failed: var(--bad);
+	--skipped: #8f78c4;
+
+	/* Chrome-only surfaces. The topbar may be decorative; nothing below it
+	   is (no gradients, glows or shadows on data or panels). */
+	--topbar-top: #1c1830;
+	--topbar-bottom: #151222;
+	--panel-3: #28223c;
+	--tip-bg: #0c0a13;
+	--hover-wash: rgba(255, 255, 255, .08);
+
+	/* Logo glyphs that are not edits. */
+	--glyph: #8d85a8;
+	--glyph-hypothetical: #6f6790;
+
+	--radius: 12px;
+
+	/* The spacing scale. Every padding, margin and gap is one of these (or a
+	   negative of one). Text keeps --space-3 from a vertical hairline and
+	   --space-2 from a horizontal one; a hairline-divided instrument pads
+	   --space-3 on both sides of each divider (--space-4 for the sidebar). */
+	--space-0: 2px;
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 24px;
+	--space-6: 32px;
+	--gap: var(--space-0);
+
+	/* The containing block for the absolutely positioned tooltip, which is
+	   placed in this element's coordinates. */
+	position: relative;
+	background: var(--bg);
+	color: var(--text);
+	font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+	-webkit-font-smoothing: antialiased;
+}
+
+.autoopt-root, .autoopt-root * { box-sizing: border-box; }
+.autoopt-root [hidden] { display: none !important; }
+
+.autoopt-root h1 { font-size: 16px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+.autoopt-root h2 { font-size: 14px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+.autoopt-root h3 { font-size: 12px; font-weight: 650; margin: 0; color: var(--text-dim); }
+.autoopt-root p { margin: var(--space-0) 0 0; }
+.autoopt-root .muted { color: var(--text-faint); }
+.autoopt-root .dim { color: var(--text-dim); }
+.autoopt-root .num { text-align: right; font-variant-numeric: tabular-nums; }
+.autoopt-root code, .autoopt-root .mono {
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 11.5px;
+}
+
+/* ==== SECTION: chrome ==== */
+
+.autoopt-root .topbar {
+	position: sticky; top: 0; z-index: 30;
+	display: flex; align-items: center; justify-content: space-between;
+	gap: var(--space-4); padding: var(--space-3) var(--space-4);
+	background: linear-gradient(180deg, var(--topbar-top), var(--topbar-bottom));
+	border-bottom: 1px solid var(--line);
+}
+.autoopt-root .topbar-id { min-width: 0; }
+.autoopt-root .topbar-id code { color: var(--text-faint); display: block;
+	white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.autoopt-root .topbar-controls { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
+
+/* The title's gradient treatment. */
+.autoopt-root h1.title-gradient {
+	background: linear-gradient(92deg, var(--pink), var(--cyan));
+	-webkit-background-clip: text; background-clip: text; color: transparent;
+	width: fit-content;
+}
+
+.autoopt-root .pulse {
+	width: 8px; height: 8px; border-radius: 50%;
+	background: var(--good); transition: background 200ms;
+}
+.autoopt-root .pulse[data-state="stale"] { background: var(--warn); }
+.autoopt-root .pulse[data-state="down"] { background: var(--bad); }
+.autoopt-root .updated b { color: var(--warn); font-weight: 650; }
+
+/* Ghost: view toggles and panel controls. */
+.autoopt-root button.ghost {
+	font: inherit; font-size: 12px; color: var(--text-dim);
+	background: transparent; border: 1px solid var(--line);
+	border-radius: 6px; padding: var(--space-0) var(--space-2); cursor: pointer;
+}
+.autoopt-root button.ghost:hover { background: var(--panel-2); color: var(--text); }
+.autoopt-root button.ghost.small { padding: 0 var(--space-2); font-size: 11px; }
+.autoopt-root button.ghost[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan); }
+
+.autoopt-root select {
+	font: inherit; font-size: 12px; color: var(--text);
+	background: var(--panel-2); border: 1px solid var(--line);
+	border-radius: 6px; padding: var(--space-0) var(--space-2); max-width: 240px;
+}
+
+/* ==== SECTION: shell ==== */
+
+.autoopt-root .shell {
+	display: grid; grid-template-columns: minmax(0, 1fr) 302px;
+	gap: var(--space-4); padding: var(--space-4) var(--space-4) var(--space-6);
+	align-items: start;
+}
+@media (max-width: 1080px) {
+	.autoopt-root .shell { grid-template-columns: minmax(0, 1fr); }
+	.autoopt-root aside { position: static; }
+}
+
+.autoopt-root main { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.autoopt-root section { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.autoopt-root .section-head { display: flex; align-items: baseline;
+	justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.autoopt-root .section-head p { font-size: 11.5px; }
+
+/* Sections are separated by space and a hairline under each head. Every
+   block of content under a head is a filled panel with --space-3 inside
+   each edge, so no text sits on the first or last pixel of its box.
+   A scroller (the GPU row, the log) sits inside a `.panel`
+   rather than being one, so its content scrolls inside the padding instead
+   of under the border. Anything drawn inside a panel that paints its own background
+   (Plotly, sticky table and log headers, the density's floor) paints
+   --panel, not --bg. */
+.autoopt-root .section-head { border-bottom: 1px solid var(--line-soft); padding-bottom: var(--space-2); }
+.autoopt-root .card, .autoopt-root .summary, .autoopt-root .panel,
+.autoopt-root .stat-card {
+	background: var(--panel); border: 1px solid var(--line-soft);
+	border-radius: 10px; padding: var(--space-3);
+}
+.autoopt-root .card { margin: 0; min-width: 0; }
+.autoopt-root figcaption {
+	font-size: 12.5px; font-weight: 650; color: var(--text-dim);
+	display: flex; align-items: center; justify-content: space-between;
+	gap: var(--space-3); margin-bottom: var(--space-2); flex-wrap: wrap;
+}
+.autoopt-root .figcaption-aside {
+	display: flex; gap: var(--space-2); align-items: center; font-weight: 400; flex-wrap: wrap;
+}
+
+/* A chart's headline number sits under its title in the font, as
+   HTML, never as a monospace Plotly annotation. */
+.autoopt-root .panel-headline {
+	font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+	margin: 0 0 var(--space-2); line-height: 1.3;
+}
+.autoopt-root .panel-headline b { color: var(--text); font-weight: 650; }
+/* The separator between the reported values, large enough to read as one. */
+.autoopt-root .panel-headline .sep {
+	font-size: 15px; line-height: 0; vertical-align: -1px;
+	margin: 0 var(--space-2); color: var(--text-dim);
+}
+
+.autoopt-root .empty {
+	color: var(--text-faint); font-size: 11.5px; padding: var(--space-5);
+	text-align: center; border: 1px dashed var(--line); border-radius: 8px;
+}
+
+.autoopt-root footer { padding: 0 var(--space-4) var(--space-5); font-size: 10.5px; color: var(--text-faint); }
+.autoopt-root footer.credit { padding-top: 0; }
+.autoopt-root footer.credit a { color: var(--text-faint) !important; }
+.autoopt-root footer.credit a:hover { color: var(--cyan) !important; }
+
+/* ==== SECTION: summary ==== */
+
+.autoopt-root .summary { display: flex; gap: 0; align-items: stretch; flex-wrap: wrap; }
+/* The hero and the tiles are one hairline-divided row: --space-3 on both
+   sides of every divider. */
+.autoopt-root .hero { margin: 0; padding: 0 var(--space-3) 0 0; min-width: 168px; }
+.autoopt-root .hero figcaption {
+	font-size: 11px; font-weight: 500; color: var(--text-faint);
+	margin-bottom: 0; display: block;
+}
+.autoopt-root .hero-value { font-size: 42px; font-weight: 650; line-height: 1.05; letter-spacing: -0.03em; }
+.autoopt-root .hero-sub { font-size: 11.5px; color: var(--text-faint); }
+
+.autoopt-root .tiles { display: flex; gap: var(--space-3) 0; flex-wrap: wrap; flex: 1; }
+/* A tile opening a wrapped row (markRowStarts): no divider, same indent. */
+.autoopt-root .tile[data-row-start="true"] { border-left-color: transparent; }
+.autoopt-root .tile {
+	padding: 0 var(--space-3); min-width: 104px;
+	border-left: 1px solid var(--line-soft);
+}
+.autoopt-root .tile .label { font-size: 10.5px; color: var(--text-faint); }
+.autoopt-root .tile .value { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; }
+.autoopt-root .tile .delta { font-size: 10.5px; color: var(--text-dim); }
+.autoopt-root .tile[data-tone="pink"] .value { color: var(--pink); }
+.autoopt-root .tile[data-tone="good"] .value { color: var(--good); }
+.autoopt-root .tile[data-tone="bad"] .value { color: var(--bad); }
+
+/* ==== SECTION: sidebar ==== */
+
+.autoopt-root aside {
+	display: flex; flex-direction: column; gap: 0;
+	position: sticky; top: 56px;
+	gap: var(--space-3);
+}
+/* Each group is a panel (see the shell section). */
+.autoopt-root .stat-card h3 { margin-bottom: var(--space-2); text-transform: uppercase; letter-spacing: .05em; font-size: 10px; }
+.autoopt-root .stat-row {
+	display: flex; align-items: baseline; justify-content: space-between;
+	gap: var(--space-2); font-size: 11.5px; padding: var(--space-0) 0;
+}
+.autoopt-root .stat-row .key { color: var(--text-faint); min-width: 0;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autoopt-root .stat-row .val { color: var(--text); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.autoopt-root .stat-row .val.good { color: var(--good); }
+.autoopt-root .stat-row .val.warn { color: var(--warn); }
+.autoopt-root .stat-row .val.bad { color: var(--bad); }
+.autoopt-root .stat-row .val.pink { color: var(--pink); }
+.autoopt-root .stat-note { font-size: 10.5px; color: var(--text-faint); margin-top: var(--space-2); line-height: 1.35; }
+
+.autoopt-root .bar-list { display: flex; flex-direction: column; gap: var(--space-1); }
+.autoopt-root .bar-row { display: grid; grid-template-columns: 78px 1fr 34px; gap: var(--space-2); align-items: center; font-size: 11px; }
+.autoopt-root .bar-row .key { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autoopt-root .bar-row .bar { height: 8px; border-radius: 2px; background: var(--text-faint); }
+.autoopt-root .bar-row .n { text-align: right; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* ==== SECTION: chips-and-legend ==== */
+
+.autoopt-root .chips { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+.autoopt-root .chip {
+	display: inline-flex; align-items: center; gap: var(--space-1);
+	padding: var(--space-0) var(--space-2); border-radius: 999px; font-size: 11px;
+	border: 1px solid var(--line); color: var(--text-dim);
+	background: var(--panel-2); cursor: default; font-family: inherit;
+}
+.autoopt-root button.chip { cursor: pointer; }
+.autoopt-root .chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.autoopt-root .chip b { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+/* A category chip (categoryChips): the body emphasises, the end dot hides. */
+.autoopt-root .chip-main, .autoopt-root .chip .eye {
+	display: inline-flex; align-items: center; gap: var(--space-1); padding: 0;
+	border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+}
+.autoopt-root .chip-main { color: var(--text-dim); }
+.autoopt-root .chip .eye { font-size: 9px; color: var(--text-faint); padding-left: var(--space-0); }
+.autoopt-root .chip .eye:hover { color: var(--text); }
+.autoopt-root .chip[data-emphasised="true"] { border-color: currentColor; }
+.autoopt-root .chip[data-emphasised="true"] .chip-main { color: var(--text); }
+.autoopt-root .chip[data-hidden="true"] { opacity: .45; }
+
+.autoopt-root .legend { display: flex; gap: var(--space-3); flex-wrap: wrap; margin: 0; }
+.autoopt-root .legend-item { display: flex; align-items: center; gap: var(--space-1); font-size: 11px; color: var(--text-dim); }
+.autoopt-root .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: 0 0 auto; }
+.autoopt-root .swatch.round { border-radius: 50%; }
+.autoopt-root .swatch.hollow { background: none !important; border: 1.5px solid currentColor; border-radius: 50%; }
+
+/* ==== SECTION: plots ==== */
+
+.autoopt-root .plot { width: 100%; height: 300px; }
+.autoopt-root .plot.tall { height: 380px; }
+.autoopt-root .plot.short { height: 168px; }
+.autoopt-root .plot-scales { display: flex; gap: var(--space-1); justify-content: flex-end; margin-top: var(--space-0); }
+.autoopt-root .plot-scales button {
+	font: inherit; font-size: 10px; line-height: 1;
+	padding: var(--space-0) var(--space-1); border-radius: 5px; cursor: pointer;
+	background: transparent; color: var(--text-faint); border: 1px solid var(--line);
+}
+.autoopt-root .plot-scales button:hover { color: var(--text-dim); }
+.autoopt-root .plot-scales button[aria-pressed="true"] {
+	color: var(--bg); background: var(--cyan); border-color: var(--cyan);
+}
+
+/* A reorderable panel: only the grip starts a drag, because Plotly owns the
+   pointer over the plot, where a drag is a lasso. */
+.autoopt-root .reorder-grid {
+	display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--space-4);
+}
+.autoopt-root .reorder-card { position: relative; transition: opacity 120ms; }
+.autoopt-root .reorder-card figcaption { gap: var(--space-2); justify-content: flex-start; }
+.autoopt-root .grip {
+	cursor: grab; color: var(--text-faint); font-size: 15px; line-height: 1;
+	padding: var(--space-0) var(--space-1); margin: calc(-1 * var(--space-0)); user-select: none; border-radius: 4px;
+}
+.autoopt-root .grip:hover { background: var(--panel-2); }
+.autoopt-root .grip:active { cursor: grabbing; }
+.autoopt-root .reorder-card[data-dragging="true"] { opacity: .35; }
+.autoopt-root .reorder-card[data-drop="before"] { box-shadow: inset 3px 0 0 var(--cyan); }
+.autoopt-root .reorder-card[data-drop="after"] { box-shadow: inset -3px 0 0 var(--cyan); }
+
+/* ==== SECTION: tables ==== */
+
+.autoopt-root .table-scroll { overflow: auto; max-height: 260px; }
+.autoopt-root table { border-collapse: collapse; width: 100%; font-size: 11.5px; }
+.autoopt-root thead th {
+	position: sticky; top: 0; z-index: 1; background: var(--panel);
+	text-align: left; font-weight: 700; color: var(--text-faint);
+	font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em;
+	padding: var(--space-1) var(--space-2); white-space: nowrap; border-bottom: 1px solid var(--line);
+}
+.autoopt-root tbody td {
+	padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--line-soft);
+	white-space: nowrap; color: var(--text);
+}
+.autoopt-root tbody td.num { font-family: ui-monospace, Menlo, monospace; }
+.autoopt-root tbody tr:hover { background: var(--panel-2); }
+.autoopt-root tbody tr:last-child td { border-bottom: 0; }
+
+/* The data-table: search, count, paging, sortable headers. */
+.autoopt-root .table-controls { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-2); }
+.autoopt-root .table-controls input[type="search"] {
+	font: inherit; font-size: 12px; color: var(--text); background: transparent;
+	border: 0; border-bottom: 1px solid var(--line); padding: var(--space-0); min-width: 220px;
+}
+.autoopt-root .table-controls input[type="search"]:focus { outline: none; border-bottom-color: var(--cyan); }
+.autoopt-root .table-count { margin-left: auto; font-size: 11px; }
+.autoopt-root .table-foot { display: flex; gap: var(--space-3); align-items: center; justify-content: center; padding: var(--space-2) 0; font-size: 11px; }
+.autoopt-root #run-table thead th { cursor: pointer; user-select: none; }
+.autoopt-root #run-table thead th .arrow { color: var(--cyan); font-size: 9px; }
+.autoopt-root #run-table .table-scroll { max-height: 420px; position: relative; }
+.autoopt-root #run-table td[data-tone="bad"] { color: var(--bad) !important; }
+.autoopt-root #run-table td.note { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+.autoopt-root #run-table tbody tr[data-selected="true"] td { color: var(--cyan) !important; }
+/* The clicked point's rows: an outline, drawn inside the row so it is not
+   clipped by the scroll box and does not shift the columns. */
+.autoopt-root #run-table tbody tr[data-pinned="true"] td {
+	box-shadow: inset 0 1px 0 var(--pink), inset 0 -1px 0 var(--pink);
+}
+.autoopt-root #run-table tbody tr[data-pinned="true"] td:first-child {
+	box-shadow: inset 1px 1px 0 var(--pink), inset 0 -1px 0 var(--pink);
+}
+.autoopt-root #run-table tbody tr[data-pinned="true"] td:last-child {
+	box-shadow: inset -1px 1px 0 var(--pink), inset 0 -1px 0 var(--pink);
+}
+
+/* ==== SECTION: tooltip ==== */
+
+/* Canvas and HTML-panel tooltips. Plotly hover labels are styled in
+   plotLayout() to match: monospace, aligned label/value block. */
+.autoopt-root .tip {
+	position: absolute; z-index: 40; pointer-events: none;
+	background: var(--tip-bg); border: 1px solid var(--line);
+	border-radius: 7px; padding: var(--space-2) var(--space-3);
+	font: 11px/1.45 ui-monospace, Menlo, Consolas, monospace;
+	white-space: pre; color: var(--text-dim); max-width: 360px;
+	opacity: 0; transition: opacity 90ms;
+}
+.autoopt-root .tip.show { opacity: 1; }
+.autoopt-root .tip .head { color: var(--text); font-weight: 650; }
+.autoopt-root .tip .edit { color: var(--pink); }
+
+/* ==== SECTION: gpu ==== */
+
+/* One row however many GPUs there are, scrolling rather than wrapping. The
+   native scrollbar is an overlay with no reserved height, so `.dragbar`
+   replaces it; without it the cards past the edge cannot be reached. */
+.autoopt-root .gpu-cards {
+	display: grid; grid-auto-flow: column;
+	grid-auto-columns: minmax(150px, 1fr); gap: 0;
+	overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.autoopt-root .gpu-cards::-webkit-scrollbar { display: none; }
+/* The last reading, kept while nvidia-smi is slow or failing; the host
+   summary says how old it is. */
+.autoopt-root .gpu-cards[data-stale="true"] .gpu-card { opacity: 0.5; }
+.autoopt-root .dragbar {
+	height: 8px; margin-top: var(--space-1); border-radius: 999px;
+	background: var(--track); cursor: grab; position: relative;
+}
+.autoopt-root .dragbar[data-dragging="true"] { cursor: grabbing; }
+.autoopt-root .dragbar .thumb {
+	position: absolute; top: 0; height: 100%; min-width: 24px;
+	border-radius: 999px; background: var(--line);
+}
+.autoopt-root .dragbar:hover .thumb { background: var(--text-faint); }
+
+/* Separated by hairlines, not boxed; this run's GPU carries a 2px cyan rule
+   across its top. */
+.autoopt-root .gpu-card {
+	border-left: 1px solid var(--line-soft); border-top: 2px solid transparent;
+	padding: var(--space-2) var(--space-3); min-width: 0;
+}
+.autoopt-root .gpu-card:first-child { border-left: 0; padding-left: 0; }
+.autoopt-root .gpu-card[data-state="ours"] { border-top-color: var(--cyan); }
+.autoopt-root .gpu-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-1); min-width: 0; }
+.autoopt-root .gpu-title {
+	font-weight: 650; font-size: 11.5px; flex: 1 1 auto; min-width: 0;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.autoopt-root .gpu-util { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; }
+/* Stacked, not a wrapping row, so every card is the same height. */
+.autoopt-root .gpu-stats {
+	display: flex; flex-direction: column; font-size: 10px;
+	color: var(--text-faint); margin-top: 0; line-height: 1.45;
+}
+.autoopt-root .gpu-stats span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autoopt-root .gpu-spark {
+	display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-1);
+	align-items: center; margin: var(--space-2) 0 var(--space-0);
+}
+.autoopt-root .spark { position: relative; height: 26px; }
+.autoopt-root .spark svg { display: block; }
+.autoopt-root .spark .mark {
+	position: absolute; width: 4px; height: 4px;
+	margin: calc(-1 * var(--space-0)) 0 0 calc(-1 * var(--space-0));
+	border-radius: 50%; background: var(--text-dim);
+}
+.autoopt-root .spark-last { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.autoopt-root .gpu-proc { font-size: 10.5px; color: var(--text-dim); border-top: 1px solid var(--line-soft); padding-top: var(--space-2); margin-top: var(--space-2); }
+.autoopt-root .gpu-proc.muted { color: var(--text-faint); }
+.autoopt-root .gpu-proc .row { display: flex; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.autoopt-root .gpu-proc .row > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autoopt-root .gpu-proc code { color: var(--text); }
+/* `nowrap` and `flex: 0 0 auto`, or the badge wraps inside a 150 px card and
+   squeezes the title to "GP…". */
+.autoopt-root .badge {
+	font-size: 9.5px; padding: 0 var(--space-1); border-radius: 999px;
+	border: 1px solid var(--line); color: var(--text-faint);
+	white-space: nowrap; flex: 0 0 auto;
+}
+.autoopt-root .badge[data-state="ours"] { border-color: var(--cyan); color: var(--cyan); }
+.autoopt-root .badge[data-state="leased"] { border-color: var(--purple); color: var(--purple); }
+.autoopt-root .badge[data-state="busy"] { border-color: var(--warn); color: var(--warn); }
+
+/* ==== SECTION: lineage-tree ==== */
+
+.autoopt-root .lineage-wrap { display: flex; gap: var(--space-3); align-items: stretch; }
+/* A fixed viewport that scrolls, rather than a diagram squeezed to fit. */
+/* --tree-height is set by dragging the handle under the tree (dashboard.js,
+   treeResize); double-clicking it removes the property, back to 430px. */
+.autoopt-root .lineage-holder {
+	flex: 1; min-width: 0; overflow: auto; max-height: var(--tree-height, 430px);
+}
+/* Scrollbars that stay out of the way: thin, invisible until the pointer is
+   over the scroller, and then a faint thumb on no track. */
+.autoopt-root .lineage-holder, .autoopt-root .lineage-map {
+	scrollbar-width: thin; scrollbar-color: transparent transparent;
+	transition: scrollbar-color 120ms;
+}
+.autoopt-root .lineage-holder:hover, .autoopt-root .lineage-map:hover {
+	scrollbar-color: color-mix(in srgb, var(--text-faint) 45%, transparent) transparent;
+}
+/* The drag handle: a hairline that thickens on hover. */
+.autoopt-root .tree-resize {
+	height: 10px; margin: var(--space-1) 0; cursor: ns-resize; position: relative; z-index: 1;
+	display: flex; align-items: center; justify-content: center; touch-action: none;
+}
+.autoopt-root .tree-resize::before {
+	content: ''; width: 44px; height: 3px; border-radius: 2px;
+	background: var(--line); transition: background 120ms, width 120ms;
+}
+.autoopt-root .tree-resize:hover::before, .autoopt-root .tree-resize[data-dragging="true"]::before {
+	background: var(--text-faint); width: 72px;
+}
+.autoopt-root .lineage-holder svg { display: block; }
+.autoopt-root .lineage-edge { fill: none; stroke-width: 1.4px; transition: opacity 90ms; }
+.autoopt-root .lineage-node { cursor: pointer; transition: opacity 90ms; }
+.autoopt-root .lineage-node text {
+	font-size: 10px; fill: var(--text-dim); text-anchor: middle;
+	font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.autoopt-root .lineage-rowlabel { font-size: 10px; fill: var(--text-faint); }
+.autoopt-root .lineage-node[data-dim="true"], .autoopt-root .lineage-edge[data-dim="true"] { opacity: .15; }
+/* Hovering shows one ancestry and pushes the rest back. */
+.autoopt-root svg[data-hovering="true"] [data-node-id]:not([data-on-path="true"]) { opacity: .1; }
+.autoopt-root svg[data-hovering="true"] .lineage-edge[data-on-path="true"] { stroke-width: 2.4px; stroke-opacity: 1; }
+.autoopt-root .lineage-map {
+	flex: 0 0 auto; width: 70px; max-height: var(--tree-height, 430px); overflow-y: auto;
+	display: flex; flex-direction: column; gap: var(--space-0);
+	border-left: 1px solid var(--line-soft); padding-left: var(--space-3);
+}
+.autoopt-root .lineage-level {
+	display: flex; flex-direction: column; align-items: center; gap: 0;
+	padding: var(--space-1) 0; border: 0; background: none; cursor: pointer; font: inherit;
+}
+.autoopt-root .lineage-level:hover .n { color: var(--cyan); }
+.autoopt-root .lineage-level .dot { width: 11px; height: 11px; border-radius: 50%; }
+.autoopt-root .lineage-level .n { font-size: 10px; color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.autoopt-root .lineage-level .lbl { font-size: 8.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
+
+/* ==== SECTION: expandable-log ==== */
+
+/* A fixed viewport that scrolls: a search reaches thousands of entries. */
+.autoopt-root .log {
+	display: flex; flex-direction: column; max-height: 480px; overflow-y: auto;
+	scrollbar-width: thin;
+}
+.autoopt-root .log-header, .autoopt-root .log-row {
+	display: grid; grid-template-columns: var(--log-cols); gap: 0 var(--space-3);
+	align-items: baseline; min-width: 0;
+}
+.autoopt-root .log-header {
+	position: sticky; top: 0; z-index: 1; background: var(--panel);
+	/* The entries' 3px rule plus their padding, so the columns align. */
+	padding: 0 0 var(--space-1) calc(3px + var(--space-3)); border-bottom: 1px solid var(--line);
+	font-size: 9.5px; font-weight: 700; color: var(--text-faint);
+	text-transform: uppercase; letter-spacing: .07em;
+}
+.autoopt-root .log-header .num, .autoopt-root .log-row .num { text-align: right; }
+/* No box: a left rule in the category's colour and a hairline under each. */
+.autoopt-root .log-entry {
+	border-left: 3px solid var(--cat-other); border-bottom: 1px solid var(--line-soft);
+	padding: var(--space-1) 0 var(--space-1) var(--space-3); cursor: pointer;
+}
+.autoopt-root .log-entry:hover { background: var(--hover-wash); }
+.autoopt-root .log-row .m {
+	font-size: 11.5px; color: var(--text-dim); white-space: nowrap;
+	overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
+}
+.autoopt-root .log-row .m:first-child { color: var(--text); font-weight: 650; font-family: ui-monospace, Menlo, monospace; }
+.autoopt-root .log-row .m:last-child { color: var(--text); }
+.autoopt-root .log-entry[data-faded="true"] { opacity: .35; }
+.autoopt-root .log-detail { margin: var(--space-2) 0 var(--space-1); cursor: auto; }
+.autoopt-root .log-detail.pairs {
+	display: grid; gap: var(--space-1) var(--space-5);
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.autoopt-root .log-detail .pair { display: flex; justify-content: space-between; gap: var(--space-2); font-size: 11px; }
+.autoopt-root .log-detail .k { color: var(--text-faint); }
+.autoopt-root .log-detail .v { color: var(--text); font-family: ui-monospace, Menlo, monospace; text-align: right; }
+
+/* ==== SECTION: autoopt ==== */
+
+/* The lineage of the whole search. */
+.autoopt-root .tree-wrap { display: block; }
+.autoopt-root .tree-holder { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.autoopt-root .tree-col { min-width: 0; }
+.autoopt-root .tally-key {
+	display: inline-block; font-size: 9px; padding: 0 var(--space-1); border-radius: 5px;
+	border: 1px dashed var(--line); color: var(--text-dim);
+}
+
+/* Gain per step: signed values with four significant figures need a wider
+   value column than a count. */
+.autoopt-root .gain-list .bar-row { grid-template-columns: 40px 1fr 76px; }
+
+/* External validation: one small multiple per measure over rounds. The
+   section head says, before any number, that it is not a gate. */
+.autoopt-root .validation-grid {
+	display: grid; gap: var(--space-4);
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.autoopt-root .validation-grid .empty { grid-column: 1 / -1; }
+.autoopt-root .not-a-gate { color: var(--text); font-weight: 650; }
+
+/* An open log entry's README, above its key/value detail. */
+.autoopt-root .log-desc { margin-top: var(--space-2); font-size: 12px; color: var(--text-dim); max-width: 78ch; white-space: normal; }
+.autoopt-root .log-desc .log-h { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; margin-top: var(--space-2); }
+.autoopt-root .log-desc .log-p { margin: var(--space-1) 0 0; line-height: 1.45; }
+.autoopt-root .log-desc .log-p.muted { color: var(--text-faint); }
+.autoopt-root .log-desc .log-more { margin-top: var(--space-2); }
+.autoopt-root .log-diffstat { display: flex; flex-wrap: wrap; gap: var(--space-2); font: 11px/1.45 ui-monospace, Menlo, monospace; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.autoopt-root .diff-add { color: var(--diff-add); }
+.autoopt-root .diff-del { color: var(--diff-del); }
+.autoopt-root .diff-mod { color: var(--diff-mod); }
+.autoopt-root .k-tag { font-weight: 600; letter-spacing: .04em; }
+.autoopt-root .k-tag.k-gate { color: var(--tag-gate); }
+.autoopt-root .k-tag.k-obs { color: var(--tag-obs); }
+.autoopt-root .k-tag.k-seed { color: var(--tag-seed); }
+
+/* ==== SECTION: diff ==== */
+
+.autoopt-root #diff-card[hidden] { display: none; }
+.autoopt-root .diff-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); padding: var(--space-2) var(--space-3); color: var(--text-dim); }
+.autoopt-root .diff-summary .diff-idea { color: var(--text); }
+.autoopt-root .diff-file { border-top: 1px solid var(--line-soft); }
+.autoopt-root .diff-file > summary { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-1) var(--space-3); cursor: pointer; font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text); }
+.autoopt-root .diff-path { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.autoopt-root .diff-status { color: var(--text-faint); width: 1.2em; }
+.autoopt-root .diff-note { padding: var(--space-1) var(--space-3) var(--space-2); color: var(--text-faint); }
+.autoopt-root .diff-scroll { overflow-x: auto; }
+/* The Lab overrides below make every table `auto` layout and every cell
+   transparent with `!important`; the diff table undoes that for itself, at
+   a higher specificity. */
+.autoopt-root .diff-table { width: 100% !important; min-width: 640px; table-layout: fixed !important; border-collapse: collapse; font-family: ui-monospace, Menlo, monospace; font-size: 12px !important; line-height: 1.5; }
+.autoopt-root .diff-table tbody td { padding: 0 var(--space-2); vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text) !important; font-size: 12px !important; border-bottom: 0 !important; text-align: left !important; }
+.autoopt-root .diff-table tbody td.num { text-align: right !important; color: var(--text-faint) !important; user-select: none; padding: 0 var(--space-1); }
+.autoopt-root .diff-table tbody td.hunk { color: var(--text-faint) !important; background: var(--panel-2) !important; }
+.autoopt-root .diff-table tbody td.del { background: var(--diff-del-bg) !important; }
+.autoopt-root .diff-table tbody td.add { background: var(--diff-add-bg) !important; }
+.autoopt-root .diff-table tbody td.num.del { background: var(--diff-del-gutter) !important; }
+.autoopt-root .diff-table tbody td.num.add { background: var(--diff-add-gutter) !important; }
+.autoopt-root .diff-table tbody td.side { border-left: 1px solid var(--line-soft) !important; }
+
+/* ==== SECTION: jupyterlab-overrides ==== */
+
+/* Lab injects theme CSS after this file and out-specifies it by an element
+   selector, so neither order nor specificity is reliable; `!important` is
+   deterministic and stays confined to the mount. Each entry undoes a real
+   breakage: a fixed table layout collapses columns and overlaps `nowrap`
+   cells, row striping paints over the surface, `code` becomes a chip. */
+.autoopt-root table {
+	table-layout: auto !important; width: 100% !important;
+	margin: 0 !important; border: 0 !important; color: inherit !important;
+	font-size: 11.5px !important;
+}
+.autoopt-root thead th {
+	background: var(--panel) !important; color: var(--text-faint) !important;
+	border: 0 !important; border-bottom: 1px solid var(--line) !important;
+	text-align: left !important; text-transform: uppercase !important;
+	font-size: 9.5px !important; font-weight: 700 !important;
+}
+.autoopt-root tbody tr { background: transparent !important; }
+.autoopt-root tbody tr:hover { background: var(--panel-2) !important; }
+.autoopt-root tbody td {
+	background: transparent !important; color: var(--text) !important;
+	border: 0 !important; border-bottom: 1px solid var(--line-soft) !important;
+	text-align: left !important; font-size: 11.5px !important;
+}
+.autoopt-root th.num, .autoopt-root td.num { text-align: right !important; }
+.autoopt-root code {
+	background: none !important; padding: 0 !important; border: 0 !important;
+	color: inherit !important; font-size: 11.5px !important;
+	line-height: inherit !important;
+}
+.autoopt-root a { color: var(--cyan) !important; text-decoration: none !important; }
+.autoopt-root img, .autoopt-root svg { max-width: none !important; }
+/* Lab sets `height: auto` on svg, which rescales the sparkline's viewBox
+   with the card's width and drops a 0% line into the row beneath. */
+.autoopt-root .spark svg { height: 26px !important; }
+.autoopt-root canvas { max-width: 100% !important; }
+.autoopt-root pre { margin: 0 !important; background: none !important; }
+.autoopt-root h1, .autoopt-root h2, .autoopt-root h3 {
+	border: 0 !important; padding: 0 !important; margin: 0 !important;
+	/* Lab's heading line-height squeezes a heading against its hairline. */
+	line-height: 1.3 !important;
+}
+.autoopt-root h2, .autoopt-root h3 { color: inherit !important; }
+.autoopt-root button, .autoopt-root select { font-family: inherit !important; }
+
+/* The node panel under the tree: a clicked node's whole README beside every
+   number the iteration recorded. */
+.autoopt-root .tree-node { border-top: 1px solid var(--line-soft); margin-top: var(--space-3); padding-top: var(--space-2); }
+.autoopt-root .tree-node[hidden] { display: none; }
+.autoopt-root .tree-node-head { display: flex; align-items: baseline; gap: var(--space-2); }
+.autoopt-root .tree-node-id { color: var(--text); font-weight: 650; font-family: ui-monospace, Menlo, monospace; }
+.autoopt-root .tree-node-title { color: var(--text-dim); flex: 1; }
+.autoopt-root .tree-node-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: var(--space-5); margin-top: var(--space-2); }
+.autoopt-root .tree-node-detail { margin-top: 0; }
+.autoopt-root .md { font-size: 12px; color: var(--text-dim); max-width: 92ch; }
+.autoopt-root .md .md-h1 { font-size: 13px; color: var(--text); font-weight: 650; margin-top: var(--space-2); }
+.autoopt-root .md .md-h { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; margin-top: var(--space-3); }
+.autoopt-root .md .md-p { margin: var(--space-1) 0 0; line-height: 1.45; }
+.autoopt-root .md .md-ul { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
+.autoopt-root .md .md-ul li { line-height: 1.45; }
+.autoopt-root .md .md-li-nested { margin-left: var(--space-4); }
+.autoopt-root .md code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--text); background: none; padding: 0; }
+.autoopt-root .md strong { color: var(--text); font-weight: 650; }
+.autoopt-root .md .md-pre { font: 11px/1.4 ui-monospace, Menlo, monospace; color: var(--text); white-space: pre-wrap; margin: var(--space-2) 0 0; background: none; border: none; padding: 0; }
+.autoopt-root .md .md-table { border-collapse: collapse; margin-top: var(--space-2); font-size: 11px; }
+.autoopt-root .md .md-table th, .autoopt-root .md .md-table td { padding: var(--space-0) var(--space-2); border: none; border-bottom: 1px solid var(--line-soft); text-align: left; background: none; }
+.autoopt-root .md .md-table th { color: var(--text-faint); font-weight: 400; }
+@media (max-width: 900px) { .autoopt-root .tree-node-body { grid-template-columns: 1fr; } }
+
