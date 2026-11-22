@@ -67,5 +67,18 @@ it.
   field and is read as before.
 - `config.json`, `state.json`, `result.json` and `ended.json` carry
   `schema_version` (1), for tools that read them.
+- A search's budget can be a number of idea-miner stages
+  (`after.budget_stages`), in place of the number of iterations the
+  interview offered, which no script enforced: `stages.py next` called for
+  another phase after such a budget was spent. Once that many stages have
+  closed, `mine` refuses a further one, `status` says so, and the search
+  stops for `budget` when every idea from those stages is tried or dropped.
+  A budget in wall-clock hours (`after.budget_hours`) is unchanged.
+- `config --set command=…` works until the baseline has run. It was refused
+  outright, so a command written without `{iteration}` at step 0 left the
+  setup subagent to work around it.
+- Step 2 names the profiling check `checks/profile_call.py`. The name it gave,
+  `profile.py`, shadows the standard library's `profile` module, which
+  `cProfile` imports, so the check failed on its first run.
 - The dashboard opens an iteration's diff against its parent when its point
   on the objective chart is clicked.
