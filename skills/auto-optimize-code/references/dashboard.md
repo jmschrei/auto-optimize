@@ -184,13 +184,13 @@ the next poll plus a re-run of the cell.
 
 ## Without a browser
 
-`autoopt.py status` prints the table the summary band carries, and `scan.py`
-prints the whole payload:
+`autoopt.py table` prints a row per iteration, as the charts plot them, and
+`scan.py` prints the whole payload:
 
 ```bash
-python3 $AO/autoopt.py status $WORK --json
+python3 $AO/autoopt.py table $WORK
 python3 $DASH/scan.py $WORK/autooptimize | head -40
 ```
 
-Testing a change to the dashboard: `references/layout.md`, *Testing the
-scripts*, and `scripts/dashboard/README.md`.
+Answering a question about a search without a dashboard:
+`references/reading-a-search.md`.

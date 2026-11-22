@@ -6,8 +6,9 @@ description: >-
   optimize, speed up or slim a function, a script, a command-line tool or a
   library, or to search over implementations of it for speed, memory or output
   size; to improve one number while another must not move ("faster, but
-  outputs match to 1e-5"); to check on a running search ("how is the search
-  going", "what is on the frontier"); or to end, resume or finish one. Covers
+  outputs match to 1e-5"); to check on a running search or read what one
+  found ("how is the search going", "what is on the frontier", "what did A7
+  try"); or to end, resume or finish one. Covers
   the objective/gate/observer interview, a git worktree per iteration,
   optimizing a copy of a GitHub repository, new unit tests as a gate, a setup
   subagent for the benchmark and baseline, median-of-N-seeds against a noise
@@ -26,6 +27,14 @@ idea and reporting a median over seeds.
 Developed at the [Programmable Genomics Laboratory](https://programmable-genomics.github.io) @ UMass Chan Medical School.
 
 MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are as in RFC 2119.
+
+## Only asked about a search?
+
+A question about a search this session is not running, whether another
+session started it or it has ended ("what won", "how far did it get", "what
+did A7 try"), is answered from `references/reading-a-search.md` alone: its
+commands only read, and nothing below applies. The main session of a running
+search follows `references/main-session.md` for what it reads.
 
 ## The three words
 
@@ -98,6 +107,7 @@ advance.
 | You are the idea miner | `references/idea-miner.md` |
 | The dashboard: start it, read it, fix it | `references/dashboard.md` |
 | A search a previous session started | `references/resume.md` |
+| A question about a search, not continuing it | `references/reading-a-search.md` |
 
 ## By topic
 
@@ -116,7 +126,9 @@ advance.
 | Speeding up or slimming an algorithm implementation: time and memory, synthetic input sizes, thread counts | `references/algorithm.md` |
 | Optimizing code in a git repository without touching it: the copy, the harness, the unit-test gate | `references/repo-mode.md` |
 | The checks `promote` makes without measuring: text, the `## Change` and `## Commit message` sections of `notes.md`, indentation, license markers, the oldest toolchain (`preflight.py`, `lint_text.py`) | `references/promotion.md`, *The preflight* |
-| What is on disk, what the JSON files hold, every script flag (the dashboard's are in `scripts/dashboard/README.md`) | `references/layout.md` |
+| What is on disk, what the JSON files hold, the version fields | `references/layout.md` |
+| Every script flag (the dashboard's are in `scripts/dashboard/README.md`) | `references/cli.md` |
+| Reading a search without changing it: `autoopt.py table` and `show`, which file answers which question | `references/reading-a-search.md` |
 | Ending the search, reopening it, an iteration made after the end (`--after-end`), what `end` leaves on disk | `references/step4-final.md` |
 | Code compiled by numba: speed, exactness classes, compile time | `references/algorithm.md`, *Numba* |
 

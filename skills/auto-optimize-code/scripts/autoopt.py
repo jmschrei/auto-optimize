@@ -9470,6 +9470,380 @@ def path(args):
 
 
 ###
+# table and show: read a search without changing it
+###
+
+# The columns `table` can print, in the order `--fields all` gives them. Each
+# gate and observer of the search is a column too, under its own name, or as
+# gate.<name> / observer.<name> where that name is one of these.
+TABLE_FIELDS = ('id', 'parent', 'round', 'category', 'title', 'status',
+	'stage', 'n', 'median', 'spread', 'vs_parent', 'vs_base', 'vs_base_pct',
+	'keep', 'promoted', 'frontier', 'gates', 'tests', 'check', 'commit')
+TABLE_DEFAULT = ('id', 'parent', 'category', 'title', 'status', 'n', 'median',
+	'vs_parent', 'vs_base', 'keep', 'frontier')
+
+
+def metric_columns(config):
+	"""[(column, 'gate' or 'observer', name)] for the search's gates and
+	observers."""
+
+	out = []
+
+	for kind, entries in (('gate', config['gates']), ('observer',
+			config['observers'])):
+		for entry in entries:
+			name = entry['name']
+			out.append((name if name not in TABLE_FIELDS else '{}.{}'.format(
+				kind, name), kind, name))
+
+	return out
+
+
+def iteration_rows(root, config):
+	"""Every iteration as a dict of raw values (numbers stay numbers, a
+	missing value is None), settled ones from result.json and in-flight ones
+	from meta.json. Reads files only."""
+
+	direction = config['objective']['direction']
+	results = all_results(root)
+	by_id = {result['id']: result for result in results}
+	on_frontier = {r['id'] for r in frontier_path(results, direction)}
+	roots = {entry.get('id') for entry in load_state(root).get('roots') or []}
+	base = ((by_id.get(0) or {}).get('objective') or {}).get('median')
+	checked = bool((config.get('checks') or {}).get('compare'))
+	rows = []
+
+	for identifier in iteration_ids(root):
+		result = by_id.get(identifier)
+		meta = load_meta(root, identifier) or {}
+		record = result or {}
+		parent = record.get('parent', meta.get('parent'))
+		median = (record.get('objective') or {}).get('median')
+		above = ((by_id.get(parent) or {}).get('objective') or {}).get(
+			'median')
+		gates = record.get('gates') or {}
+
+		if result is not None:
+			status = record.get('status')
+		elif os.path.exists(os.path.join(iteration_dir(root, identifier),
+				'result.json')):
+			status = 'unreadable'
+		else:
+			status = 'running'
+
+		broken = [gate['name'] for gate in config['gates'] if not (gates.get(
+			gate['name']) or {}).get('pass')]
+
+		row = {
+			'id': label(root, identifier),
+			'parent': label(root, parent) if parent is not None else None,
+			'round': record.get('round', meta.get('round')),
+			'category': category_of({'id': identifier, 'category': record.get(
+				'category') or meta.get('category')}),
+			'title': record.get('title') or meta.get('title'),
+			'status': status,
+			'stage': record.get('stage'),
+			'n': record.get('n_runs'),
+			'median': median,
+			'spread': (record.get('objective') or {}).get('std'),
+			'vs_parent': median - above if None not in (median, above)
+				else None,
+			'vs_base': median - base if None not in (median, base) else None,
+			'vs_base_pct': 100.0 * (median - base) / abs(base) if None not in (
+				median, base) and base != 0 else None,
+			'keep': (record.get('keep') or {}).get('verdict'),
+			'promoted': identifier in roots,
+			'frontier': identifier in on_frontier,
+			'gates': None if result is None or not config['gates'] else
+				'FAIL ' + ','.join(broken) if broken else 'pass',
+			'tests': tests_cell(record) if result and config.get('tests')
+				else None,
+			'check': check_cell(record) if result and checked else None,
+			'commit': (record.get('commit') or meta.get('commit') or '')[:12]
+				or None,
+		}
+
+		for column, kind, name in metric_columns(config):
+			found = (record.get(kind + 's') or {}).get(name) or {}
+			row[column] = found.get('worst' if kind == 'gate' else 'median')
+
+		row['_id'] = identifier
+		rows.append(row)
+
+	return rows
+
+
+def table_cell(value):
+	"""A raw value as text for the aligned table."""
+
+	if value is True:
+		return 'yes'
+	if value is False:
+		return ''
+
+	return fmt(value)
+
+
+def table_command(args):
+	"""`table`: one row per iteration, filtered, sorted and cut, as text,
+	TSV or JSON."""
+
+	root = resolve(args.root)
+	config = load_config(root)
+	rows = iteration_rows(root, config)
+	every = list(TABLE_FIELDS) + [column for column, _, _ in metric_columns(
+		config)]
+
+	fields = every if args.fields == 'all' else [field.strip() for field in (
+		args.fields or ','.join(TABLE_DEFAULT)).split(',') if field.strip()]
+	unknown = [field for field in fields if field not in every]
+
+	if unknown:
+		fail('--fields: no column {}; the columns are {}'.format(', '.join(
+			unknown), ', '.join(every)))
+
+	if args.status:
+		wanted = {word.strip() for word in args.status.split(',')}
+		rows = [row for row in rows if row['status'] in wanted]
+
+	if args.category:
+		wanted = {word.strip().upper() for word in args.category.split(',')}
+		rows = [row for row in rows if (row['category'] or '').upper()
+			in wanted or SHORT.get(row['category'], '').upper() in wanted]
+
+	if args.round is not None:
+		rows = [row for row in rows if row['round'] == args.round]
+
+	if args.parent is not None:
+		parent = label(root, to_id(root, args.parent, '--parent'))
+		rows = [row for row in rows if row['parent'] == parent]
+
+	if args.frontier:
+		rows = [row for row in rows if row['frontier']]
+
+	if args.promoted:
+		rows = [row for row in rows if row['promoted']]
+
+	if args.sort:
+		key = args.sort.lstrip('-')
+		descending = args.sort.startswith('-')
+
+		if key == 'best':
+			key = 'median'
+			descending = config['objective']['direction'] == 'max'
+		elif key not in every:
+			fail('--sort: no column {}; the columns are best, {}'.format(key,
+				', '.join(every)))
+
+		present = [row for row in rows if row.get(key) is not None]
+		present.sort(key=lambda row: (row[key], row['_id']),
+			reverse=descending)
+		rows = present + [row for row in rows if row.get(key) is None]
+
+	if args.limit is not None:
+		rows = rows[:args.limit]
+
+	if args.json:
+		print(json.dumps([{field: row.get(field) for field in fields}
+			for row in rows], indent='\t'))
+		return 0
+
+	if args.tsv:
+		print('\t'.join(fields))
+		for row in rows:
+			print('\t'.join('' if row.get(field) is None else str(row[field])
+				for field in fields))
+		return 0
+
+	cells = [[table_cell(row.get(field)) for field in fields] for row in rows]
+	cells = [[cell[:40] if field == 'title' else cell for field, cell in zip(
+		fields, line)] for line in cells]
+	widths = [max([len(field)] + [len(line[i]) for line in cells])
+		for i, field in enumerate(fields)]
+
+	print('  '.join(field.ljust(widths[i]) for i, field in enumerate(
+		fields)).rstrip())
+	print('  '.join('-' * width for width in widths))
+
+	for line in cells:
+		print('  '.join(cell.ljust(widths[i]) for i, cell in enumerate(
+			line)).rstrip())
+
+	print('({} of {} iterations; median: {}, {}imized, over each iteration\'s '
+		'runs; vs_parent and vs_base: its median minus the parent\'s and A0\'s)'
+		.format(len(rows), len(iteration_ids(root)), config['objective'][
+		'name'], config['objective']['direction']))
+
+	return 0
+
+
+def notes_excerpts(root, identifier, chars):
+	"""{section: text} for The idea and What happened, from notes.md, else
+	README.md, each cut to `chars` (0: whole). A file with neither section
+	gives its first `## ` section other than Numbers."""
+
+	directory = iteration_dir(root, identifier)
+
+	for name in ('notes.md', 'README.md'):
+		try:
+			with open(os.path.join(directory, name), encoding='utf-8') as handle:
+				text = handle.read()
+		except OSError:
+			continue
+
+		# Lenient: a README opens with a title and a metadata block.
+		sections, current = [], None
+		for line in text.splitlines():
+			if line.startswith('## '):
+				current = [line[3:].strip(), []]
+				sections.append(current)
+			elif current is not None:
+				current[1].append(line)
+
+		sections = [(heading, '\n'.join(body).strip()) for heading, body
+			in sections if '\n'.join(body).strip()]
+		chosen = [(heading, body) for heading, body in sections if heading in (
+			'The idea', 'What happened')] or [(heading, body) for heading, body
+			in sections if heading != 'Numbers'][:1]
+
+		if chosen:
+			return {heading: body if not chars or len(body) <= chars else
+				body[:chars].rstrip() + ' …' for heading, body in chosen}
+
+	return {}
+
+
+def show(args):
+	"""`show`: one iteration on one screen, with the paths to read further.
+	Reads files and runs `git diff --shortstat` only."""
+
+	root = resolve(args.root)
+	config = load_config(root)
+	identifier = resolve_id(root, config, args.id)
+
+	if identifier is None or not os.path.isdir(iteration_dir(root,
+			identifier)):
+		fail('no iteration {} in {}'.format(label(root, identifier), root))
+
+	row = next(row for row in iteration_rows(root, config) if row['_id']
+		== identifier)
+	result = load_result(root, identifier) or {}
+	meta = load_meta(root, identifier) or {}
+	objective = config['objective']
+	parent = result.get('parent', meta.get('parent'))
+	directory = iteration_dir(root, identifier)
+	bare = os.path.join(root, 'repo.git')
+	diff = None
+
+	if parent is not None:
+		span = 'autoopt/{}...autoopt/{}'.format(parent, identifier)
+		try:
+			diff = {'command': 'git -C {} diff {}'.format(shlex.quote(bare),
+				span), 'shortstat': git('-C', bare, 'diff', '--shortstat',
+				span).strip() or 'no change'}
+		except RuntimeError:
+			diff = None
+
+	paths = {name: os.path.join(directory, name) for name in ('README.md',
+		'notes.md', 'result.json', 'meta.json', 'runs')
+		if os.path.exists(os.path.join(directory, name))}
+	brief = os.path.join(root, 'briefs', '{}.md'.format(identifier))
+	if os.path.exists(brief):
+		paths['brief'] = brief
+
+	notes = notes_excerpts(root, identifier, args.chars)
+
+	if args.json:
+		print(json.dumps({'row': {key: value for key, value in row.items()
+			if not key.startswith('_')}, 'objective': result.get('objective'),
+			'gates': result.get('gates'), 'observers': result.get('observers'),
+			'keep': result.get('keep'), 'failures': result.get('failures'),
+			'tests': result.get('tests'), 'check': result.get('check'),
+			'prediction': result.get('prediction'), 'diff': diff,
+			'notes': notes, 'paths': paths}, indent='\t'))
+		return 0
+
+	lines = ['{}  {}'.format(row['id'], row['title'] or '(no title)')]
+	where = ['round {}'.format(row['round']), 'parent {}'.format(row['parent']
+		or 'none: the baseline')]
+	if result.get('branch') or meta.get('branch'):
+		where.append('branch ' + (result.get('branch') or meta.get('branch')))
+	if row['commit']:
+		where.append('commit ' + row['commit'])
+	lines.append('{:<11}{}, {}'.format('category', row['category'] or '-',
+		', '.join(where)))
+
+	if not result:
+		lines.append('{:<11}{}'.format('status', 'running: no result.json yet'
+			if row['status'] == 'running' else 'unreadable: result.json is not '
+			'valid JSON'))
+	else:
+		values = result.get('objective') or {}
+		unit = ' ' + objective['unit'] if objective.get('unit') else ''
+		lines.append('{:<11}{}'.format('status', status_words(config, result)))
+		lines.append('{:<11}{}{} (std {}, range {} to {}, {} runs)'.format(
+			'median', fmt(values.get('median'), 6), unit, fmt(values.get(
+			'std'), 3), fmt(values.get('min'), 6), fmt(values.get('max'), 6),
+			result.get('n_runs')))
+		lines.append('{:<11}{}, {}imized'.format('objective',
+			objective['name'], objective['direction']))
+
+		for name, key, other in (('vs parent', 'vs_parent', parent),
+				('vs A0', 'vs_base', 0)):
+			if row[key] is not None and identifier != other:
+				above = ((load_result(root, other) or {}).get('objective')
+					or {}).get('median')
+				lines.append('{:<11}{:+.4g}{} against {}\'s {}'.format(name,
+					row[key], ' ({:+.1f}%)'.format(100.0 * row[key] / abs(above))
+					if above else '', label(root, other), fmt(above, 6)))
+
+		keep = result.get('keep') or {}
+		if keep:
+			lines.append('{:<11}{}: {}'.format('keep', keep.get('verdict'),
+				keep.get('why') or ''))
+		lines.append('{:<11}{}; on the frontier path: {}'.format('promoted',
+			'yes' if row['promoted'] else 'no', 'yes' if row['frontier']
+			else 'no'))
+
+		for gate in config['gates']:
+			record = (result.get('gates') or {}).get(gate['name']) or {}
+			lines.append('{:<11}{} {} {}: {} (worst {})'.format('gate',
+				gate['name'], gate['op'], fmt(gate['threshold']), 'pass'
+				if record.get('pass') else 'FAIL', fmt(record.get('worst'), 6)))
+
+		observed = ['{} {}'.format(entry['name'], fmt(((result.get(
+			'observers') or {}).get(entry['name']) or {}).get('median'), 4))
+			for entry in config['observers']]
+		if observed:
+			lines.append('{:<11}{}'.format('observers', ', '.join(observed)))
+
+		if row['tests']:
+			lines.append('{:<11}{}'.format('tests', row['tests']))
+		if result.get('check'):
+			lines.append('{:<11}{}'.format('check', check_line(result['check'])[
+				len('check: '):]))
+		if result.get('prediction'):
+			lines.append('{:<11}{}'.format('prediction', prediction_note(root,
+				result).lstrip('; ')))
+		for failure in result.get('failures') or []:
+			lines.append('{:<11}seed {}: {}'.format('failed', failure.get(
+				'seed'), failure.get('error')))
+
+	if diff:
+		lines.append('{:<11}{}; {}'.format('change', diff['shortstat'],
+			diff['command']))
+
+	for heading, body in notes.items():
+		lines += ['', '## ' + heading, body]
+
+	lines += ['', 'files']
+	lines += ['  {:<12}{}'.format(name, path) for name, path in paths.items()]
+	print('\n'.join(lines))
+
+	return 0
+
+
+###
 # tokens: what a search's agents spent, from Claude Code's transcripts
 ###
 
@@ -10716,6 +11090,47 @@ def build_parser():
 	path_parser.add_argument('--markdown', action='store_true')
 	path_parser.add_argument('--json', action='store_true')
 	path_parser.set_defaults(func=path)
+
+	tabler = subparsers.add_parser('table', help='read-only: one row per '
+		'iteration, in flight included, filtered, sorted and cut; text, TSV '
+		'or JSON')
+	tabler.add_argument('root')
+	tabler.add_argument('--fields', help='comma-separated columns, or all '
+		'(default: {}). Also: {}, and each gate and observer by name'.format(
+		','.join(TABLE_DEFAULT), ', '.join(field for field in TABLE_FIELDS
+		if field not in TABLE_DEFAULT)))
+	tabler.add_argument('--status', help='keep these statuses: ok, '
+		'gate-failed, error, partial, running, unreadable (comma-separated)')
+	tabler.add_argument('--category', help='keep these categories, by name '
+		'or short name (CACHING or cache; comma-separated)')
+	tabler.add_argument('--round', type=int, help='keep this round')
+	tabler.add_argument('--parent', help='keep the children of this '
+		'iteration (A5)')
+	tabler.add_argument('--frontier', action='store_true', help='keep the '
+		'iterations that improved on everything before them')
+	tabler.add_argument('--promoted', action='store_true', help='keep the '
+		'iterations promoted to root')
+	tabler.add_argument('--sort', help='a column, descending with a leading '
+		'-; best sorts by median, best first. Missing values go last')
+	tabler.add_argument('--limit', type=int, help='the first N rows, after '
+		'sorting')
+	shape = tabler.add_mutually_exclusive_group()
+	shape.add_argument('--tsv', action='store_true', help='tab-separated, '
+		'raw values, a header line')
+	shape.add_argument('--json', action='store_true', help='a list of '
+		'objects, raw values')
+	tabler.set_defaults(func=table_command)
+
+	shower = subparsers.add_parser('show', help='read-only: one iteration on '
+		'one screen: its numbers, keep verdict, gates, code change, notes and '
+		'the paths to read further')
+	shower.add_argument('root')
+	shower.add_argument('id', nargs='?', default='best', help='an iteration '
+		'(A7 or 7), or best (default)')
+	shower.add_argument('--chars', type=int, default=600, help='cut each '
+		'notes section at this many characters; 0 prints it whole')
+	shower.add_argument('--json', action='store_true')
+	shower.set_defaults(func=show)
 
 	branching = subparsers.add_parser('tests-branch', help='step 1: check '
 		'the original, clone it into <work>/tests/suite and branch; --squash '

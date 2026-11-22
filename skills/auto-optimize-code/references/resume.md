@@ -3,6 +3,10 @@
 The session that started a search is rarely the one that finishes it. None of
 its context survives; everything needed is on disk.
 
+This file is for continuing the search: it starts the dashboard publisher and
+hands unfinished iterations to new subagents. To answer a question about the
+search without continuing it, read `references/reading-a-search.md` instead.
+
 ## First: has the search ended?
 
 `autooptimize/ended.json` means it has (`references/step4-final.md`). Read
