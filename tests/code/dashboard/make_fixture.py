@@ -24,7 +24,8 @@ import argparse
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS = os.path.dirname(HERE)
+SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, os.pardir,
+	'skills', 'auto-optimize-code', 'scripts'))
 
 
 BENCH = '''\

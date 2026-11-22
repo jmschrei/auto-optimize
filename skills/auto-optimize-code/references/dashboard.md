@@ -161,7 +161,7 @@ the next poll plus a re-run of the cell.
 | **scan failing · <reason> · last good scan N ago · see <writer.log>** | the scanner raises on this search (a bad `config.json`, a corrupt `state.json`); the writer keeps running and recovers on the next good scan. Fix the file it names; `python3 $DASH/scan.py $WORK/autooptimize` reproduces it |
 | `N unreadable: …` beside the pulse | those iterations' records raise in the scanner (a malformed `result.json`) and their rows have status `unreadable`; the rest of the page is current |
 | **the dashboard has been updated — re-run the cell** | the open page runs an older script than the one published; re-running the cell is the only fix |
-| stuck on `Loading the dashboard…` | `dashboard.js` loaded but did not reach `startAutoopt`; the browser console names the error, and `test_frontend.py` fails on it |
+| stuck on `Loading the dashboard…` | `dashboard.js` loaded but did not reach `startAutoopt`; the browser console names the error |
 | `could not load …/dashboard.css` (or `.js`) | the out directory is outside the root of the server the notebook runs on; `--status` shows where it publishes |
 | `connecting…` never clears | no `state.json` was read: the writer is not running or has not written yet. `--status`, then `writer.log` |
 | `could not reload <module>: …` above the output | the reload chain hit an error in that module, and the old copy stays loaded. Fix it and re-run the cell |

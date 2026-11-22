@@ -32,7 +32,10 @@ import http.server
 import socketserver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+# The skill's dashboard scripts, which these tests import and run.
+DASHBOARD = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, os.pardir, 'skills',
+	'auto-optimize-code', 'scripts', 'dashboard'))
+sys.path.insert(0, DASHBOARD)
 
 import make_fixture
 import spacing_check
@@ -56,7 +59,7 @@ def equal(name, got, want):
 
 
 def make_fixture_results(root):
-	sys.path.insert(0, os.path.join(os.path.dirname(HERE)))
+	sys.path.insert(0, os.path.join(os.path.dirname(DASHBOARD)))
 	import autoopt
 	return autoopt.all_results(root)
 
@@ -267,7 +270,7 @@ def publisher(root, work):
 	"""The mount's CLI and lifecycle: slugs, intervals, stop, discovery by
 	process, --out, and errors as messages."""
 
-	mount_py = os.path.join(HERE, 'autoopt_monitor.py')
+	mount_py = os.path.join(DASHBOARD, 'autoopt_monitor.py')
 	cli = lambda *args: subprocess.run([sys.executable, mount_py] + list(args),
 		capture_output=True, text=True, cwd=work)
 	mount = autoopt_monitor
@@ -303,7 +306,7 @@ def publisher(root, work):
 	# A writer started by hand, publishing outside the base, with no index
 	# entry: status() finds it by process, and --stop stops it.
 	elsewhere = tempfile.mkdtemp(prefix='by-hand-', dir=work)
-	hand = subprocess.Popen([sys.executable, os.path.join(HERE,
+	hand = subprocess.Popen([sys.executable, os.path.join(DASHBOARD,
 		'monitor_writer.py'), root, '--out', elsewhere, '--interval', '60',
 		'--resource-interval', '60'], stdout=subprocess.DEVNULL,
 		stderr=subprocess.DEVNULL, start_new_session=True)
@@ -360,7 +363,7 @@ def publisher(root, work):
 	# as `| head` leaves a long snapshot.
 	reader, writer = os.pipe()
 	os.close(reader)
-	piped = subprocess.run([sys.executable, os.path.join(HERE, 'scan.py'), root],
+	piped = subprocess.run([sys.executable, os.path.join(DASHBOARD, 'scan.py'), root],
 		stdout=writer, stderr=subprocess.PIPE, text=True)
 	os.close(writer)
 	check('scan.py into a closed pipe exits quietly', piped.returncode == 0
@@ -510,7 +513,7 @@ def check_one_writer(root, work):
 	forty nvidia-smi calls in flight."""
 
 	out = tempfile.mkdtemp(prefix='one-writer-', dir=work)
-	script = os.path.join(HERE, 'monitor_writer.py')
+	script = os.path.join(DASHBOARD, 'monitor_writer.py')
 	into = lambda: sorted(autoopt_monitor.writers_into(out))
 
 	try:
@@ -626,7 +629,7 @@ def check_shared_sample(work):
 	probe = ('import sys, json; sys.path.insert(0, {!r}); import gpu_scan; '
 		'h = gpu_scan.Hardware({!r}); r = [h.resources() for _ in range(3)]; '
 		'print(json.dumps([[len(x["gpus"]), x.get("gpu_sampled_at")] for x in r]))'
-		.format(HERE, work))
+		.format(DASHBOARD, work))
 	# A library that will not load puts the scanner on nvidia-smi: the stub.
 	env = dict(os.environ, PATH=bin_dir + os.pathsep + os.environ['PATH'],
 		GPU_SCAN_NVML=os.path.join(work, 'missing-libnvidia-ml.so'))
@@ -736,7 +739,7 @@ def check_live_samples(root, work):
 	probe = ('import sys, json; sys.path.insert(0, {!r}); import gpu_scan; '
 		'h = gpu_scan.Hardware({!r}); h.live = {}; '
 		'r = [h.resources() for _ in range(3)]; '
-		'print(json.dumps([x["gpu_sampled_at"] for x in r]))'.format(HERE, work, '{}'))
+		'print(json.dumps([x["gpu_sampled_at"] for x in r]))'.format(DASHBOARD, work, '{}'))
 	env = dict(os.environ, PATH=bin_dir + os.pathsep + os.environ['PATH'])
 
 	def sampled(live, nvml):
@@ -940,7 +943,7 @@ def check_other_host(root, work):
 	thread = threading.Thread(target=other_host, daemon=True)
 	thread.start()
 	log = open(os.path.join(out, 'writer.log'), 'w')
-	writer = subprocess.Popen([sys.executable, os.path.join(HERE,
+	writer = subprocess.Popen([sys.executable, os.path.join(DASHBOARD,
 		'monitor_writer.py'), root, '--out', out, '--interval', '1',
 		'--resource-interval', '1'], stdout=log, stderr=log,
 		start_new_session=True)
@@ -987,7 +990,7 @@ def check_bad_config(root, work):
 
 	out = tempfile.mkdtemp(prefix='bad-config-', dir=work)
 	log = open(os.path.join(out, 'writer.log'), 'w')
-	writer = subprocess.Popen([sys.executable, os.path.join(HERE,
+	writer = subprocess.Popen([sys.executable, os.path.join(DASHBOARD,
 		'monitor_writer.py'), copy, '--out', out, '--interval', '1',
 		'--resource-interval', '1'], stdout=log, stderr=log,
 		start_new_session=True)
@@ -1120,7 +1123,7 @@ def check_portability(root, work):
 		'autoopt_monitor.jupyter_servers(); '
 		'import jupyter_core.paths as p; '
 		'print(json.dumps([p.jupyter_runtime_dir(), '
-		'os.environ.get("JUPYTER_PLATFORM_DIRS")]))').format(HERE)
+		'os.environ.get("JUPYTER_PLATFORM_DIRS")]))').format(DASHBOARD)
 	env = {key: value for key, value in os.environ.items()
 		if key not in ('JUPYTER_PLATFORM_DIRS', 'JUPYTER_RUNTIME_DIR')}
 	done = subprocess.run([sys.executable, '-c', probe], capture_output=True,
@@ -1188,7 +1191,7 @@ def check_portability(root, work):
 	cli = subprocess.run([sys.executable, '-c', 'import sys, runpy; '
 		'sys.modules["plotly"] = None; sys.argv = ["autoopt_monitor.py", '
 		'{!r}, "--export", {!r}]; runpy.run_path({!r}, run_name="__main__")'
-		.format(root, os.path.join(work, 'no-plotly.html'), os.path.join(HERE,
+		.format(root, os.path.join(work, 'no-plotly.html'), os.path.join(DASHBOARD,
 		'autoopt_monitor.py'))], capture_output=True, text=True)
 	check('and --export says it in one line, exit 1', cli.returncode == 1
 		and cli.stderr.startswith('error:') and 'Traceback' not in cli.stderr,
@@ -1514,11 +1517,12 @@ def check_dead_code(root=None, work=None):
 	the Python that builds the page. A class built by string concatenation
 	would read as unused here; spell it out whole in the script instead."""
 
-	static = os.path.join(HERE, 'static')
+	static = os.path.join(DASHBOARD, 'static')
 	read = lambda name: open(os.path.join(static, name)).read()
 	js, html, css = read('dashboard.js'), read('index.html'), read('dashboard.css')
-	python = ''.join(open(os.path.join(HERE, name)).read()
-		for name in ('autoopt_monitor.py', 'spacing_check.py'))
+	python = ''.join(open(path).read() for path in (
+		os.path.join(DASHBOARD, 'autoopt_monitor.py'),
+		os.path.join(HERE, 'spacing_check.py')))
 
 	names = set(re.findall(r'^(?:async )?function (\w+)\(', js, re.M)) \
 		| set(re.findall(r'^(?:const|let) (\w+) = ', js, re.M))

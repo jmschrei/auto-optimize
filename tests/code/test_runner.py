@@ -25,7 +25,10 @@ import tempfile
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+# The skill's scripts, which these tests import and run.
+SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, 'skills',
+	'auto-optimize-code', 'scripts'))
+sys.path.insert(0, SCRIPTS)
 
 import autoopt
 
@@ -36,8 +39,8 @@ os.environ['AUTOOPT_SKIP_SPEC_CHECK'] = '1'
 # would refuse at random; quiet_check turns it back on.
 os.environ['AUTOOPT_SKIP_QUIET_CHECK'] = '1'
 
-AUTOOPT = os.path.join(HERE, 'autoopt.py')
-RUNNER = os.path.join(HERE, 'run_iteration.py')
+AUTOOPT = os.path.join(SCRIPTS, 'autoopt.py')
+RUNNER = os.path.join(SCRIPTS, 'run_iteration.py')
 
 
 # A benchmark with a knob the tests turn: QUALITY sets the objective, GATE
@@ -1358,7 +1361,7 @@ def measuring_scripts(suite, base):
 	probe = os.path.join(root, 'probe.py')
 	with open(probe, 'w') as out:
 		out.write(PROBE)
-	paired = os.path.join(HERE, 'paired.py')
+	paired = os.path.join(SCRIPTS, 'paired.py')
 
 	def run(a, b, kind_b, kind_a='same', expect=(0,)):
 		return call([paired, '--a', sides[a], '--b', sides[b], '--json',
@@ -1386,7 +1389,7 @@ def measuring_scripts(suite, base):
 		out.write(COLD_PROBE)
 	record = os.path.join(root, 'cold-record.txt')
 	scratch = os.path.join(root, 'cold-scratch')
-	out = call([os.path.join(HERE, 'cold.py'), '--side', 'old=' + sides['old'],
+	out = call([os.path.join(SCRIPTS, 'cold.py'), '--side', 'old=' + sides['old'],
 		'--side', 'new=' + sides['new'], '--scratch', scratch, '--reps', '2',
 		'--json', '--cmd', 'python3 {} {{src}} {}'.format(cold_probe, record)])
 	got = json.loads(out[out.index('{'):])
@@ -1412,13 +1415,13 @@ def measuring_scripts(suite, base):
 		out.write('import sys\nprint("seconds", 0.000412 if '
 			'sys.argv[1].endswith("a") else 0.000409)\n')
 	cmd = 'python3 {} {{src}}'.format(probe)
-	out = call([os.path.join(HERE, 'paired.py'), '--a', sides['a'], '--b',
+	out = call([os.path.join(SCRIPTS, 'paired.py'), '--a', sides['a'], '--b',
 		sides['b'], '--cmd', cmd], expect=(0,))
 	median = re.search(r'median (\S+),', out)
 	suite.check('paired.py prints a 3 us difference as nonzero',
 		median is not None and float(median.group(1)) != 0
 		and abs(float(median.group(1)) + 3e-6) < 1e-7, out[-300:])
-	out = call([os.path.join(HERE, 'cold.py'), '--side', 'a=' + sides['a'],
+	out = call([os.path.join(SCRIPTS, 'cold.py'), '--side', 'a=' + sides['a'],
 		'--side', 'b=' + sides['b'], '--reps', '1', '--scratch',
 		os.path.join(root, 'scratch'), '--cmd', cmd], expect=(0,))
 	medians = re.findall(r'median (\S+) s', out)
@@ -1977,12 +1980,12 @@ def spaces(suite, base):
 	with open(probe, 'w') as out:
 		out.write('import os, sys\nassert len(sys.argv) == 2 and '
 			'os.path.isdir(sys.argv[1]), sys.argv\nprint("seconds", 1.0)\n')
-	out = call([os.path.join(HERE, 'paired.py'), '--a', sides['a'], '--b',
+	out = call([os.path.join(SCRIPTS, 'paired.py'), '--a', sides['a'], '--b',
 		sides['b'], '--min-pairs', '1', '--max-pairs', '1', '--json',
 		'--cmd', 'python3 "{}" {{src}}'.format(probe)], expect=(0, 1))
 	suite.check('paired.py passes {src} as one word', '"pairs": 1' in out,
 		out[-300:])
-	out = call([os.path.join(HERE, 'cold.py'), '--side', 'a=' + sides['a'],
+	out = call([os.path.join(SCRIPTS, 'cold.py'), '--side', 'a=' + sides['a'],
 		'--reps', '1', '--scratch', os.path.join(base, 'cold scratch'),
 		'--cmd', 'python3 "{}" {{src}}'.format(probe)], expect=(0, 1))
 	suite.check('cold.py passes {src} as one word', 'median' in out,
@@ -2075,7 +2078,7 @@ json.dump({{'objective': 1.0 + 0.001 * n, 'gates': {{'cost': 1.0}},
 def small_fixes(suite, base):
 	"""One check each for the smaller interface promises."""
 
-	seeding = os.path.join(HERE, 'check_seeding.py')
+	seeding = os.path.join(SCRIPTS, 'check_seeding.py')
 
 	# check_seeding.py hands its runs a real {cache}, and its exit codes
 	# keep a refusal apart from a verdict.
@@ -2213,7 +2216,7 @@ def one_publisher(suite, base):
 	"""A second `autoopt_monitor.py --start` for a search leaves one
 	publisher, wherever the first one writes."""
 
-	monitor = os.path.join(HERE, 'dashboard', 'autoopt_monitor.py')
+	monitor = os.path.join(SCRIPTS, 'dashboard', 'autoopt_monitor.py')
 	search = make_search(os.path.join(base, 'one-publisher'))
 	home = os.path.join(base, 'one-publisher-home')
 	first, other = (os.path.join(base, name) for name in ('publish-a',
@@ -3738,7 +3741,7 @@ def quiet_check(suite, base):
 	suite.check('final --background detaches into final.log, ending with its '
 		'exit', 'started in the background' in out and 'wait: finished, exit '
 		'1' in waited and 'no timing probe' in open(log).read(), waited[-400:])
-	out = call([os.path.join(HERE, 'check_seeding.py'),
+	out = call([os.path.join(SCRIPTS, 'check_seeding.py'),
 		autoopt.iteration_dir(search, 0)], expect=(0, 1, 2))
 	log = os.path.join(search, 'setup', 'seeding.log')
 	suite.check('check_seeding on the baseline writes setup/seeding.log',

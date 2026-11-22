@@ -11,7 +11,10 @@ import tempfile
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+# The skill's scripts, which these tests import and run.
+SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, 'skills',
+	'auto-optimize-code', 'scripts'))
+sys.path.insert(0, SCRIPTS)
 
 import lint_text
 
@@ -102,24 +105,24 @@ def main():
 			text and 'b.py:4:' in text and 'b.py:6' not in text, text)
 		check('commit messages are read', any('winner' in p for p in
 			lint_text.commit_problems(repo, 'work', 'main')))
-		done = subprocess.run([sys.executable, os.path.join(HERE, 'lint_text.py'),
+		done = subprocess.run([sys.executable, os.path.join(SCRIPTS, 'lint_text.py'),
 			'diff-comments', repo, 'work', 'main'], capture_output=True, text=True)
 		check('the CLI exits 1 listing every hit with its line', done.returncode
 			== 1 and 'a.c:2:' in done.stderr and 'Traceback' not in done.stderr,
 			done.stderr)
-		done = subprocess.run([sys.executable, os.path.join(HERE, 'lint_text.py'),
+		done = subprocess.run([sys.executable, os.path.join(SCRIPTS, 'lint_text.py'),
 			'commits', repo, 'work', 'main'], capture_output=True, text=True)
 		check('the CLI commits subcommand lists the message hits', done.returncode
 			== 1 and 'winner' in done.stderr, done.stderr)
 		page = os.path.join(scratch, 'body.md')
 		with open(page, 'w') as out:
 			out.write('The winner is A175.\n')
-		done = subprocess.run([sys.executable, os.path.join(HERE, 'lint_text.py'),
+		done = subprocess.run([sys.executable, os.path.join(SCRIPTS, 'lint_text.py'),
 			'body', page, '--labels', 'A175'], capture_output=True, text=True)
 		check('the CLI body subcommand lists the hits', done.returncode == 1 and
 			'label' in done.stderr and 'winner' in done.stderr, done.stderr)
 		check('the CLI title passes a clean title', subprocess.run([
-			sys.executable, os.path.join(HERE, 'lint_text.py'), 'title',
+			sys.executable, os.path.join(SCRIPTS, 'lint_text.py'), 'title',
 			'Vectorize scoring']).returncode == 0)
 
 	print('\n{} passed, {} failed'.format(passed, len(failed)))

@@ -14,7 +14,10 @@ import tempfile
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+# The skill's scripts, which these tests import and run.
+SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, 'skills',
+	'auto-optimize-code', 'scripts'))
+sys.path.insert(0, SCRIPTS)
 
 import autoopt
 import probe_run
@@ -48,7 +51,7 @@ def main():
 			('echo "t=x"', 'no number')):
 		done = subprocess.run([sys.executable, '-c', 'import sys; sys.path.'
 			'insert(0, {!r}); import probe_run; probe_run.run_probe({!r}, '
-			'{!r}, "a", {!r}, pattern={!r})'.format(HERE, command, base,
+			'{!r}, "a", {!r}, pattern={!r})'.format(SCRIPTS, command, base,
 			cache, 't=([0-9.]+)s' if 't=' in command else None)],
 			capture_output=True, text=True)
 		suite.check('{!r} exits with {!r}'.format(command, text),
@@ -57,7 +60,7 @@ def main():
 	for side in ('a', 'b'):
 		os.makedirs(os.path.join(base, side), exist_ok=True)
 
-	done = subprocess.run([sys.executable, os.path.join(HERE, 'paired.py'),
+	done = subprocess.run([sys.executable, os.path.join(SCRIPTS, 'paired.py'),
 		'--a', os.path.join(base, 'a'), '--b', os.path.join(base, 'b'),
 		'--cmd', "echo 't=1.5s on GPU0'", '--regex', 't=([0-9.]+)s',
 		'--min-pairs', '2', '--max-pairs', '3', '--json',
@@ -68,7 +71,7 @@ def main():
 		os.path.join(base, 'log.txt')) > 0, done.stderr)
 
 	paired = lambda command, *flags: subprocess.run([sys.executable,
-		os.path.join(HERE, 'paired.py'), '--a', os.path.join(base, 'a'), '--b',
+		os.path.join(SCRIPTS, 'paired.py'), '--a', os.path.join(base, 'a'), '--b',
 		os.path.join(base, 'b'), '--cmd', command, '--min-pairs', '2',
 		'--max-pairs', '3', '--json', '--log', os.path.join(base, 'cap.txt')]
 		+ list(flags), capture_output=True, text=True)

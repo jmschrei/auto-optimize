@@ -407,14 +407,6 @@ python3 $AO/lint_text.py diff-comments REPO REF BASE [--labels …]
 `lint_text.py` exits 1 listing every hit with its line. The checks and the
 vocabulary: `references/promotion.md`, *The preflight*.
 
-## Testing the scripts
-
-```bash
-python3 $AO/run_tests.py [NAME…] [--jobs N]   # every test_*.py here, one line each; exit 1 on any failure
-```
-
-After editing `X.py`, run `test_X.py` (the dashboard's are in `scripts/dashboard/README.md` and are not run by `run_tests.py`). `test_runner.py` takes minutes.
-
 ## The verdict, exactly
 
 Every stage the runner runs, in order: `references/subagent.md`, *Checks

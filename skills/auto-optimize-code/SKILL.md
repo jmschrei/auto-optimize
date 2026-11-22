@@ -116,7 +116,7 @@ advance.
 | Speeding up or slimming an algorithm implementation: time and memory, synthetic input sizes, thread counts | `references/algorithm.md` |
 | Optimizing code in a git repository without touching it: the copy, the harness, the unit-test gate | `references/repo-mode.md` |
 | The checks `promote` makes without measuring: text, the `## Change` and `## Commit message` sections of `notes.md`, indentation, license markers, the oldest toolchain (`preflight.py`, `lint_text.py`) | `references/promotion.md`, *The preflight* |
-| What is on disk, what the JSON files hold, every script flag (the dashboard's are in `scripts/dashboard/README.md`), testing the scripts | `references/layout.md` |
+| What is on disk, what the JSON files hold, every script flag (the dashboard's are in `scripts/dashboard/README.md`) | `references/layout.md` |
 | Ending the search, reopening it, an iteration made after the end (`--after-end`), what `end` leaves on disk | `references/step4-final.md` |
 | Code compiled by numba: speed, exactness classes, compile time | `references/algorithm.md`, *Numba* |
 

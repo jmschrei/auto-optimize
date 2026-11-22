@@ -146,9 +146,9 @@ warmup suffices. Loaded from a cache, the same code's timed call can run
 slower, enough to make an iteration read short of its prediction; a warmup
 call at full size brings the gap inside the noise. **Warm up at full size**,
 and never compare medians across a switch to or from a shared cache without
-re-measuring the root. `scripts/test_runner.py`, *shared compiler cache*,
-reproduces the numba case, with a control showing that a cache kept across
-the edit is stale.
+re-measuring the root. The repository's `tests/code/test_runner.py`,
+*shared compiler cache*, reproduces the numba case, with a control showing
+that a cache kept across the edit is stale.
 
 For a hand-timed sweep or an asm dump, give each variant its own new
 `NUMBA_CACHE_DIR` inside the iteration directory. Never delete a cache to

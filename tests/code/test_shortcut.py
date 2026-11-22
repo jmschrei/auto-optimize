@@ -19,7 +19,10 @@ import tempfile
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+# The skill's scripts, which these tests import and run.
+SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, 'skills',
+	'auto-optimize-code', 'scripts'))
+sys.path.insert(0, SCRIPTS)
 
 import autoopt
 import test_runner as tr

@@ -27,7 +27,10 @@ import subprocess
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+# The skill's dashboard scripts, which these tests import and run.
+DASHBOARD = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, os.pardir, 'skills',
+	'auto-optimize-code', 'scripts', 'dashboard'))
+sys.path.insert(0, DASHBOARD)
 
 import make_fixture
 import autoopt_monitor
@@ -209,7 +212,7 @@ def drive(url, payload_dir, args_run=None, payload_path=None):
 		# The script URL's ?v= is fixed when the cell ran, so the page must
 		# notice a newer published front end and say so.
 		before = page.text_content('.autoopt-root #updated') or ''
-		os.utime(os.path.join(HERE, 'static', 'dashboard.js'))
+		os.utime(os.path.join(DASHBOARD, 'static', 'dashboard.js'))
 
 		for _ in range(45):
 			page.wait_for_timeout(1000)

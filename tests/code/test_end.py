@@ -21,14 +21,17 @@ import contextlib
 import subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+# The skill's scripts, which these tests import and run.
+SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, 'skills',
+	'auto-optimize-code', 'scripts'))
+sys.path.insert(0, SCRIPTS)
 
 import autoopt
 import test_runner as tr
 
 AUTOOPT = tr.AUTOOPT
 RUNNER = tr.RUNNER
-MONITOR = os.path.join(HERE, 'dashboard', 'autoopt_monitor.py')
+MONITOR = os.path.join(SCRIPTS, 'dashboard', 'autoopt_monitor.py')
 
 
 def read(path):
@@ -383,7 +386,7 @@ def main():
 		with open(os.path.join(folder, 'config.json'), 'w') as out:
 			json.dump({}, out)
 
-	writer = os.path.join(HERE, 'dashboard', 'monitor_writer.py')
+	writer = os.path.join(SCRIPTS, 'dashboard', 'monitor_writer.py')
 	fakes = {}
 
 	for name, folder in (('mine', mine), ('theirs', theirs)):
