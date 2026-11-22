@@ -1,4 +1,13 @@
+CLAUDE.md
+claude_comments/
 __pycache__/
 *.pyc
 .pytest_cache/
 .ipynb_checkpoints/
+.venv/
+dist/
+build/
+*.egg-info/
+.install.json
+examples/word-count/input.txt
+examples/word-count/counts.tsv

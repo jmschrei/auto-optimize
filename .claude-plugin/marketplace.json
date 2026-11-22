@@ -1,0 +1,15 @@
+{
+	"name": "auto-optimize",
+	"owner": {
+		"name": "Jacob Schreiber",
+		"url": "https://github.com/jmschrei"
+	},
+	"plugins": [
+		{
+			"name": "auto-optimize",
+			"source": "./",
+			"description": "Search for a faster, leaner or smaller implementation of code by running many small measured experiments, each in its own git worktree, and keeping what survives.",
+			"version": "0.1.0"
+		}
+	]
+}

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "auto-optimize"
+dynamic = ["version"]
+description = "Claude Code skills that search for faster, leaner or smaller code by running many small measured experiments."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "Jacob Schreiber" }]
+keywords = ["claude-code", "agent-skills", "optimization", "benchmarking", "performance"]
+classifiers = [
+	"Development Status :: 4 - Beta",
+	"Environment :: Console",
+	"Intended Audience :: Developers",
+	"Intended Audience :: Science/Research",
+	"Operating System :: POSIX :: Linux",
+	"Programming Language :: Python :: 3",
+	"Topic :: Software Development :: Testing",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/jmschrei/auto-optimize"
+Issues = "https://github.com/jmschrei/auto-optimize/issues"
+Changelog = "https://github.com/jmschrei/auto-optimize/blob/main/CHANGELOG.md"
+
+[project.scripts]
+auto-optimize = "auto_optimize.cli:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.hatch.version]
+path = "src/auto_optimize/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/auto_optimize"]
+
+# The skills ship inside the package, where `auto-optimize install` finds them.
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "auto_optimize/skills"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "skills/", "tests/", "examples/", "README.md", "CHANGELOG.md", "LICENSE", ".claude-plugin/"]
+exclude = ["__pycache__", "*.pyc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/package"]
