@@ -407,7 +407,7 @@ writes checks only for paths they cannot reach:
 | `time_one.py` | `{src}` | imports from the tree, warms up at full size, times one benchmark call, prints the seconds last; what `autoopt.py final` pairs, A0 against the winner (`references/measuring.md`, *Paired separate processes: `paired.py`*) | 0, or non-zero on a wrong output |
 | `first_call.py` | `{src}` | compiled code only: one small call, which the runner times with `cold.py` on empty caches before each iteration's runs | 0 |
 | `checks.build` | `{src}` | compiled code only: a command (not a file under `checks/`) that builds that exported tree in place exactly as the harness builds a worktree, the same compiler, flags and toolchain; what `variant` builds a subagent's copies with and what a checker's `{parent}` and `{child}` are built with | 0 |
-| `profile.py` | `{src}`, `{out}` (a scratch directory) | prints where one benchmark call spends its time on that tree: one line per function or stage, `<share of the call>  <file>:<function>`, largest first, at most 60 lines. Python: cProfile's cumulative time over the call's total; compiled code: a sampling profiler (`perf`, or one that needs no privileges where `perf` is blocked); numba: wrap a dispatcher to time it only after the warm-up call, since a jitted caller compiled later sees the wrapper, a Python object, and fails to type, which breaks the profile on every new jitted helper. What `promote` runs on each new root, so the miner's *Gain* and each brief's premise come from the root being changed, not from A0 | 0 |
+| `profile_call.py` (never `profile.py`, which shadows the standard library's `profile` that `cProfile` imports, since a script's own directory comes first on the import path) | `{src}`, `{out}` (a scratch directory) | prints where one benchmark call spends its time on that tree: one line per function or stage, `<share of the call>  <file>:<function>`, largest first, at most 60 lines. Python: cProfile's cumulative time over the call's total; compiled code: a sampling profiler (`perf`, or one that needs no privileges where `perf` is blocked); numba: wrap a dispatcher to time it only after the warm-up call, since a jitted caller compiled later sees the wrapper, a Python object, and fails to type, which breaks the profile on every new jitted helper. What `promote` runs on each new root, so the miner's *Gain* and each brief's premise come from the root being changed, not from A0 | 0 |
 
 The public functions are the second group because the benchmark calls one
 entry point: a change to a shared helper can keep its output identical and
@@ -427,7 +427,7 @@ python3 $AO/autoopt.py config $WORK --reason "step 2: the task's checks" \
 python3 $AO/autoopt.py config $WORK --reason "step 2: how a copy is built" \
 	--set checks.build="make -C {src} -j 8"      # compiled code: as the harness builds
 python3 $AO/autoopt.py config $WORK --reason "step 2: the root's profile" \
-	--set checks.profile="python3 $WORK/autooptimize/checks/profile.py {src} {out}"
+	--set checks.profile="python3 $WORK/autooptimize/checks/profile_call.py {src} {out}"
 ```
 
 **Only A0's outputs are cached**, in `autooptimize/reference/checks/outputs/`,
