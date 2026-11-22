@@ -9,7 +9,8 @@ import subprocess
 
 import pytest
 
-from auto_optimize import cli, __version__
+from auto_optimize import cli
+from auto_optimize import __version__
 
 from conftest import ROOT
 
@@ -41,7 +42,8 @@ def home(tmp_path, monkeypatch):
 	config = tmp_path / 'config'
 	monkeypatch.setenv('HOME', str(tmp_path / 'home'))
 	monkeypatch.setenv('CLAUDE_CONFIG_DIR', str(config))
-	monkeypatch.setenv('CLAUDE_CODE_PLUGIN_CACHE_DIR', str(tmp_path / 'plugins'))
+	monkeypatch.setenv('CLAUDE_CODE_PLUGIN_CACHE_DIR', str(tmp_path /
+		'plugins'))
 	project = tmp_path / 'project'
 	project.mkdir()
 	monkeypatch.chdir(project)

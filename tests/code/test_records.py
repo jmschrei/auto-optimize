@@ -25,7 +25,10 @@ sys.path.insert(0, SCRIPTS)
 
 import autoopt
 import test_end
-import test_runner as tr
+import test_runner
+
+AUTOOPT = test_runner.AUTOOPT
+RUNNER = test_runner.RUNNER
 
 
 def read_json(path):
@@ -39,13 +42,14 @@ def run(*args):
 
 
 def main():
-	suite = tr.Suite()
+	suite = test_runner.Suite()
 	base = tempfile.mkdtemp(prefix='records-')
 
 	with open(os.path.join(os.path.dirname(SCRIPTS), 'VERSION')) as handle:
 		version = handle.read().strip()
 
-	search = tr.make_search(os.path.join(base, 'a'), staged=False, runs=3)
+	search = test_runner.make_search(os.path.join(base, 'a'), staged=False,
+		runs=3)
 	config = read_json(os.path.join(search, 'config.json'))
 
 	suite.equal('init records the skill\'s name and its VERSION',
@@ -74,11 +78,11 @@ def main():
 	with open(path, 'w') as handle:
 		json.dump(other, handle)
 
-	done = run(tr.AUTOOPT, 'status', theirs)
+	done = run(AUTOOPT, 'status', theirs)
 	suite.check('status refuses a search the auto-optimize-ml skill made, '
 		'naming it', done.returncode == 1 and 'made by the auto-optimize-ml '
 		'skill' in done.stderr, done.stderr[-300:])
-	done = run(tr.RUNNER, '--dry-run', autoopt.iteration_dir(os.path.join(
+	done = run(RUNNER, '--dry-run', autoopt.iteration_dir(os.path.join(
 		theirs, 'autooptimize'), 0))
 	suite.check('and so does the runner', done.returncode == 1
 		and 'auto-optimize-ml' in done.stderr, done.stderr[-300:])
@@ -87,7 +91,7 @@ def main():
 	del other['skill']['name']
 	with open(path, 'w') as handle:
 		json.dump(other, handle)
-	done = run(tr.AUTOOPT, 'status', theirs, '--brief')
+	done = run(AUTOOPT, 'status', theirs, '--brief')
 	suite.check('a search with no skill name is accepted', done.returncode
 		== 0, done.stderr[-300:])
 

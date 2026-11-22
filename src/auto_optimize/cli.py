@@ -1,6 +1,7 @@
 """Install, list, locate and check the auto-optimize Claude Code skills.
 
-	auto-optimize install [SKILL ...] [--project [DIR] | -d DIR] [--symlink] [-f]
+	auto-optimize install [SKILL ...] [--project [DIR] | -d DIR] [--symlink]
+	                      [-f]
 	auto-optimize uninstall [SKILL ...] [--project [DIR] | -d DIR] [-f]
 	auto-optimize list
 	auto-optimize path [SKILL] [--bundled]
@@ -176,8 +177,8 @@ def ownership(dest, name):
 	if os.path.isdir(dest) and os.path.isfile(os.path.join(dest, MARKER)):
 		return 'copy', None
 
-	return 'foreign', 'was not installed by auto-optimize (it has no {})'.format(
-		MARKER)
+	return 'foreign', 'was not installed by auto-optimize (it has no ' \
+		'{})'.format(MARKER)
 
 
 def remove(path):
@@ -499,7 +500,8 @@ def doctor(args):
 	if version:
 		for module, package, why in OPTIONAL:
 			code, _ = run([python3, '-c', 'import importlib.util, sys; '
-				'sys.exit(importlib.util.find_spec({!r}) is None)'.format(module)])
+				'sys.exit(importlib.util.find_spec({!r}) is None)'.format(
+				module)])
 			report(code == 0, '{} ({}){}'.format(module, why, '' if code == 0
 				else ': not installed'), required=False)
 			if code != 0:
