@@ -30,7 +30,7 @@ second checks a whole winner at once.
 Exit codes: 0 no problem, 1 a problem (each on one line, `check: text`),
 2 refused (not a repository search, no such iteration).
 
-Standard library only, Python 3.8 or later; needs git.
+Standard library only, Python 3.9 or later; needs git.
 """
 
 import os

@@ -123,6 +123,21 @@ iteration descends from. To drop an iteration, `git -C repo.git worktree
 remove iterations/<id>` rather than `rm -rf`, or git keeps a stale
 registration and refuses the next `new`.
 
+## Version fields
+
+`config.json`, `state.json`, every `result.json` and `ended.json` carry
+`schema_version`, the version of their layout (1). It rises when a field
+changes meaning or is removed, not when one is added. A file without it was
+written before the field existed and reads as version 1. A tool outside the
+skill that reads these files checks it.
+
+`config.json`'s `skill.name` is the skill that made the search. Another skill
+that writes the same layout (`auto-optimize-ml`) runs by other rules, so every
+script refuses a search whose `name` is not `auto-optimize-code` with `this
+search was made by the … skill`, and the search is read with that skill's
+scripts. A search with no `name` was made before the field existed and is
+accepted.
+
 ## state.json
 
 ```json
@@ -188,7 +203,8 @@ Written by `autoopt.py init`, changed mid-search by `autoopt.py config`.
 | `seed_base` | the first seed. Run *i* uses `seed_base + i`, so every iteration runs the same seeds, 0–4 at the default count. Change it only to start a whole search on fresh draws |
 | `timeout_seconds` | a run killed after this many seconds counts as failed; 0 disables |
 | `gpu` | false when the benchmark needs no GPU, which also lifts the lease check |
-| `skill` | `commit`: the skill's last commit when `init` ran. `stages.py next` and `stages.py status` print one `NOTICE` line for each later change (`autooptimize/skill-seen.json` holds the one last reported); nothing stops |
+| `skill` | `name` (`auto-optimize-code`), `version` (the skill's `VERSION` file) and `commit` (the skill's last commit, or null outside a git checkout) when `init` ran. `stages.py next` and `stages.py status` print one `NOTICE` line for each later commit (`autooptimize/skill-seen.json` holds the one last reported); nothing stops |
+| `schema_version` | the layout version of the record files (*Version fields*) |
 | `floor` | a minimized objective's smallest value worth measuring, or null. At or under it the search stops with the reason `floor`; the price table marks an A0 under 20 times it (`references/step2-baseline.md`, *The price of the base*) |
 | `workers` | the worker, rank or thread count the task names, or null. Each run's process tree is sampled every 0.1 s for threads the kernel shows running; `result.json` `workers` holds the most seen at once, and `setup --done` refuses while A0's is lower |
 | `gpu_command` | the machine's GPU allocator as the words before a command, which it runs with `CUDA_VISIBLE_DEVICES` set and releases at exit (`srun --gres=gpu:1`). `run_iteration.py`, `check_seeding.py`, `prove`, `end` and `final` start under it when they hold no lease (`references/step2-baseline.md`, *GPU leases*) |

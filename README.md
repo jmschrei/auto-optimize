@@ -24,7 +24,7 @@ project to install it there alone. Claude Code finds it by its
 `SKILL.md` and starts it when a request matches its description, such as
 "optimize this function, but the output must not change".
 
-Requirements are in the skill's `SKILL.md`, *Requirements*: Linux, Python 3.8 or later and
+Requirements are in the skill's `SKILL.md`, *Requirements*: Linux, Python 3.9 or later and
 git for the core; JupyterLab, IPython and plotly for the dashboard.
 
 ## Test

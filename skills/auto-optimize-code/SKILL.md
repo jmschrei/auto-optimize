@@ -56,7 +56,7 @@ A round ends when an iteration is promoted.
 
 | For | Needs |
 |---|---|
-| everything | Linux, Python 3.8 or later, git. The core scripts use only the standard library |
+| everything | Linux, Python 3.9 or later, git. The core scripts use only the standard library |
 | the orchestration | Claude Code's Agent (subagents) and AskUserQuestion tools; SendMessage and Monitor where available |
 | a GPU search | `CUDA_VISIBLE_DEVICES`, set by the machine's GPU allocator, or by `env CUDA_VISIBLE_DEVICES=<index>` on a machine with none; either is recorded as `gpu_command` |
 | the dashboard in a notebook | JupyterLab, IPython and plotly; psutil for the host and process panels |

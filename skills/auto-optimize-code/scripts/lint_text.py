@@ -32,7 +32,7 @@ fixed here:
 `autoopt.py readme` and any script that writes such text call
 `problems`; nothing here rewrites text.
 
-Standard library only, Python 3.8 or later.
+Standard library only, Python 3.9 or later.
 """
 
 import os

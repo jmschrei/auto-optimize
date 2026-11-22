@@ -11,7 +11,7 @@ failure, is reported with the tail of its output. Exit 0 only when every file
 passed. The dashboard's browser tests (`dashboard/`, which need Playwright)
 are not included.
 
-Standard library only, Python 3.8 or later.
+Standard library only, Python 3.9 or later.
 """
 
 import os

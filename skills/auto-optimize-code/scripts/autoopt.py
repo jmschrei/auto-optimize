@@ -536,6 +536,28 @@ def tmp_dir(work):
 	return path
 
 
+# This skill's name, recorded in config.json: another skill that writes the
+# same layout (auto-optimize-ml) has scripts of its own, and these refuse a
+# search it made rather than misread it (check_config).
+SKILL_NAME = 'auto-optimize-code'
+
+# The version of the record files' layout: config.json, state.json,
+# result.json and ended.json carry it as `schema_version`. It is raised when a
+# field changes meaning or is removed, never for a field added. A file without
+# it was written before versioning, and reads as version 1.
+SCHEMA_VERSION = 1
+
+
+def skill_version():
+	"""The skill's release, from VERSION beside SKILL.md, or None."""
+
+	try:
+		with open(os.path.join(os.path.dirname(SCRIPTS), 'VERSION')) as handle:
+			return handle.read().strip() or None
+	except OSError:
+		return None
+
+
 def skill_commit():
 	"""The last commit of the skill's own files in the checkout these
 	scripts run from, or None when that is not a git checkout."""
@@ -736,6 +758,13 @@ def check_config(config):
 	hours into a search otherwise, with the runs already spent.
 	"""
 
+	maker = (config.get('skill') or {}).get('name')
+
+	if maker not in (None, SKILL_NAME):
+		fail('this search was made by the {} skill, whose scripts write the '
+			'same layout with different rules; read and run it with that '
+			'skill\'s scripts, not {}\'s'.format(maker, SKILL_NAME))
+
 	for key in ('task', 'command', 'objective'):
 		if key not in config:
 			fail('config.json has no "{}"'.format(key))
@@ -907,6 +936,7 @@ def to_id(root, text, flag):
 
 
 def save_state(root, state):
+	state['schema_version'] = SCHEMA_VERSION
 	write_json(state_path(root), state)
 	refresh_notes(root)
 
@@ -1402,6 +1432,7 @@ def init(args):
 				error))
 
 	config = {
+		'schema_version': SCHEMA_VERSION,
 		'task': args.task,
 		'command': args.command,
 		'objective': {'name': args.objective, 'direction': args.direction,
@@ -1422,9 +1453,11 @@ def init(args):
 		'gpu_command': args.gpu_command,
 		'floor': args.floor,
 		'workers': args.workers,
-		# The skill these scripts were at: a later change is reported once
-		# (`skill_notice`).
-		'skill': {'commit': skill_commit()},
+		# The skill these scripts belong to and were at: another skill's
+		# scripts refuse the search (check_config), and a later change is
+		# reported once (`skill_notice`).
+		'skill': {'name': SKILL_NAME, 'version': skill_version(),
+			'commit': skill_commit()},
 		# The model every iteration subagent is spawned with; the miner and
 		# the orchestrator keep the session's.
 		'subagent_model': args.subagent_model,
@@ -4311,7 +4344,8 @@ def end(args):
 	winning = winning_iterations(root, config, winner)
 	zero = (load_result(root, 0) or {}).get('objective', {}).get('median')
 	record = winner_record(root, config, winner)
-	ended = {'ended_at': now(), 'reason': reason, 'winner': record,
+	ended = {'schema_version': SCHEMA_VERSION, 'ended_at': now(),
+		'reason': reason, 'winner': record,
 		'paired': paired, 'medians': {'A0': zero, 'winner': record['median'],
 		'objective': config['objective']['name'], 'direction':
 		config['objective']['direction'], 'unit': config['objective'].get(

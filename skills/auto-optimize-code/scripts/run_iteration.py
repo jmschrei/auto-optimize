@@ -511,6 +511,7 @@ def aggregate(root, config, meta, records, failures, stage, frontier_value,
 		else min(records, key=lambda r: r['objective']) if records else None)
 
 	return {
+		'schema_version': autoopt.SCHEMA_VERSION,
 		'id': meta['id'],
 		'parent': meta.get('parent'),
 		'prediction': meta.get('prediction'),

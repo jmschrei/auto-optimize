@@ -8,6 +8,7 @@
 | `config.json "command" must contain both {seed} and {out}`, `has {…}, which is not a placeholder` | `references/layout.md`, *config.json* |
 | `copied file(s) match the plain-mode exclude list` at `init` | `references/layout.md`, *The git model* |
 | `… is not valid JSON … repair it or move it aside` | `references/layout.md`, *The `autooptimize/` tree* |
+| `this search was made by the … skill` | `references/layout.md`, *Version fields*: read that search with the skill it names |
 | `fewer than 2 untried ideas`; `stage S<n> of the idea miner is still open` | `references/step3-rounds.md`, *Keeping the ideas* |
 | `refusing to start step 2` or `refusing to start the idea miner: the interview is not written down`; `step 2 is still with the setup subagent`; `step 2 is already with a setup subagent`; `no setup is open`; `setup (step 2): waiting for the user`; `first iteration: waiting for …` | `references/step0-interview.md`, *Handing off step 2* |
 | `step 2 is not finished` | `references/step2-baseline.md`, *Closing step 2* |

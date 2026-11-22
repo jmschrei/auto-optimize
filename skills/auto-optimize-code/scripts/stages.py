@@ -11,7 +11,7 @@ Five stages, in order: interview, setup, search, final, finish. Each is
 hand, so a render of the same state is the same bytes. `autoopt.py end` calls
 `render`; it is also safe to run at any time.
 
-Standard library only, Python 3.8 or later.
+Standard library only, Python 3.9 or later.
 """
 
 import os
