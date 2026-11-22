@@ -1,18 +1,33 @@
 # auto-optimize
 
-`auto-optimize-code` is a Claude Code skill that turns "make this faster"
-into a search that runs itself. It interviews you about what to improve and
-what must not change, builds a benchmark and measures a baseline, then hands
-one idea at a time to a subagent, each in its own git worktree, and keeps a
-change only when its median over several seeds beats its parent by more than
-the run-to-run noise. A live dashboard follows the search, and at the end the
-winner is timed against the baseline in paired runs and written up.
+Historically, the task of improving software has been performed by humans who knew
+too much about how computers worked. As punishment for learning too much about how 
+computers worked, they punished us by becoming better than us at this task.
 
-It optimizes code: wall time, memory, output size or any other number a
-script can emit, with the outputs held fixed by gates you choose ("faster,
-but the output must stay byte-identical", "smaller, but within 1e-5"). It
-works on a function, a script, a command-line tool, or a copy of a whole git
-repository, whose original it never writes to.
+Auto-optimization is the process by which agents iteratively find improvements
+to a codebase which optimize a given performance measure (or set of such measures).
+This repository is a Claude Code skill that implements auto-optimization with all
+the quality-of-life features I always wished I had in the past, including:
+
+- an interview at the beginning
+- separation of "runs" from "iterations", where each "iteration" is an idea and multiple "runs" can be done to establish performance distributions
+- external validations that can be run once per iteration, such as a unit test suite or a complete processing step, to ensure no drift
+- observational measures that are also recorded each iteration but not used to decide (e.g., memory usage, first run compile time)
+- a pretty interactive dashboard to monitor progress
+- clean logging, formatting, usage of git worktrees, and documentation at each step, with instructions for future agents to build on top of what I have built here
+- clean division of work done by subagents and work done by deterministic scripts, to give consistent and robust results
+
+Conceptually, there are many things that one may wish to auto-optimize. Each thing
+is shaped slightly differently, and so our approach will be to release skills for
+each kind of thing one can auto-optimize that perfectly fits that setting.
+
+(1) auto-optimize-code: the focus of this skill is optimizing the runtime and memory
+usage of code while keeping identical outputs. Hence, things like unit tests, running
+small real examples at each iteration, and comparison of outputs at the byte-level
+are relevant. This can be run on functions in a code-base, command-line tools, or
+entire end-to-end algorithms or multi-step procedures.
+
+(More to come.)
 
 Developed at the [Programmable Genomics Laboratory](https://programmable-genomics.github.io) @ UMass Chan Medical School.
 
