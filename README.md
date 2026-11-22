@@ -1,4 +1,4 @@
-# auto-optimize
+# auto-optimize-code
 
 A Claude Code skill that turns "make this better" into a search that runs
 itself: a benchmark that emits numbers, a baseline, then one subagent at a
@@ -15,10 +15,10 @@ This file is for people. Claude reads `SKILL.md`, which routes to the files in
 ## Install
 
 ```bash
-git clone https://github.com/jmschrei/auto-optimize ~/.claude/skills/auto-optimize
+git clone https://github.com/jmschrei/auto-optimize ~/.claude/skills/auto-optimize-code
 ```
 
-That installs it for every project; clone into `.claude/skills/auto-optimize/`
+That installs it for every project; clone into `.claude/skills/auto-optimize-code/`
 inside a project to install it there alone. Claude Code finds it by its
 `SKILL.md` and starts it when a request matches its description, such as
 "optimize this function, but the output must not change".
@@ -34,6 +34,10 @@ python3 scripts/dashboard/test_frontend.py      # the dashboard, in headless Chr
 ```
 
 `references/layout.md`, *Testing the scripts*, lists every suite.
+
+## Credit
+
+Developed at the [Programmable Genomics Laboratory](https://programmable-genomics.github.io) @ UMass Chan Medical School.
 
 ## License
 

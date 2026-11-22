@@ -93,7 +93,7 @@ For a parallel kernel (`prange`, BLAS, a thread pool), the thread count used
 by the timed call is part of the objective's definition. Set it explicitly in
 the harness (`n_jobs=8`, never a default like `-1` that means every core),
 ask the user for it at step 0, and write it on `spec.md`'s *Thread counts
-timed* line. An iteration that changes it is a different search.
+timed, tracking inputs* line. An iteration that changes it is a different search.
 
 **When the objective is timed at one thread count, ask whether to observe
 another.** A search timed at `n_jobs=1` only cannot see a change that makes
@@ -171,12 +171,12 @@ Rows for group 4 of `references/step0-interview.md`, *The questions*; record
 "algorithm implementation" on `spec.md`'s *Kind of search* line, which makes
 `setup --done` require the task's checks.
 
-| Group | Question | Options to offer | Default | Fills, in `spec.md` |
+| Group | Question | Options to offer | Default | Recorded in `spec.md` |
 |---|---|---|---|---|
 | 4 | Which memory measure is recorded: as the observer when the objective is time, as the objective when it is memory? | `max_rss_mb`, which any program has (Recommended for compiled code); `peak_traced_mb` (Recommended for Python) | the recommended one for the language | Objective, Observers |
-| 4 | At what thread count is the objective timed? This is also group 2's worker count: ask once | the count users run; 1 | none: always asked, since the code's own default is never taken | Thread counts timed; `init --workers` |
+| 4 | At what thread count is the objective timed? This is also group 2's worker count: ask once | the count users run; 1 | none: always asked, since the code's own default is never taken | Thread counts timed, tracking inputs; `init --workers` |
 | 4 | Track the synthetic dataset classes above, and gate their outputs too? | the classes proposed from the tests (Recommended); fewer; gate them as well | observe, do not gate | Thread counts timed, tracking inputs |
-| 4 | Observe a second thread count? | yes, where the code has a parallel path (Recommended); no | yes, where it applies | Observers; Thread counts timed |
+| 4 | Observe a second thread count? | yes, where the code has a parallel path (Recommended); no | yes, where it applies | Observers; Thread counts timed, tracking inputs |
 
 The unit-test command and whether the baseline passes it belong to repository
 mode (`references/repo-mode.md`), or to `init --tests` in plain mode.

@@ -67,7 +67,7 @@ PANEL_TAIL = 'panel-tail-7f3c'
 
 def publish(root, out):
 	"""Everything a writer would write, once, into a directory nothing has
-	published before: serving an old one tests that run's assets."""
+	published to: a reused directory would serve that run's assets."""
 
 	scanner = scan.RunScanner(root)
 	monitor_writer.install_assets(out)
@@ -80,6 +80,12 @@ def publish(root, out):
 	for identifier, (mtime, text) in scanner.readmes().items():
 		monitor_writer.write_json(os.path.join(out, 'readmes', '%d.json' % identifier),
 			{'id': identifier, 'text': text})
+
+	os.makedirs(os.path.join(out, 'diffs'), exist_ok=True)
+	for identifier, (payload, pair) in scanner.diffs(snapshot['iterations'],
+			budget=None).items():
+		monitor_writer.write_json(os.path.join(out, 'diffs', '%d.json' % identifier),
+			payload)
 
 	# Two readings, so the sparkline has a line to draw. The answer is the
 	# host's shared one, which a live publisher may be refreshing past
@@ -221,8 +227,8 @@ def drag_panel(page, handle, target, fraction=0.25):
 def new_page(browser, errors, height=1100):
 	page = browser.new_page(viewport={'width': 1500, 'height': height})
 	# A fresh browser's first render has taken 26-31 s on a busy 256-core
-	# machine, with old and new dashboard.js alike; Playwright's 30 s default
-	# then failed checks that had nothing to do with the page.
+	# machine; Playwright's 30 s default would fail checks that have nothing
+	# to do with the page.
 	page.set_default_timeout(90000)
 	page.on('console', lambda m: errors.append(m.text)
 		if m.type == 'error' else None)
@@ -665,9 +671,9 @@ def check_shared_sample(work):
 			if key in name:
 				os.unlink(os.path.join(gpu_scan.shared_dir(), name))
 
-	# The answer's date is when its call started: dated when it finished, a
-	# call over 0.5 s left it fresh at the next 3 s tick, so it moved every
-	# 6 s. A publisher that finds another's call under way waits for it.
+	# The answer is dated when its call started, not when it finished: a call
+	# over 0.5 s must not read as fresh at the next 3 s tick. A publisher that
+	# finds another's call under way waits for it.
 	keys = ['test-dating-{}'.format(os.getpid()), 'test-waiting-{}'.format(
 		os.getpid())]
 
@@ -892,10 +898,10 @@ def check_live_button(root, work, args=None):
 
 
 def check_other_host(root, work):
-	"""Two hosts mounting one payload directory each ran a writer, and the
-	page flipped every write between their GPUs: the lock and the pid checks
-	are per host. A writer pauses while another host with the better claim
-	publishes, and takes over once that host goes quiet."""
+	"""Two hosts mounting one payload directory each run a writer, and the
+	lock and pid checks are per host. A writer pauses while another host
+	with the better claim publishes, and takes over once that host goes
+	quiet."""
 
 	now = time.time()
 	mine = {'host': 'b', 'since': now - 100, 'search': False}
@@ -1433,6 +1439,75 @@ def check_paths(root, work):
 		directory, ['"my%20run%20%231%3F/monitor"'])
 
 
+def check_diff_payload(root, work):
+	"""The scanner's code changes: the patch parser, and which iterations get one."""
+
+	files = scan.parse_patch("""diff --git a/a.py b/a.py
+--- a/a.py
++++ b/a.py
+@@ -1,3 +1,3 @@ def f():
+ x = 1
+-y = 2
++y = 3
+ z = 4
+diff --git a/old.txt b/new.txt
+similarity index 100%
+rename from old.txt
+rename to new.txt
+diff --git a/img.png b/img.png
+Binary files a/img.png and b/img.png differ
+diff --git a/gone.py b/gone.py
+deleted file mode 100644
+--- a/gone.py
++++ /dev/null
+@@ -1,2 +0,0 @@
+-a
+-b
+""")
+	equal('the parser reads a modified file, a rename, a binary and a deletion',
+		[(f['path'], f['status'], f['binary'], f['additions'], f['deletions'])
+			for f in files], [('a.py', 'M', False, 1, 1),
+			('new.txt', 'R', False, 0, 0), ('img.png', 'M', True, 0, 0),
+			('gone.py', 'D', False, 0, 2)])
+	equal('its rows carry the tag and the text', files[0]['hunks'][0]['rows'],
+		[[' ', 'x = 1'], ['-', 'y = 2'], ['+', 'y = 3'], [' ', 'z = 4']])
+	equal('and the hunk its first line numbers and heading', [
+		files[0]['hunks'][0][k] for k in ('old', 'new', 'head')], [1, 1, 'def f():'])
+	equal('a rename keeps its old path', files[1]['old'], 'old.txt')
+
+	big = 'diff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -0,0 +1,{} @@\n{}'.format(
+		scan.PATCH_FILE_ROWS + 1, '+x\n' * (scan.PATCH_FILE_ROWS + 1))
+	huge = scan.parse_patch(big)[0]
+	check('a file past the row limit keeps its counts and drops its hunks',
+		huge['truncated'] and huge['hunks'] == []
+		and huge['additions'] == scan.PATCH_FILE_ROWS + 1, huge['additions'])
+	long = scan.parse_patch('diff --git a/c b/c\n--- a/c\n+++ b/c\n@@ -0,0 +1 @@\n+'
+		+ 'y' * (scan.PATCH_LINE_CHARS + 50))[0]
+	equal('a long line is cut', len(long['hunks'][0]['rows'][0][1]),
+		scan.PATCH_LINE_CHARS + 1)
+
+	scanner = scan.RunScanner(root)
+	snapshot = scanner.snapshot()
+	got = scanner.diffs(snapshot['iterations'], budget=None)
+	rows = {r['id']: r for r in snapshot['iterations']}
+	check('every settled iteration with a parent has one, and nothing else',
+		set(got) == {i for i, r in rows.items() if r['status'] not in
+			('running', 'unreadable') and r.get('parent') is not None
+			and r.get('commit') and rows.get(r['parent'], {}).get('commit')},
+		sorted(got))
+	check('the baseline and an iteration in flight have none',
+		0 not in got and all(i not in got for i, r in rows.items()
+			if r['status'] == 'running'))
+	seen = {i: pair for i, (payload, pair) in got.items()}
+	equal('a pair already written is not asked of git again',
+		scanner.diffs(snapshot['iterations'], seen, budget=None), {})
+	equal('a budget of nothing writes nothing this scan',
+		scanner.diffs(snapshot['iterations'], budget=0), {})
+	one = next(iter(got.values()))[0]
+	check('the payload names its iteration and its parent', set(one)
+		== {'id', 'parent', 'files'} and one['files'], one.keys())
+
+
 def check_dead_code(root=None, work=None):
 	"""Every top-level function and constant in dashboard.js is used, and
 	every class the stylesheet names appears in the script, the markup or
@@ -1590,10 +1665,9 @@ def check_pulse(root, work, args=None):
 
 
 def check_gpu_strip(root, work, args=None):
-	"""The GPU strip holds its height. Writers before the shared sample
-	published an empty GPU list whenever nvidia-smi timed out, so the cards
-	vanished and came back every few seconds and the notebook jumped with
-	them; process blocks coming and going did the same at a smaller scale."""
+	"""The GPU strip holds its height. A timed-out nvidia-smi keeps the last
+	cards rather than dropping them, and process blocks coming and going do
+	not shrink the strip, so the notebook does not jump."""
 
 	from playwright.sync_api import sync_playwright
 
@@ -2544,11 +2618,11 @@ def run(base, snapshot, resources, exported, args):
 		page.select_option('#run-table select[data-key="status"]', '')
 		page.wait_for_timeout(150)
 
-		def point_of(want_key):
+		def point_of(want_key, plot='main-chart'):
 			# The DOM paints traces and points in data order, so the index of
 			# a customdata entry names the path to move onto.
-			return page.evaluate('''([key]) => {
-				const n = document.querySelector('#main-chart');
+			return page.evaluate('''([key, plot]) => {
+				const n = document.getElementById(plot);
 				const groups = n.querySelectorAll('.scatterlayer .trace');
 				for (let t = 0; t < n.data.length; t++) {
 					const i = (n.data[t].customdata || []).findIndex(
@@ -2558,26 +2632,30 @@ def run(base, snapshot, resources, exported, args):
 						.getBoundingClientRect();
 					return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
 				}
-				return null; }''', [str(want_key)])
+				return null; }''', [str(want_key), plot])
 
-		def click_point(key):
-			page.eval_on_selector('#main-chart',
+		def click_point(key, plot='main-chart'):
+			page.eval_on_selector('#' + plot,
 				'n => n.scrollIntoView({block: "center"})')
 			page.wait_for_timeout(250)
-			at = point_of(key)
+			at = point_of(key, plot)
 			if at is None:
 				raise AssertionError('no point for {}'.format(key))
 			page.mouse.click(at['x'], at['y'])
 			page.wait_for_timeout(400)
 
 		# The oldest iteration sorts last, so pinning it has to change page
-		# and scroll the box; nothing is outlined before the click.
+		# and scroll the box; nothing is outlined before the click. The
+		# objective chart's click opens the code change; an observer chart
+		# pins.
 		oldest = min(r['id'] for r in shown if r.get('runs'))
+		observer = 'observer-' + page.eval_on_selector(
+			'#observer-charts .reorder-card', 'n => n.dataset.panel')
 		equal('nothing is outlined before a click', pinned_rows(), 0)
-		click_point(oldest)
+		click_point(oldest, observer)
 		n_oldest = len(by_id[oldest]['runs']) + len(by_id[oldest].get('failures')
 			or [])
-		equal('clicking a point outlines each of its runs', pinned_rows(),
+		equal('clicking an observer point outlines each of its runs', pinned_rows(),
 			n_oldest)
 		look = page.eval_on_selector('#run-table', '''h => {
 			const row = h.querySelector('tbody tr[data-pinned="true"]');
@@ -2591,24 +2669,76 @@ def run(base, snapshot, resources, exported, args):
 		equal('the outlined rows are that iteration', look['id'], 'A' + str(oldest))
 		check('and the table scrolled to them, below its header', look['inside'],
 			look)
-		click_point(oldest)
+		click_point(oldest, observer)
 		equal('clicking it again clears the outline', pinned_rows(), 0)
 
-		page.click('#toggle-runs')
-		page.wait_for_timeout(400)
-		run = by_id[oldest]['runs'][-1]
-		click_point('{}:{}'.format(oldest, run['seed']))
-		one = page.eval_on_selector_all('#run-table tbody tr[data-pinned="true"]',
-			'n => n.map(r => r.cells[0].textContent + " seed " + '
-			'[...r.cells].map(c => c.textContent)['
-			'[...r.closest("table").querySelectorAll("th")].findIndex('
-			'h => h.textContent.startsWith("seed"))])')
-		equal('clicking a run dot outlines that one run', one,
-			['A{} seed {}'.format(oldest, run['seed'])])
-		click_point('{}:{}'.format(oldest, run['seed']))
-		page.click('#toggle-runs')
-		page.wait_for_timeout(300)
-		equal('and a second click clears it', pinned_rows(), 0)
+		print('\ncode change panel')
+		pinned_before = pinned_rows()
+		stat_ids = [r['id'] for r in iterations if r.get('diffstat')
+			and r['status'] != 'running' and r.get('runs')]
+		first_id = stat_ids[0]
+		equal('the panel is closed before a click', page.eval_on_selector(
+			'#diff-card', 'n => n.hidden'), True)
+		wanted = page.evaluate('async (id) => (await fetch("diffs/" + id + ".json")).json()',
+			first_id)
+		click_point(first_id)
+		page.wait_for_selector('#diff-card:not([hidden]) .diff-table', timeout=5000)
+		geometry = page.evaluate('''() => {
+			const c = document.getElementById('main-chart').getBoundingClientRect();
+			const d = document.getElementById('diff-card').getBoundingClientRect();
+			return { below: d.top >= c.bottom - 1, width: d.width }; }''')
+		check('clicking a point opens the code change below the chart',
+			geometry['below'], geometry)
+		check('and a click there pins nothing', pinned_rows() == pinned_before,
+			(pinned_before, pinned_rows()))
+		summary = page.inner_text('#diff-summary')
+		check('the summary names the iteration and its parent',
+			'A{}'.format(first_id) in summary and 'A{}'.format(
+				by_id[first_id]['parent']) in summary, summary)
+		equal('one entry per changed file', page.eval_on_selector_all(
+			'#diff-files .diff-file', 'n => n.length'), len(wanted['files']))
+		counts = page.evaluate('''() => ({
+			removed: document.querySelectorAll('#diff-files td.del:not(.num)').length,
+			added: document.querySelectorAll('#diff-files td.add:not(.num)').length}) ''')
+		equal('the left column holds each deleted line',
+			counts['removed'], sum(f['deletions'] for f in wanted['files']))
+		equal('the right column holds each added line',
+			counts['added'], sum(f['additions'] for f in wanted['files']))
+		colours = page.evaluate('''() => {
+			const bg = (s) => { const n = document.querySelector(s);
+				return n ? getComputedStyle(n).backgroundColor : null; };
+			return { del: bg('#diff-files td.del:not(.num)'),
+				add: bg('#diff-files td.add:not(.num)') }; }''')
+		check('deletions are red and additions green',
+			(colours['del'] is None or colours['del'].startswith('rgba(248, 81, 73'))
+			and (colours['add'] is None or colours['add'].startswith('rgba(46, 160, 67')),
+			colours)
+		hunk = next((h for f in wanted['files'] for h in f['hunks']
+			if h['rows'] and h['rows'][0][0] == ' '), None)
+		if hunk:
+			numbers = page.evaluate('''() => {
+				const r = document.querySelector('#diff-files .diff-table tr:nth-child(2)');
+				return [...r.cells].map((c) => c.textContent); }''')
+			equal('a hunk opening on context is numbered from its header, both sides',
+				[numbers[0], numbers[2]], [str(hunk['old']), str(hunk['new'])])
+		click_point(first_id)
+		equal('a second click closes it', page.eval_on_selector('#diff-card',
+			'n => n.hidden'), True)
+		if len(stat_ids) > 1:
+			click_point(first_id)
+			click_point(stat_ids[1])
+			page.wait_for_timeout(300)
+			check('a click on another point shows that iteration',
+				'A{}'.format(stat_ids[1]) in page.inner_text('#diff-summary'),
+				page.inner_text('#diff-summary'))
+		page.click('#diff-close')
+		equal('close shuts it', page.eval_on_selector('#diff-card',
+			'n => n.hidden'), True)
+		click_point(0)
+		check('the baseline has no parent, and says so',
+			'original code' in page.inner_text('#diff-files'),
+			page.inner_text('#diff-files'))
+		page.click('#diff-close')
 
 		print('\nobserver reordering')
 		order = lambda: page.eval_on_selector_all('#observer-charts .reorder-card',
@@ -3136,8 +3266,8 @@ def lineage(by_id, identifier):
 ###
 
 def run_scale(base, snapshot, out, args):
-	"""What breaks only at a real search's size: a row of 2,600
-	nodes forked from one parent was 119,000 px wide with the root off the edge, and no error."""
+	"""What breaks only at a real search's size: a row of 2,600 nodes forked
+	from one parent must fit the tree's width with the root in view."""
 
 	from playwright.sync_api import sync_playwright
 
@@ -3306,6 +3436,7 @@ def main(argv=None):
 			print('\npublisher freshness')
 			check_reload_chain()
 			check_dead_code()
+			check_diff_payload(root, work)
 			check_stale_writer(root, work)
 			check_pid_reuse(root, work)
 			check_slow_hardware(root, work)

@@ -204,7 +204,7 @@ search is most likely to break.
 Rows for group 4 of `references/step0-interview.md`, *The questions*. The
 first is asked in these words, and never assumed.
 
-| Group | Question | Options to offer | Default | Fills, in `spec.md` |
+| Group | Question | Options to offer | Default | Recorded in `spec.md` |
 |---|---|---|---|---|
 | 4 | "Do you want to add new unit tests?" | no; yes, which needs the original's branch committed and pushed to its remote (`references/step1-unit-tests.md`) | none: always asked | New unit tests |
 | 4 | On a yes: for the functions being optimized, or the whole repository? | the functions being optimized (Recommended); the whole repository | none: always asked, though one option is recommended (step 0's one exception) | New unit tests |

@@ -42,10 +42,12 @@ from gpu_scan import Hardware, stdout_of
 # A long search pays this per iteration on every poll: 2,600 iterations at
 # 600 characters is 1.5 MB of README in a payload that crosses an ssh tunnel
 # every few seconds, and it is the single largest block. Past `MANY` the
-# budget drops to the first line or two, which is all a tooltip shows anyway.
+# budget drops to NOTES_CHARS_LARGE, the first line or two, which is all a
+# tooltip shows anyway.
 NOTES_CHARS = 600
-WORKING_IDLE = 3600     # seconds of silence after which a README-less iteration is not 'working'
 NOTES_CHARS_LARGE = 160
+# Seconds of silence after which a README-less iteration is not 'working'.
+WORKING_IDLE = 3600
 
 # Above this many iterations the README excerpt shrinks to NOTES_CHARS_LARGE.
 # The lineage diagram condenses on its own past the same count, in the page
@@ -266,6 +268,98 @@ def diffstat(repo, base, commit):
 	return [added, deleted, files['A'], files['D'], files['M']]
 
 
+PATCH_LINE_CHARS = 1000
+PATCH_FILE_ROWS = 2000
+PATCH_BYTES = 400000
+_HUNK = re.compile(r'^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@ ?(.*)$')
+
+
+def parse_patch(text):
+	"""The files of a `git diff` as dicts for the page's diff panel.
+
+	Each file has `path`, `old` (the path before a rename, else None),
+	`status` (A, D, M or R), `binary`, `additions`, `deletions`, `truncated`
+	and `hunks`: `{old, new, head, rows}` where `old` and `new` are the first
+	line numbers and a row is `[tag, text]`, tag one of ' ', '+', '-'. A line
+	is cut at PATCH_LINE_CHARS. A file past PATCH_FILE_ROWS rows, or after
+	the files before it have used PATCH_BYTES, keeps its counts and loses its
+	hunks (`truncated`)."""
+
+	files, current, hunk = [], None, None
+	spent = 0
+
+	for line in text.split('\n'):
+		if line.startswith('diff --git '):
+			head = line[len('diff --git '):]
+			half = head.find(' b/')
+			current = {'path': head[half + 3:] if half >= 0 else head,
+				'old': None, 'status': 'M', 'binary': False, 'additions': 0,
+				'deletions': 0, 'truncated': False, 'hunks': [], 'rows': 0,
+				'bytes': 0}
+			files.append(current)
+			hunk = None
+		elif current is None:
+			continue
+		elif hunk is None and line.startswith('new file mode'):
+			current['status'] = 'A'
+		elif hunk is None and line.startswith('deleted file mode'):
+			current['status'] = 'D'
+		elif hunk is None and line.startswith('rename from '):
+			current['old'], current['status'] = line[len('rename from '):], 'R'
+		elif hunk is None and line.startswith('rename to '):
+			current['path'] = line[len('rename to '):]
+		elif hunk is None and line.startswith('Binary files '):
+			current['binary'] = True
+		elif hunk is None and line.startswith('+++ b/'):
+			current['path'] = line[len('+++ b/'):]
+		elif hunk is None and line.startswith('--- a/') and current['status'] == 'D':
+			current['path'] = line[len('--- a/'):]
+		else:
+			match = _HUNK.match(line)
+			if match:
+				hunk = {'old': int(match.group(1)), 'new': int(match.group(2)),
+					'head': match.group(3), 'rows': []}
+				current['hunks'].append(hunk)
+			elif hunk is not None and line[:1] in (' ', '+', '-'):
+				if line[0] == '+':
+					current['additions'] += 1
+				elif line[0] == '-':
+					current['deletions'] += 1
+				body = line[1:]
+				if len(body) > PATCH_LINE_CHARS:
+					body = body[:PATCH_LINE_CHARS] + '…'
+				hunk['rows'].append([line[0], body])
+				current['rows'] += 1
+				current['bytes'] += len(body) + 8
+
+	for item in files:
+		spent += item['bytes']
+		if item['rows'] > PATCH_FILE_ROWS or spent > PATCH_BYTES:
+			item['hunks'], item['truncated'] = [], True
+		del item['rows'], item['bytes']
+
+	return files
+
+
+def patch(repo, base, commit):
+	"""`parse_patch` of the diff from the merge base of `base` and `commit` to
+	`commit` (the same range as `diffstat`), or None when git cannot say."""
+
+	try:
+		done = subprocess.run(['git', '-C', repo, '-c', 'core.quotepath=off',
+			'diff', '-M', '--no-color', '--no-ext-diff', '-U3',
+			'--src-prefix=a/', '--dst-prefix=b/',
+			'{}...{}'.format(base, commit)], capture_output=True,
+			timeout=30)
+	except (OSError, subprocess.SubprocessError):
+		return None
+
+	if done.returncode != 0:
+		return None
+
+	return parse_patch(done.stdout.decode('utf-8', 'replace'))
+
+
 class RunScanner:
 	def __init__(self, root):
 		self.root = autoopt.resolve(root)
@@ -374,8 +468,8 @@ class RunScanner:
 		record from `validations/round-<N>.json`, oldest round first. None
 		when the search has neither, so the page draws nothing.
 
-		Reported, never gated on: nothing here feeds `on_frontier`, a
-		or a status.
+		Reported, never gated on: nothing here feeds `on_frontier` or a
+		status.
 		"""
 
 		block = config.get('external_validation')
@@ -572,6 +666,39 @@ class RunScanner:
 				changed[identifier] = (mtime, read_text(path))
 		return changed
 
+	def diffs(self, rows, seen=None, budget=DIFF_BUDGET):
+		"""The code change of every settled iteration with a parent, against
+		that parent, for the diff panel under the objective chart.
+
+		`rows` are the snapshot's iterations. Returns {id: (payload, pair)} for
+		the iterations whose (parent commit, commit) pair is not already in `seen` ({id: (base, head)}); the writer records what it
+		wrote there. A pair is asked of git once, newest iteration first, and
+		each call spends at most `budget` seconds (None: no limit, for the
+		export) on pairs it has not seen; the rest fill in on later calls.
+		The payload is `{id, parent, files}`, `files` from `parse_patch`."""
+
+		seen = seen if seen is not None else {}
+		repo = os.path.join(self.root, 'repo.git')
+		commits = {row['id']: row.get('commit') for row in rows}
+		rows = [row for row in rows
+			if row['status'] not in ('running', 'unreadable')]
+		out, spent = {}, 0.0
+
+		for row in sorted(rows, key=lambda row: -row['id']):
+			base, head = commits.get(row.get('parent')), row.get('commit')
+			if not base or not head or seen.get(row['id']) == (base, head):
+				continue
+			if budget is not None and spent >= budget:
+				break
+			started = time.time()
+			files = patch(repo, base, head)
+			spent += time.time() - started
+			if files is not None:
+				out[row['id']] = ({'id': row['id'], 'parent': row['parent'],
+					'files': files}, (base, head))
+
+		return out
+
 	def iteration(self, identifier, config, notes_chars=NOTES_CHARS):
 		directory = autoopt.iteration_dir(self.root, identifier)
 		meta = autoopt.load_meta(self.root, identifier) or {}
@@ -594,8 +721,8 @@ class RunScanner:
 			'branch': (result or meta).get('branch'),
 			'commit': (result or meta).get('commit'),
 			'created': meta.get('created'),
-			# The idea miner's last finished stage when it was created; the
-			# baseline and searches begun before the miner have none.
+			# The idea miner's last finished stage when it was created (0 before
+			# any has finished).
 			'mining_stage': meta.get('mining_stage'),
 			# `no` or `specific`, the answer to the brief's toolchain question.
 			'toolchain': meta.get('toolchain'),

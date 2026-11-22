@@ -1,4 +1,4 @@
-# auto-optimize dashboard
+# auto-optimize-code dashboard
 
 Operating it: `references/dashboard.md`, under the skill root two levels
 above this directory.
@@ -11,7 +11,7 @@ say so); playwright and jupyterlab for the tests.
 
 | File | Owns |
 |---|---|
-| `scan.py` | `RunScanner`: `snapshot()` (state.json), `readmes()` (readmes/<id>.json), `hardware.resources()` (resources.json), and `classify`/`target(cmdline, pid)` for the process table. `scan.py <root>` prints the snapshot |
+| `scan.py` | `RunScanner`: `snapshot()` (state.json), `readmes()` (readmes/<id>.json), `diffs()` (diffs/<id>.json), `hardware.resources()` (resources.json), and `classify`/`target(cmdline, pid)` for the process table. `scan.py <root>` prints the snapshot |
 | `gpu_scan.py` | GPUs (three queries run side by side through one NVML session per publisher, `libnvidia-ml.so.1` by ctypes, since a new nvidia-smi process stalls cudaMalloc in every CUDA process on the host; nvidia-smi only where NVML will not load, or where `GPU_SCAN_NVML` names a file that does not; the power limit read once per session and per-process SM once a minute, since those NVML calls also hold cudaMalloc while they run; each query shared by every publisher of this user on the host through `shared_sample()` in `/dev/shm/dashboard-monitor-<uid>/`, keyed by the nvidia-smi path; an answer is dated when its call started, a publisher waits up to `SHARED_WAIT` (1.5 s) for a call under way, and a failed call keeps the last good answer), host and its name, lease holders (`GPU_LEASE_DIR`, optional), this search's processes; `autoopt_monitor.py` is in `SELF_MARKERS` |
 | `monitor_writer.py` | the scan loop, the hardware thread, asset install, rounding, `writer.pid`, the writer index, the per-directory writer lock (`claim()`, in the same `/dev/shm` directory: one writer per payload directory on a host, released by the kernel at exit), and the heartbeat `writer.host` beside the payload for writers on other hosts (`yields_to()`). `monitor_writer.py <root> --out DIR [--interval 20] [--resource-interval 3]`, started by `autoopt_monitor.py` |
 | `autoopt_monitor.py` | `show()`, `make_notebook()`, `--start/--status/--stop/--export`; the notebook entry point |
@@ -31,7 +31,7 @@ generic widgets; `search`, `objective`, `observers`, `validation`,
 | Panel | Reads | Behavior to keep |
 |---|---|---|
 | Summary band | `result.json`, `resources.json` | settled, frontier, gain, rounds, frontier steps, runs per iteration, GPUs in use, subagents working |
-| Category chips | `categories` | `ROOT`, then the categories `autoopt.py` allows (`autoopt.categories_for`), empty ones included, and any other an iteration used. Eight hues (`--cat-0` to `--cat-7`), since shape carries status here, so each of the idea miner's ten categories has its own; `MISC` is the grey catch-all. A click emphasizes (several may be on; a second click clears); the `.eye` dot hides the category from charts and log and dims it in the tree |
+| Category chips | `categories` | `ROOT`, then the categories `autoopt.py` allows (`autoopt.categories_for`), empty ones included, and any other an iteration used. Ten hues (`--cat-0` to `--cat-9`), one for each of the idea miner's ten categories, since shape carries status; `MISC` is the grey catch-all. A click emphasizes (several may be on; a second click clears); the `.eye` dot hides the category from charts and log and dims it in the tree |
 | GPUs | `gpu_scan` | one card per device: utilization sparkline, lease holder, this search's processes. A sample with no GPUs after one with GPUs keeps the last cards; a reading older than 30 s (or three hardware cadences) dims them and the host summary gives its age (`gpu_sampled_at`). The strip's height only grows while mounted, and its drag bar is left alone while the strip is not laid out. Its Live toggle (off on every load) writes `live.json` beside the payload every 3 s through the Contents API while the tab is showing and polls every second; while that file is under 10 s old the publisher samples every second, straight from NVML without the shared cache (nvidia-smi keeps it), and reports `writer.live`. Per-process SM stays on its 60 s clock, and the sparkline history on the slow one |
 | Objective by iteration | `result.json`, `meta.json` | medians, the frontier staircase, in-flight iterations on the floor. *Stage boundaries* (on): a purple dashed line between neighbors whose idea-miner stage (`mining_stage`; the baseline is 0) differs, so a bump after a fresh batch of ideas shows; in a search with no stages, whose tree generation differs, and the legend says which. *Confidence intervals* (off): a capped dotted whisker from `scan.median_ci` (95% percentile bootstrap of the median, 2,000 resamples, seed 0), none under two runs. *All runs*: every seed, size 4, opacity 0.3, muted hue. The hover adds the code change: `lines` `+`/`−` and each nonzero file count, in the diff colors, and the miner stage |
 | Abandoned iterations | `iterations/<id>.abandoned/meta.json`, `README.md` | an empty fork set aside (`references/resume.md`): a thin ✕ (`x-thin-open`) in its category's hue at its own x and the baseline's value, keyed in the legend; follows the chips and *hide failed*; in no count, tree, table or log (scan.py `abandoned`) |
@@ -55,10 +55,12 @@ generic widgets; `search`, `objective`, `observers`, `validation`,
 | muted green / red validation point | that round's script reported `ok` true / false |
 
 Lasso or box-select links every chart and dims the tree; **Clear selection**
-or a double-click drops it. A click on a point or tree node, or an opened
-log entry, pins that iteration: its rows in *Every run* are outlined and
-scrolled to, and a second click drops the pin; a click on one run's dot
-outlines that run. `x log` / `y log`
+or a double-click drops it. A click on a tree node, an observer chart's
+point or an opened log entry pins that iteration: its rows in *Every run* are
+outlined and scrolled to, and a second click drops the pin. A click on a point
+of the objective chart (a median or a run's dot) opens that iteration's code
+change under the chart, and pins nothing: a second click, or *close*, shuts it.
+`x log` / `y log`
 override the automatic log axis and count the points it hides; the
 objective chart's `x log` is manual only (`(1 hidden)`: the baseline at x = 0).
 
@@ -76,13 +78,15 @@ from 600 to 160 characters. `test_frontend.py --scale` covers this.
 | `state.json` | every full scan (`interval`, 20 s) | every state poll |
 | `resources.json` | every hardware sample (`resource_interval`, 3 s, or as long as the GPU query takes), on its own thread | every hardware poll |
 | `readmes/<id>.json` | when that iteration's `README.md` mtime moves; the whole file, where `state.json` carries an excerpt | when its tree node's panel opens, and again when the excerpt changes |
+| `diffs/<id>.json` | once per (parent commit, commit) pair, newest iteration first, at most `DIFF_BUDGET` seconds of git per scan; settled iterations with a parent only | when its point on the objective chart is clicked; a failed read is tried again after 10 s |
 
 `state.json` carries every iteration (its `objective.ci` is `median_ci`'s
-bootstrap interval, cached per set of run values), the root, round and roots, the frontier and its steps, and `categories`, the
-fixed list from `autoopt.py`, which fixes each category's color: sorted,
-`MISC` the gray catch-all, `ROOT` (iteration 0, whatever its `meta.json`
-says) a fixed light neutral outside the slots. The lineage is built and condensed in the page
-from `iterations`; the payload carries no tree. `validation` is None for a
+bootstrap interval, cached per set of run values), the root, round and roots,
+the frontier and its steps, and `categories`, the fixed list from
+`autoopt.py`, which fixes each category's color: sorted, `MISC` the gray
+catch-all, `ROOT` (iteration 0, whatever its `meta.json` says) a fixed light
+neutral outside the slots. The lineage is built and condensed in the page from
+`iterations`; the payload carries no tree. `validation` is None for a
 search without an external validation, else its configured `measures`,
 `units` (config.json's, then each round's `validation.json`), `note`,
 `approved` and one record per `validations/round-<N>.json`, oldest
@@ -94,11 +98,10 @@ settled and never on the frontier; `state.json`'s `unreadable` lists them
 as `{id, error}`.
 
 `resources.json` carries `psutil` (False when it is not installed),
-`gpu_sampled_at` (when the last GPU query that answered started;
-older than `timestamp` while it is slow or failing, and a history sample
-repeats no reading), `hostname` (the host the GPUs are on, which the host
-summary leads with), and
-`writer`, the writer's report on itself: `interval`,
+`gpu_sampled_at` (when the last GPU query that answered started; older than
+`timestamp` while the query is slow or failing, and a history sample repeats
+no reading), `hostname` (the host the GPUs are on, which the host summary
+leads with), and `writer`, the writer's report on itself: `interval`,
 `resource_interval`, `state_cadence` and `resource_cadence` (the longest of
 the last five measured gaps, in seconds, None until two have happened),
 and `scan_error` with `scan_error_at`, the last failed scan's reason
@@ -124,14 +127,25 @@ pidfile is gone still counts as running.
 `start_writer` first stops every writer into the directory but the
 pidfile's (`writers_into`: by process, from any copy of the script) and
 every writer of the search into another directory (`publishers`, the same
-way), and returns once the new writer's `state.json` and `resources.json` both
-exist, so it blocks for one hardware sample. When its writer loses the
+way), and returns once the new writer's `state.json` and `resources.json`
+both exist, so it blocks for one hardware sample. When its writer loses the
 lock to a start racing it, it returns the winner's pid. `--start`
 without `--out` takes the directory a live writer of the search publishes
 into, so a second `--start` reports that writer. A
-handover to another search deletes the three payloads and renames
-`readmes/` to `readmes.<YYYYmmdd-HHMMSS>-<pid>`; nothing deletes those.
+handover to another search deletes `state.json` and `resources.json` and
+renames `readmes/` and `diffs/` to `readmes.<YYYYmmdd-HHMMSS>-<pid>` and
+`diffs.<…>`; nothing deletes those.
 The page fetches `readmes/<id>.json` only for a row with `has_readme`.
+
+`diffs/<id>.json` is `{id, parent, files}`, `files` from `scan.parse_patch`:
+`path`, `old` (before a rename), `status` (A, D, M, R), `binary`, `additions`,
+`deletions`, `truncated` and `hunks` (`{old, new, head, rows}`, a row
+`[' '|'+'|'-', text]`). The patch is `git diff -M` from the merge base, as
+`diffstat` is. A line is cut at `PATCH_LINE_CHARS` (1,000); a file past
+`PATCH_FILE_ROWS` (2,000) rows, or after `PATCH_BYTES` (400,000) bytes of
+earlier files, keeps its counts and no hunks. The page draws it in two
+columns, old on the left and new on the right, with no syntax highlighting;
+below 640 px wide the table scrolls sideways.
 
 A settled row with a parent carries `diffstat`, `[lines added, lines
 deleted, files added, files deleted, files modified]`, from `git diff --raw
@@ -150,7 +164,7 @@ without it. Jupyter servers are read from
 and `$JUPYTER_RUNTIME_DIR`.
 
 `SOURCES` in `monitor_writer.py` includes `../autoopt.py`, so a change to the
-runner's scoring replaces a running writer too.
+runner's scoring replaces a running writer.
 
 ## Testing
 

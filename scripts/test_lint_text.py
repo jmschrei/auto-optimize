@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Check lint_text.py on the phrasings that reached published text and on the
-real code words that must pass.
+"""Check lint_text.py on the phrasings it must flag and on the real code words
+that must pass.
 
 	python3 test_lint_text.py     # a second
 """

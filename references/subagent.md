@@ -26,12 +26,12 @@ parent ran. A premise the ledger settled is not measured again; a helper or
 checker in `tools/` is reused, not rewritten.
 
 **2. Implement the idea.** Edit code only in `$SRC`, after reading the
-parent's code, which differs from the baseline once anything was promoted. What one run calls,
-with which inputs, is your brief's *What one run does* line, and in
-repository mode the brief lists the harness's files and functions, which a
-probe or checker may import: read the harness only for what those leave out. For code compiled by
-numba, read `references/algorithm.md`, *Numba*, first. In
-repository mode the benchmark is `harness/`, which no iteration edits.
+parent's code, which differs from the baseline once anything is promoted. What
+one run calls, with which inputs, is your brief's *What one run does* line. In
+repository mode the benchmark is `harness/`, which no iteration edits, and the
+brief lists its files and functions, which a probe or checker may import: read
+the harness only for what those leave out. For code compiled by numba, read
+`references/algorithm.md`, *Numba*, first.
 
 Change **one thing**. If the idea needs three changes to work at all, it is
 one idea; if it splits into three that each stand alone, it is three
@@ -59,9 +59,10 @@ tests and the compare, then the other runs. A broken edit therefore costs one
 run. It writes `result.json` and `report.txt`, whose `run <seed>`
 rows give each run's objective and observers beside your parent's run of the
 same seed, any gate it broke, and the load when it started: read those rows,
-not the runs' `metrics.json`. Do not loop over seeds yourself. After you fix the code, run it again: the new commit runs
-every seed afresh, while seeds already measured on an unchanged commit are
-reused (`--rerun` runs them again).
+not the runs' `metrics.json`. Do not loop over seeds yourself. After you fix
+the code, run it again: the new commit runs every seed afresh, while seeds
+already measured on an unchanged commit are reused (`--rerun` runs them
+again).
 
 **When `"tests"` is configured**, the runner runs the unit tests once, after
 the first run passes its gates. A failure is `gate-failed`. Read
@@ -211,13 +212,14 @@ A prefetch thread kept alive across calls, or prefetching only for inputs
 past one block, where the startup is amortised.
 ```
 
-**When the runner's `keep:` line reads `promoted` or `passes`, in a repository search, add two more
-sections; `finish` refuses the README without them.** They are the text
-published with your change, so nobody has to read your diff again to describe it. An
-iteration made with `--after-end` writes them before `promote`. `finish` and `promote` lint both (`references/promotion.md`,
-*The preflight*): name nothing of the search (no winner, baseline, round,
-label such as A12, or path on this machine), and call the original code by its
-branch name.
+**When the runner's `keep:` line reads `promoted` or `passes`, in a repository
+search, add two more sections; `finish` refuses the README without them.** They
+are the text published with your change, so nobody has to read your diff again
+to describe it. An iteration made with `--after-end` writes them before
+`promote`. `finish` and `promote` lint both (`references/promotion.md`, *The
+preflight*): name nothing of the search (no winner, baseline, round, label such
+as A12, or path on this machine), and call the original code by its branch
+name.
 
 | Section | Holds |
 |---|---|
@@ -228,15 +230,15 @@ branch name.
 ## Change
 
 name: Reuse the parsed header across records
-The record parser now parses a block's header once and passes it to each
-record, where it was parsed again for every record.
+The record parser parses a block's header once and passes it to each record,
+where it parsed the header again for every record.
 
 ## Commit message
 
 Parse a block's header once
 
 parse_record() took the raw header and parsed it for each record of the
-block. read_block() now parses it once and hands the result down.
+block. read_block() parses it once and hands the result down.
 ```
 
 The README's *Numbers*
@@ -292,8 +294,7 @@ report (*What to report back*).
 ## Check your brief before you follow it
 
 Your brief was written from a profile of another root and a memory of what
-was tried. Briefs are wrong often enough that checking them is the most
-valuable habit a subagent has. When the search profiles its roots, *The idea*
+was tried, so check its premises before relying on them. When the search profiles its roots, *The idea*
 quotes your parent's profile on the idea's function; one that says the
 profile does not name it is the first premise to check, before building
 anything. Premises that turned out false:
@@ -363,11 +364,14 @@ file (Makefile and `*.inc`, `CMakePresets.json`, `build.sh`, `config.toml`, an
 `include` of a new file), a compiler or flag variable set in one, an optimize
 or target pragma or attribute wherever it sits, a new assembly file, a binary
 or library, and a file under `vendor/` or `third_party/`. The runner scrubs
-`CC`, `CFLAGS` and the other build variables from every run and test and sets those in `config.json` `build_env`, so exporting one
-changes nothing. The harness is hashed when step 2 closes; a run refuses once
-it differs (`autoopt.py harness`). A new binary is flagged by content, not suffix, so a build's output committed by accident is refused too: ignore build outputs in the repository's `.gitignore`. A changed build file, a binary or library, a vendored
-tree and an assembly file are refused whatever the answer is, unless `config
---set allow_build_changes=yes` (tuning the build is the task).
+`CC`, `CFLAGS` and the other build variables from every run and test and sets
+those in `config.json` `build_env`, so exporting one changes nothing. The
+harness is hashed when step 2 closes; a run refuses once it differs
+(`autoopt.py harness`). A new binary is flagged by content, not suffix, so a
+build's output committed by accident is refused too: ignore build outputs in
+the repository's `.gitignore`. A changed build file, a binary or library, a
+vendored tree and an assembly file are refused whatever the answer is, unless
+`config --set allow_build_changes=yes` (tuning the build is the task).
 
 **Constants fit to this machine.** A number you chose by timing here (a block
 or tile size, a thread count, a buffer length, a prefetch distance, the cutoff

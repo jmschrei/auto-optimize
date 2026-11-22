@@ -15,7 +15,7 @@ the user wants it there), because section 3 deletes most of what is in
 python3 $AO/autoopt.py archive $WORK        # --id <it> for another iteration; --dest DIR outside $WORK; --force to write over an archive
 ```
 
-It writes `idea.patch`, `code/`, the README and `result.json`, and the report's skeleton (section 2) with *What was optimized*, *Result* and *The path* filled in and `<<FILL>>` marks left.
+It writes `idea.patch`, `code/`, the README and `result.json`, and the report's skeleton (section 2) with *What was optimized*, *Result* and *The path* filled in and `<<FILL: …>>` marks left.
 
 Quote the iteration's median, never the single run in `best_run`.
 

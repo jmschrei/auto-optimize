@@ -3,8 +3,8 @@
 
 	python3 test_runner.py
 
-`test_frontend.py` covers the page and `test_notebook.py` the mount; this
-covers the arithmetic underneath both — which seeds run, what counts as
+`dashboard/test_frontend.py` covers the page and `dashboard/test_notebook.py`
+the notebook mount; this covers the arithmetic underneath both — which seeds run, what counts as
 passing, when the confirmation stage is earned. Every case builds a real
 search in a temporary directory and drives the real scripts, because the
 failures worth catching are the ones where two of them disagree.
@@ -140,8 +140,8 @@ def make_search(root, **kwargs):
 	"""A search whose baseline scores 0.50, gated at cost <= 1.0."""
 
 	os.makedirs(root, exist_ok=True)
-	# The older suites promote by hand and screen, then confirm;
-	# auto_promotion and single_count cover the defaults.
+	# Searches promote by hand and screen, then confirm, unless a test says
+	# otherwise; auto_promotion and single_count cover init's defaults.
 	kwargs.setdefault('promote', 'orchestrator')
 	staged = kwargs.pop('staged', True)
 	if staged:
@@ -1696,8 +1696,8 @@ def no_identity(suite, base):
 		os.environ.update(saved)
 
 
-# A git older than 2.42, whose `worktree add` has no --orphan
-# (`checkout --orphan` is far older and stays).
+# A git without `worktree add --orphan` (git 2.42 and later has it);
+# `checkout --orphan` still works.
 OLD_GIT = """#!/bin/sh
 case " $* " in
 	*" worktree "*" --orphan "*)
@@ -2367,8 +2367,8 @@ def leftover_controls(suite, base):
 	old.pop('control')
 	autoopt.write_json(os.path.join(autoopt.iteration_dir(search, 4),
 		'result.json'), old)
-	suite.equal('a control recorded before result.json carried the flag is '
-		'kept off it too', autoopt.search_frontier(search, autoopt.all_results(
+	suite.equal('a control whose result.json has no control flag is '
+		'kept off the frontier too', autoopt.search_frontier(search, autoopt.all_results(
 			search), 'max')[1], 3)
 
 
@@ -2636,7 +2636,7 @@ def reporting(suite, base):
 		'knowledge.md mentions' in report and '4' in report.split(
 			'knowledge.md mentions')[1].splitlines()[0], report)
 	out = call([AUTOOPT, 'reset', search, '--keep', '0,1', '--force', '--apply'])
-	suite.check('reset removes the old validation records',
+	suite.check('reset removes the validation records',
 		not os.listdir(os.path.join(search, 'validations')))
 	suite.check('and names a next id past a directory set aside',
 		'next `new` takes id 8' in out, out[-300:])
@@ -2941,7 +2941,7 @@ def setup_tools(suite, base):
 	with open(os.path.join(folder, 'same', 'calc.py'), 'w') as handle:
 		handle.write('def result():\n\treturn [1, 2, 5]\n')
 
-	# A rewrite of the same size within the second would keep the old .pyc.
+	# A rewrite of the same size within the second would keep a stale .pyc.
 	shutil.rmtree(os.path.join(folder, 'same', '__pycache__'),
 		ignore_errors=True)
 
@@ -2991,7 +2991,7 @@ def setup_tools(suite, base):
 	suite.equal('and the other way round for an objective maximized',
 		autoopt.width_verdict({1: [(10, 9.5, 0)], 2: [(10, 9.6, 0)],
 			4: [(9.4, 9.0, 0)]}, False), (9.5, 0, 2))
-	# Live test 3's table under load: 0.4% on the slowest run is noise.
+	# A table where a 0.4% slowdown of the slowest run is noise.
 	measured = {1: [(v, v, 41) for v in (0.1234, 0.1236, 0.1238, 0.124,
 		0.1241)], 2: [(0.1229, 0.1231, 41), (0.1243, 0.1246, 41)],
 		4: [(0.123, 0.1234, 41), (0.124, 0.1244, 41)]}
@@ -3128,8 +3128,8 @@ def next_briefs(suite, base):
 	call([AUTOOPT, 'summary', older, '--round', '1'])
 	out = call([AUTOOPT, 'brief', older, '--next', '--count', '0'],
 		expect=(0,))
-	suite.check('on a search older than the record, the first call shows no '
-		'old summary, and marks them shown', 'written since the last brief'
+	suite.check('on the first call of a search that already has summaries, none is '
+		'shown, and all are marked shown', 'written since the last brief'
 		not in out and autoopt.load_state(older).get('summaries_shown')
 		== ['round-1.md'], out[-600:])
 
@@ -3533,7 +3533,7 @@ def variants_and_proofs(suite, base):
 			'controls | Inputs | Run time |\n|---|---|---|---|---|---|---|\n')
 	call([AUTOOPT, 'finish', search, '--id', '1', '--checker',
 		os.path.join(probe, 'guard'), '--checker-row', row], expect=(0,))
-	suite.check('a library begun before the index keeps its seven columns',
+	suite.check('a library whose header has seven columns keeps them',
 		re.search(r'\n\| core-A1 \| bench\.py of two trees \| touch BUILT \| '
 			r'`python3 tools/checkers/core-A1/check\.py', open(old_library)
 			.read()), open(old_library).read())
@@ -3813,7 +3813,7 @@ def orchestrator_phases(suite, base):
 		'Nothing is in flight: hand back now' in out, out[-400:])
 	call([AUTOOPT, 'loop', search, '--done'])
 	out = call([AUTOOPT, 'brief', search, '--next'], expect=(0,))
-	suite.check('once the phase is closed, brief --next briefs as before',
+	suite.check('once the phase is closed, brief --next briefs again',
 		os.path.exists(os.path.join(search, 'briefs', '4.md'))
 		and 'orchestrator subagent: phase' not in out, out[-600:])
 
@@ -4598,7 +4598,7 @@ def main(argv=None):
 		print('\nJSON records')
 		json_files(suite, base)
 
-		print('\nsmall interface fixes')
+		print('\nsmall interface checks')
 		small_fixes(suite, base)
 		one_publisher(suite, base)
 		unlisted_publisher(suite, base)

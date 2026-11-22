@@ -20,8 +20,8 @@ What is measured, and what is exempt:
   rows), where the rule separates rows of values. Exempt: text inside
   controls (buttons, chips, inputs, selects, badges, grips, a checkbox's
   box), legend keys (`.swatch`, `.mark-key`), anything inside a closed
-  `<details>` other than its summary, inside SVG, canvas and Plotly plots and their modebar (their own
-  check below), the tooltip, the dashed empty-state box and anything
+  `<details>` other than its summary, inside SVG, canvas and Plotly plots and
+  their modebar (their own check below), the tooltip, the dashed empty-state box and anything
   `[hidden]`; borders of those elements do not count either. Transparent
   borders do not count.
 - `divider_violations`: an element matching a key of `DIVIDED` (add a

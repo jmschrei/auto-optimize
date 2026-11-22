@@ -1,4 +1,4 @@
-"""Show the auto-optimize monitor inside a JupyterLab notebook.
+"""Show the auto-optimize-code monitor inside a JupyterLab notebook.
 
 	import autoopt_monitor as am
 	am.show('<work>/autooptimize')
@@ -37,10 +37,9 @@ import gpu_scan
 import scan
 import monitor_writer
 
-# A notebook cell reloads this module and nothing else, so a kernel left open
-# across a change would keep the old copies of everything below and the new
-# code would call into them. Refresh the chain innermost first, so each reload
-# binds the fresh copy of the one under it.
+# A notebook cell reloads this module and nothing else, so a long-lived kernel
+# would keep stale copies of the modules below. Reload them innermost first,
+# so each reload binds the fresh copy of the one under it.
 for _module in ('autoopt', 'gpu_scan', 'scan', 'monitor_writer'):
 	try:
 		globals()[_module] = importlib.reload(sys.modules[_module])
@@ -173,7 +172,7 @@ def writer_processes(any_copy=False):
 	"""This user's running `monitor_writer.py` processes from this
 	dashboard, found by process rather than by directory: a writer started by
 	hand with `--out` anywhere. `[{pid, run, out_dir}]`, from /proc.
-	`any_copy` takes a writer from any copy of the script, such as an older
+	`any_copy` takes a writer from any copy of the script, such as another
 	checkout of the skill."""
 
 	script = os.path.realpath(os.path.join(HERE, 'monitor_writer.py'))
@@ -241,7 +240,7 @@ def status(base=DEFAULT_BASE):
 	"""Every run currently being published, wherever its payload lives.
 
 	Payloads sit beside their runs, so there is no one directory to list. The
-	writer index names them. `base` is still scanned, including the base
+	writer index names them. `base` is also scanned, including the base
 	itself, for a writer started by hand with `--out` pointing there.
 	"""
 
@@ -269,8 +268,8 @@ def status(base=DEFAULT_BASE):
 			# The entry outlived its writer: a kill -9, or a reboot.
 			monitor_writer.forget(out_dir)
 
-	# And by process: a writer that never reached the index (an older copy,
-	# an unwritable ~/.cache) is still this user's monitor_writer.py.
+	# And by process: a writer that never reached the index (another copy of
+	# the script, an unwritable ~/.cache) is still this user's monitor_writer.py.
 	pids = {entry['pid'] for entry in out}
 	out += [entry for entry in writer_processes() if entry['pid'] not in pids]
 
@@ -357,9 +356,9 @@ def start_writer(root, out_dir, interval=20.0, resource_interval=3.0):
 	"""Start the publisher unless a current one already serves this run.
 
 	A writer on a different run is replaced, since it would show the wrong
-	numbers under the right name. A writer on this run started before the
+	numbers under the right name. A writer on this run that started before the
 	current scanner code is replaced too, since it keeps publishing the
-	payload shape it was started with. A writer of this run into another
+	payload shape it started with. A writer of this run into another
 	directory is stopped: a search has one publisher.
 	"""
 
@@ -397,17 +396,17 @@ def start_writer(root, out_dir, interval=20.0, resource_interval=3.0):
 	if info and info['root'] == root:
 		print('Restarting the writer (pid {}): {}.'.format(info['pid'],
 			'it predates the current scanner' if info['code']
-			!= monitor_writer.code_version() else 'its intervals were {}, now {}'
+			!= monitor_writer.code_version() else 'its intervals were {}, not {}'
 			.format(info['intervals'], clocks)))
 		_terminate(out_dir, info['pid'])
 
 	elif info:
-		print('Stopping the writer on {} (pid {}); {} will now publish '
+		print('Stopping the writer on {} (pid {}); {} will publish '
 			'{}.'.format(info['root'], info['pid'], out_dir, root))
 		_terminate(out_dir, info['pid'])
 
-		# Drop the old run's files, or the wait below would accept them as
-		# the new writer's output. Its whole READMEs are moved aside, not
+		# Drop the previous search's files, or the wait below would accept
+		# them as the new writer's output. Its whole READMEs are moved aside, not
 		# deleted: the new writer writes only its own, so any left would
 		# show under the new search's ids.
 		for name in monitor_writer.PAYLOADS:
@@ -416,10 +415,11 @@ def start_writer(root, out_dir, interval=20.0, resource_interval=3.0):
 			except OSError:
 				pass
 
-		readmes = os.path.join(out_dir, 'readmes')
-		if os.path.isdir(readmes):
-			os.rename(readmes, '{}.{}-{}'.format(readmes,
-				time.strftime('%Y%m%d-%H%M%S'), os.getpid()))
+		for name in ('readmes', 'diffs'):
+			stale = os.path.join(out_dir, name)
+			if os.path.isdir(stale):
+				os.rename(stale, '{}.{}-{}'.format(stale,
+					time.strftime('%Y%m%d-%H%M%S'), os.getpid()))
 
 	log = open(os.path.join(out_dir, 'writer.log'), 'a')
 	process = subprocess.Popen([sys.executable,
@@ -429,7 +429,7 @@ def start_writer(root, out_dir, interval=20.0, resource_interval=3.0):
 		stdin=subprocess.DEVNULL, start_new_session=True)
 
 	# Wait for the pidfile to name this run, not merely for a state.json to
-	# exist: after a handover the old one may still be on disk. And for
+	# exist: after a handover the previous search's may still be on disk. And for
 	# resources.json, which its own thread writes one hardware sample after
 	# start (seconds on a busy host): a page mounted before it polls a 404.
 	exited = None
@@ -561,9 +561,10 @@ def show(root, out_dir=None, interval=20.0, resource_interval=3.0,
 		The `autooptimize/` directory to watch, or the directory holding it.
 
 	out_dir: str, optional
-		Where the JSON is published. Defaults to `<base>/<run>`. Must be
-		inside the directory Jupyter serves, because the page reads it
-		through the Contents API.
+		Where the JSON is published. Defaults to `<root>/monitor` when that
+		is inside the directory Jupyter serves and writable, else
+		`<base>/<project>-<hash>`. Must be inside the directory Jupyter
+		serves, because the page reads it through the Contents API.
 
 	interval, resource_interval: float, optional
 		Seconds between full scans, and between hardware samples.
@@ -586,7 +587,7 @@ def show(root, out_dir=None, interval=20.0, resource_interval=3.0,
 			'the page could not read it. Pass out_dir= somewhere under '
 			'{}.'.format(out_dir, served_root, served_root))
 
-	# Refresh the front end now: a long-lived writer may be mid-sleep.
+	# Install the current front end now: a long-lived writer may be mid-sleep.
 	monitor_writer.install_assets(out_dir)
 
 	if writer:
@@ -674,6 +675,7 @@ _BOOTSTRAP = r"""
 		state: () => contents('state.json'),
 		resources: () => contents('resources.json'),
 		readme: (id) => contents('readmes/' + id + '.json'),
+		diff: (id) => contents('diffs/' + id + '.json'),
 		live,
 	}, {stateInterval: %(state_interval)d,
 		resourceInterval: %(resource_interval)d, writerLog: %(writer_log)s});
@@ -684,9 +686,10 @@ _BOOTSTRAP = r"""
 def export(root, path):
 	"""Write one self-contained, read-only HTML file of the search as it is.
 
-	Inlines the stylesheet, plotly, the script, and every payload the page
-	reads, so the file opens anywhere with no Jupyter and no publisher. The page shows "snapshot of <time>" in place of the pulse.
-	Returns the path and the size in bytes.
+	Inlines the stylesheet, plotly, the script and every payload the page
+	reads, so the file opens anywhere with no Jupyter and no publisher. The
+	page shows "snapshot of <time>" in place of the pulse. Returns the path
+	and the size in bytes.
 	"""
 
 	root = check_run(root)
@@ -697,6 +700,9 @@ def export(root, path):
 		'resources.json': scanner.hardware.resources()}
 	for identifier, (mtime, text) in scanner.readmes().items():
 		files['readmes/%d.json' % identifier] = {'id': identifier, 'text': text}
+	for identifier, (payload, pair) in scanner.diffs(snapshot['iterations'],
+			budget=None).items():
+		files['diffs/%d.json' % identifier] = payload
 
 	def read(name):
 		with open(os.path.join(HERE, 'static', name)) as infile:
@@ -767,7 +773,7 @@ def main(argv=None):
 		help='stop the publishers for root, or every one if root is omitted; '
 			'returns once they have exited')
 	parser.add_argument('--export', metavar='HTML', help='write one '
-		'self-contained, read-only HTML file of root as it is now, and exit')
+		'self-contained, read-only HTML file of root as it is, and exit')
 	args = parser.parse_args(argv)
 
 	if args.status:

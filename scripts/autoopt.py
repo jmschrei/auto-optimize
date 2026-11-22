@@ -72,8 +72,7 @@ def categories_for(root):
 
 def category_of(record):
 	"""The category of a meta.json or result.json record. Iteration 0 is
-	ROOT whatever it recorded: searches begun before ROOT existed filed their
-	baseline under MISC."""
+	ROOT whatever it recorded."""
 
 	if str(record.get('id')) == '0':
 		return ROOT_CATEGORY
@@ -141,10 +140,7 @@ BUILD_VARS = ('CC', 'CXX', 'FC', 'CPP', 'AR', 'LD', 'CFLAGS', 'CXXFLAGS',
 	'NUMBA_OPT', 'NUMBA_CPU_NAME', 'NUMBA_CPU_FEATURES')
 BUILD_ENV = {}
 
-# What the user decides once, at step 0, about what follows the search
-# (`references/step0-interview.md`, call 5). `ask` means the process halts
-# at that point and asks; `auto`, `keep` and `prune` are answers given in
-# advance.
+# AUTOOPT_TMPDIR, when set, is where temporary files go.
 if os.environ.get('AUTOOPT_TMPDIR'):
 	try:
 		os.makedirs(os.environ['AUTOOPT_TMPDIR'], exist_ok=True)
@@ -152,7 +148,11 @@ if os.environ.get('AUTOOPT_TMPDIR'):
 	except OSError:
 		pass
 
-# This script's own answers. A script that imports this one adds the answers
+# What the user decides once, at step 0, about what follows the search
+# (`references/step0-interview.md`, call 5). `ask` means the process halts
+# at that point and asks; `auto`, `keep` and `prune` are answers given in
+# advance. These are this script's own answers. A script that imports this
+# one adds the answers
 # it reads with `register_after`; a key no table names is kept as it is (it
 # belongs to whatever extension wrote it).
 AFTER_DEFAULTS = {'stop': 'ask', 'budget_hours': None, 'disk': 'ask',
@@ -579,7 +579,7 @@ def skill_notice(root, mark=True):
 	count = subprocess.run(['git', '-C', os.path.dirname(SCRIPTS), 'rev-list',
 		'--count', '{}..{}'.format(seen['seen'], current), '--', '.'],
 		capture_output=True, text=True).stdout.strip() or '?'
-	line = ('NOTICE the auto-optimize skill changed under this search: {} '
+	line = ('NOTICE the auto-optimize-code skill changed under this search: {} '
 		'commit(s) since {} (now {}; the search began on {}). Nothing stops. '
 		'Tell the user, with `git -C {} log --oneline {}..{} -- .`; later '
 		'steps follow the new scripts and references'.format(count, seen[
@@ -995,7 +995,7 @@ def all_results(root):
 	for identifier in iteration_ids(root):
 		result = load_result(root, identifier)
 		if result is not None:
-			# A control measured before result.json carried the flag.
+			# The control flag may be recorded only in meta.json.
 			if 'control' not in result and (load_meta(root, identifier)
 					or {}).get('control'):
 				result['control'] = True
@@ -1650,7 +1650,7 @@ def spec_path(root):
 	return os.path.join(root, 'spec.md')
 
 
-# The shared files `init` starts, so every search's look the same. Each is
+# The shared files `init` starts, so every search looks the same. Each is
 # written only when absent; a later `init --force` never touches them.
 # Subagents append under `flock`, which is why the ledger and the two tables
 # end with the part that grows.
@@ -2472,7 +2472,7 @@ def mine(args):
 	with open(path, 'w') as out:
 		out.write(text)
 
-	print(spawn_prompt('You are the idea miner of an auto-optimize search, '
+	print(spawn_prompt('You are the idea miner of an auto-optimize-code search, '
 		'stage S{}.'.format(stage), [(path, 'your prompt'),
 			(os.path.join(skill, 'references', 'idea-miner.md'), 'the protocol '
 				'you follow'),
@@ -2725,7 +2725,7 @@ def loop(args):
 	with open(path, 'w') as out:
 		out.write('\n'.join(lines))
 
-	print(spawn_prompt('You are the orchestrator of an auto-optimize search, '
+	print(spawn_prompt('You are the orchestrator of an auto-optimize-code search, '
 		'phase {}.'.format(phase), [(path, 'your prompt'),
 			(os.path.join(skill, 'SKILL.md'), 'the rules that hold everywhere'),
 			(os.path.join(skill, 'references', 'step3-rounds.md'),
@@ -3029,7 +3029,7 @@ def setup(args):
 	if continuing:
 		reads.append((os.path.join(root, 'setup', 'notes.md'), 'the notes of '
 			'the setup subagent before you: what is done'))
-	prompt = spawn_prompt('You are the setup subagent of an auto-optimize '
+	prompt = spawn_prompt('You are the setup subagent of an auto-optimize-code '
 		'search: you do step 2.', reads, closing='Then follow your prompt and '
 		'the protocol.', root=root)
 
@@ -3476,9 +3476,9 @@ SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 THREAD_VARIABLES = ('OMP_NUM_THREADS', 'NUMBA_NUM_THREADS', 'MKL_NUM_THREADS',
 	'OPENBLAS_NUM_THREADS')
 
-# Set when compare.py is to cache the outputs of the tree it is given into
-# {reference} instead of comparing against them. Only ensure_reference sets
-# it, and only on A0's code.
+# Set when the compare check is to cache the outputs of the tree it is given
+# into {reference} instead of comparing against them. Only `run_compare` with
+# `write` sets it, and only on A0's code.
 REFERENCE_ENV = 'AUTOOPT_WRITE_REFERENCE'
 
 
@@ -4550,7 +4550,7 @@ def iteration_prompt(root, identifier, exists=False):
 		'--brief {}'.format(shlex.quote(os.path.join(scripts, 'autoopt.py')),
 			shlex.quote(work), identifier))
 
-	return spawn_prompt('You are running iteration {} of an auto-optimize '
+	return spawn_prompt('You are running iteration {} of an auto-optimize-code '
 		'search.{}'.format(label(root, identifier), ' It exists already: do '
 			'not run `new`. {}'.format(takeover_line(root, identifier))
 			if exists else ''), [
@@ -4849,7 +4849,7 @@ def show_new_summaries(root):
 
 	with Lock(root):
 		state = load_state(root)
-		# A search older than this record: what it holds was shown already.
+		# With no record yet, every summary on disk counts as shown.
 		first = 'summaries_shown' not in state
 		shown = set(state.get('summaries_shown') or [])
 		fresh = [name for name in names if name not in shown]
@@ -5409,7 +5409,7 @@ TOOLCHAIN_CONSTRUCT = re.compile(
 	r'|assume_aligned)|\[\[(?:un)?likely\]\]|\[\[gnu::|__restrict'
 	r'|\*\s*restrict\b|\b(?:__asm__|asm)\b')
 # These steer the compiler wherever they are, so a block of added lines does
-# not excuse them the way it excuses an inline hint in a new function.
+# not excuse them the way it excuses an inline hint in a function added by the diff.
 TOOLCHAIN_ALWAYS = re.compile(
 	r'optimize\s*\(|\btarget\s*\(|#\s*pragma\s+(?:GCC|clang)\b|_Pragma'
 	r'|gnu::(?:optimize|target)|target_feature')
@@ -8727,7 +8727,7 @@ def reset(args):
 		and name[:-3].isdigit() and int(name[:-3]) not in keep)
 
 	# Anything still publishing this search will serve the deleted
-	# iterations until it next scans. Naming it is the whole fix; stopping it
+	# iterations until it next scans. The message names it; stopping it
 	# is the user's call because it may be somebody else's window.
 	publishers = live_publishers(root)
 
@@ -8821,7 +8821,7 @@ def reset(args):
 			pass
 
 	# `worktree remove` leaves the registration behind when the directory was
-	# deleted by hand at some point in the past, and the next `new` then
+	# deleted by hand, and the next `new` then
 	# refuses the id it wants to reuse.
 	try:
 		git('-C', bare, 'worktree', 'prune')
@@ -8885,7 +8885,7 @@ def reset(args):
 		state.pop('band', None)
 		save_state(root, state)
 
-	# The removed branches' commits are unreachable now but still on disk,
+	# The removed branches' commits are unreachable but still on disk,
 	# and a long search leaves a lot of them. Without this the directory
 	# does not actually shrink, which is half the reason resets get run.
 	before = directory_size(bare)

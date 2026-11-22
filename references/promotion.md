@@ -57,7 +57,7 @@ the whole path from the commit the search copied and writes
 
 | Check | A problem is |
 |---|---|
-| `text` | an added comment that names the search (`lint_text.py`: winner, baseline, a label such as A12, a path on this machine); the same in the iteration's `notes.md` `## Change`; a `## Commit message` that breaks the message rules; for an iteration made with `--after-end`, either section missing (an ordinary iteration writes them after it is promoted, and `finish` refuses its README without them) |
+| `text` | an added comment that names the search (`lint_text.py`: winner, baseline, a label such as A12, a path on this machine); the same in the iteration's `notes.md` `## Change`; a `## Commit message` that breaks the message rules; for an iteration made with `--after-end`, either section missing (an ordinary iteration writes them once its `keep:` line reads `promoted` or `passes`, and `finish` refuses its README without them) |
 | `indent` | an added line indented with tabs in a file indented with spaces, or the reverse. A new file is compared with the repository's files of the same extension. Four fifths of the indented lines decide a file's style; a file with fewer than five decides nothing |
 | `license` | an added line with a marker of a license a permissive repository cannot take: GPL, LGPL, AGPL, MPL, non-commercial, share-alike (*Code from another project*, below). Code copied without any marker is not found: say what you copied in `notes.md` |
 | `toolchain` | `after.oldest_toolchain_command` (`{src}` is an export of the tree) exits non-zero. Skipped while the key is unset |

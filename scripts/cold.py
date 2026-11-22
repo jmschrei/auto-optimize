@@ -4,7 +4,7 @@
 	python3 cold.py --side b120=DIR_A --side b126=DIR_B \\
 		--cmd 'python3 first_call.py --src {src}' --scratch $DIR/cold --reps 2
 
-Every run gets a new, empty compiler cache created under `--scratch` (never
+Every run gets a new, empty compiler cache created under `--scratch` (not
 `/tmp`, which another process may clean mid-run) and passed as
 `NUMBA_CACHE_DIR`, `TRITON_CACHE_DIR` and `TORCHINDUCTOR_CACHE_DIR`. Nothing
 is deleted: the caches stay in `--scratch`. The runner's, under

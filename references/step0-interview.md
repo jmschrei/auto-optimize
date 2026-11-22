@@ -181,8 +181,8 @@ iteration after it; the paired comparison against A0 at the end
 its seeds one after another. Raise it and the iteration holds that many and
 runs that many seeds at once, so each iteration finishes sooner. `gpus_per_agent`
 must fit in the free GPUs; check what is free before promising a number, with
-whatever allocates GPUs on the machine, or `nvidia-smi` where nothing does. Without a GPU, `gpus_per_agent` is how
-many of an iteration's runs go at once.
+whatever allocates GPUs on the machine, or `nvidia-smi` where nothing does.
+Without a GPU, `gpus_per_agent` is how many of an iteration's runs go at once.
 
 **For a CPU benchmark, the concurrency agreed here is provisional.** Runs at
 once (`gpus_per_agent`, or the runs an iteration starts at once without a GPU)
@@ -244,8 +244,8 @@ gate without a numeric threshold, fails at once. It writes
 environment answers go on its *Machine and environment* line, the
 representative run and any target under *Goal and scope*), except three that the
 setup subagent answers at step 2: *Gate proof*, *Width measured* and
-*Benchmark*. Until all
-are gone, `new`, `brief` and `run_iteration.py` refuse (`refusing to fork an
+*Benchmark*. Until all are
+gone, `new`, `brief` and `run_iteration.py` refuse (`refusing to fork an
 iteration: step 0 is not finished`, `refusing to run A0: …`) and print the
 remaining TODO lines. An existing `spec.md` is never overwritten, even by
 `init --force`.
@@ -271,8 +271,8 @@ ignore list: it holds a git repository of its own and every run's outputs.
 
 Step 2 belongs to a setup subagent. The idea miner starts after it, not
 beside it: stage S1 prices every idea against A0's profile, which setup writes
-after the baseline, and a miner started earlier prices blind. `setup` refuses while a TODO other than
-*Gate proof*, *Width measured* and *Benchmark* is left (`refusing to start …:
+after the baseline, and a miner started earlier prices blind. `setup`
+refuses while a TODO other than *Gate proof*, *Width measured* and *Benchmark* is left (`refusing to start …:
 the interview is not written down`):
 
 ```bash

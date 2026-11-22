@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>auto-optimize monitor</title>
+<title>auto-optimize-code monitor</title>
 <link rel="stylesheet" href="dashboard.css">
 </head>
 <body class="autoopt-root" data-standalone>
 
 <header class="topbar">
 	<div class="topbar-id">
-		<h1 class="title-gradient">auto-optimize</h1>
+		<h1 class="title-gradient">auto-optimize-code</h1>
 		<code id="run-root">&nbsp;</code>
 		<div class="muted" id="ended-line" hidden></div>
 	</div>
@@ -81,6 +81,18 @@
 		<div id="main-chart" class="plot tall"></div>
 		<div class="plot-scales" id="scales-main"></div>
 		<div class="legend" id="main-legend"></div>
+	</figure>
+
+	<!-- ==== SECTION: diff ==== -->
+	<figure class="card" id="diff-card" hidden>
+		<figcaption>
+			<span id="diff-title">Code change</span>
+			<span class="figcaption-aside">
+				<button class="ghost small" id="diff-close" type="button">close</button>
+			</span>
+		</figcaption>
+		<div class="diff-summary" id="diff-summary"></div>
+		<div id="diff-files"></div>
 	</figure>
 
 	<!-- ==== SECTION: run-table ==== -->
@@ -171,6 +183,7 @@
 
 <div class="tip" id="tip"></div>
 <footer id="footer"></footer>
+<footer class="credit"><a href="https://programmable-genomics.github.io" target="_blank" rel="noopener">Programmable Genomics Laboratory @ UMass Chan Medical School</a></footer>
 
 <script src="plotly.min.js"></script>
 <script type="module" src="dashboard.js"></script>

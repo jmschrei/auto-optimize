@@ -37,7 +37,7 @@ died with the old session: a question waiting for the user goes to them, and
 `setup --answer` prints the prompt for a new subagent; otherwise `setup
 --force` prints one that continues from the notes
 (`references/step0-interview.md`, *Handing off step 2*). Step 3 starts once
-`status` no longer prints `first iteration: waiting for …`.
+`status` stops printing `first iteration: waiting for …`.
 
 **Iterations**, by the verdict `--resume` gives each:
 

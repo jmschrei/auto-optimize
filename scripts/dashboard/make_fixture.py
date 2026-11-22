@@ -13,8 +13,8 @@ It covers a passing baseline, iterations in all five categories, a gate
 failure, a run that crashes, an iteration still in flight, two rounds with a
 promoted root, observer measures, an approved external validation run
 once a round (clean in round 1, needing attention in round 2, with one
-measure a string), and a `worker.py` inside the in-flight iteration that a test launches so the GPU monitor's
-process table has a row.
+measure a string), and a `worker.py` inside the in-flight iteration that a
+test launches so the GPU monitor's process table has a row.
 """
 
 import os

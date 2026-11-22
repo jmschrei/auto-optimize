@@ -68,8 +68,8 @@ redirection of your own.
 10. Seed the knowledge ledger and write A0's README (*After the baseline*).
 11. Close step 2 and report (*Closing step 2*).
 
-`run_iteration.py` refuses the baseline until steps 1, 5 and 7 are on
-`spec.md`.
+`run_iteration.py` refuses the baseline until items 1, 5 and 7 (*Benchmark*,
+*Gate proof*, *Width measured*) are on `spec.md`.
 
 ## Decisions that are the user's
 
@@ -266,7 +266,7 @@ code_rng = numpy.random.default_rng(seed + 1_000_000)    # handed to the code un
 
 The separate stream keeps property 2 through a change to the code. Drawn from
 one stream, an implementation that takes one more value (a random pivot, a
-sampled subset) shifts every later draw, and the run no longer sees the input
+sampled subset) shifts every later draw, and the run does not see the input
 the baseline saw at that seed: the seeds match and the input does not, which
 looks like a real effect.
 
@@ -447,7 +447,7 @@ harness builds the worktree (`references/repo-mode.md`, *Setting it up*).
 |---|---|---|
 | `command`, the benchmark | `run_iteration.py`, once per run; `prove` and `width` the same way | in the iteration directory, with `{seed}`, `{out}` (the run's directory, relative to it; `{out_abs}` absolute), `{iteration}` (the iteration's absolute directory), `{src}` (its worktree) and `{cache}` (`iterations/<id>/cache/<commit>`) filled shell-quoted; `CUDA_VISIBLE_DEVICES` set to one leased GPU; killed with its process group after `timeout_seconds`. A non-zero exit, or a `metrics.json` without the objective or a gate, fails the run |
 | `checks.compare` | the runner, after an iteration's first run; `check --reference`; `prove --compare` | `{src}`: the iteration's commit as `git archive` writes it (tracked files, no `.git`) in `iterations/<id>/check/<commit>/`; `{reference}`: `reference/checks/outputs/`; in the iteration directory, with the same timeout. Exit 0 is `pass`, 1 `differ`, anything else or a timeout `error`; its last non-empty line is the `check:` line's summary |
-| caching A0's outputs | the runner, before the first compare and after any change to the compare command, the gates or a file under `checks/` | A0's commit exported to `reference/checks/trees/`; the compare run with `AUTOOPT_WRITE_REFERENCE=1` into a new directory, which must not stay empty; then A0 compared against it, which must pass. The old outputs are kept beside the new |
+| caching A0's outputs | the runner, before the first compare and after any change to the compare command, the gates or a file under `checks/` | A0's commit exported to `reference/checks/trees/`; the compare run with `AUTOOPT_WRITE_REFERENCE=1` into a new directory, which must not stay empty; then A0 compared against it, which must pass. Earlier outputs stay beside the new ones |
 | `checks.time` | `final`, through `paired.py` | `{src}`, a tree; the seconds are the last number on its last line; a non-zero exit stops the pairing as a wrong output. Run again at `checks.threads` with `OMP_NUM_THREADS`, `NUMBA_NUM_THREADS`, `MKL_NUM_THREADS` and `OPENBLAS_NUM_THREADS` all set to it |
 | `checks.first_call` | the runner, before an iteration's runs, through `cold.py` | `{src}`, the exported tree; two repetitions, each with `NUMBA_CACHE_DIR`, `TRITON_CACHE_DIR` and `TORCHINDUCTOR_CACHE_DIR` on an empty directory of its own; the seconds are the last number on its last line |
 | `checks.build` | `variant`, `prove --id`, `finish` and `checkers` | `{src}`: an exported tree under the iteration's `probe/`; run in that tree with the runner's timeout, once per tree, its log beside it as `<tree>.build.log` ending `exit <code>` |
@@ -469,8 +469,8 @@ python3 $AO/autoopt.py prove $WORK --make fault_value,fault_raise
 python3 $AO/autoopt.py prove $WORK --compare "python3 $WORK/autooptimize/checks/compare.py {src} {reference}"
 ```
 
-It takes the registered `checks.compare` when `--compare` is not given. `time_one.py` reads within
-the noise of the runner's timing.
+It takes the registered `checks.compare` when `--compare` is not given. `time_one.py`'s seconds should agree with the runner's
+timing within its noise.
 
 ## Measure what concurrency does to the objective
 
@@ -599,12 +599,12 @@ three things in its report; one that fails is a question for the user
 1. **The objective moves across seeds, but not wildly.** A standard deviation
    of zero means the seed reaches nothing that varies. One as large as the
    hoped-for improvement means more runs per iteration, and that is cheapest
-   to decide now.
+   to decide at this step.
 2. **Every gate passes, with margin.** A baseline sitting on its own gate
    leaves no room: is the threshold right?
 3. **One run's wall clock.** Multiply by the runs per iteration, the round
    size and the number of rounds. If the product is a week, the plan changes
-   now: a smaller input, fewer runs per iteration, fewer thread counts.
+   at this step: a smaller input, fewer runs per iteration, fewer thread counts.
 
 In repository mode the unit tests MUST pass on A0 (`references/repo-mode.md`,
 *Setting it up*, step 5).

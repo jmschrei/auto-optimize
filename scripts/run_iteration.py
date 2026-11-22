@@ -412,9 +412,9 @@ def start_load(run_dir):
 def reusable(run_dir, config, commit):
 	"""A stored run's record, if it measured this commit; otherwise None.
 
-	Without the commit check, code committed after an iteration was measured
-	would inherit the old code's numbers on the next plain re-run, and be
-	recorded as measured.
+	Without the commit check, code committed after the measurement would take
+	over the stored numbers on the next plain re-run and be recorded as
+	measured.
 	"""
 
 	record = load_metrics(run_dir, config)[0]
@@ -613,8 +613,8 @@ def commit_worktree(iteration, meta):
 	name = '{}{}'.format(autoopt.LABEL_LETTER, meta['id'])
 
 	# A machine with no git identity would refuse the commit, and with it
-	# the whole iteration. The one a re-measurement outside the search uses fills only what is
-	# missing, so a configured identity is never overridden.
+	# the whole iteration. Only a missing name or email is filled, so a
+	# configured identity is never overridden.
 	identity = []
 
 	for key, value in (('user.name', 'auto-optimize'),
@@ -900,8 +900,8 @@ def main(argv=None):
 		confirm = config['runs_per_iteration']
 
 	# A staged search measures the baseline, which sets the frontier and the
-	# noise band, at the full count from the start, unless the
-	# caller asked for a count: a smoke run on the baseline stays one run.
+	# noise band, at the full count, unless the caller asked for a count: a
+	# smoke run on the baseline stays one run.
 	if (meta['id'] == 0 and config['staged'] and args.runs is None
 		and args.stage == 'all'):
 		screen = confirm
@@ -910,8 +910,8 @@ def main(argv=None):
 		screen = confirm
 
 	# A checked-only iteration (`meta.split`) is not measured: one run for
-	# the gates and the tests, since five would cost a slow base's time five
-	# times for each of them.
+	# the gates and the tests, since several runs would cost a slow base's
+	# time several times over.
 	earlier = autoopt.load_result(root, meta['id']) or {}
 
 	if meta.get('split') and args.runs is None and earlier.get('n_runs', 0) \
@@ -988,9 +988,9 @@ def main(argv=None):
 
 	# The baseline sets the frontier and the noise band: measured beside
 	# another job, it makes every later iteration look like a win once that
-	# job ends. On a CPU benchmark that is the user's call.
-	# Never a refusal: whether to measure under load is the user's call,
-	# asked before this runs (`autoopt.py busy`); what was busy is recorded.
+	# job ends. This never refuses: whether to measure a CPU benchmark under
+	# load is the user's call, asked before this runs (`autoopt.py busy`);
+	# what was busy is recorded.
 	busy_at_start = []
 	if (meta['id'] == 0 and already < confirm and not config.get('gpu', True)
 			and not os.environ.get('AUTOOPT_SKIP_QUIET_CHECK')):
@@ -1021,8 +1021,7 @@ def main(argv=None):
 	devices = leased_devices(config, config.get('gpus_per_agent', 1) or 1)
 
 	# A run takes a device off the queue and gives it back when it ends, so
-	# each GPU holds one run at a time. Assigning by seed instead put the
-	# next seed on a busy card whenever a run finished out of turn.
+	# each GPU holds one run at a time, even when runs finish out of turn.
 	free = queue.Queue()
 	for device in devices:
 		free.put(device)
@@ -1097,8 +1096,7 @@ def main(argv=None):
 			return
 
 		if len(devices) == 1:
-			# Serial, and printed as each finishes, which is what a single
-			# GPU search has always looked like.
+			# Serial, and printed as each finishes.
 			for seed in seeds:
 				print('  seed {}: running…'.format(seed), flush=True)
 				record, failure, line = one(seed)

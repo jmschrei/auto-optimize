@@ -1,6 +1,6 @@
 'use strict';
 
-/* dashboard.js -- the auto-optimize monitor.
+/* dashboard.js -- the auto-optimize-code monitor.
 
    One entry point, `window.startAutoopt(root, transport, options)`. The mount
    supplies the transport: the notebook passes one that reads published JSON
@@ -9,8 +9,8 @@
    snapshot. Nothing below knows which.
 
    Loaded as an ES module, and it must stay one. As a classic script a second
-   copy in one page throws `Identifier ... has already been declared`, the new
-   code never runs, and the old copy keeps serving a stale page silently.
+   copy in one page throws `Identifier ... has already been declared`, the
+   second copy never runs, and the first keeps serving a stale page silently.
 
    Sections are delimited by `==== SECTION: <name> ====` and match the ones in
    dashboard.css and index.html. */
@@ -39,11 +39,16 @@ const state = {
 	readmes: {},          // id -> whole README text (null: could not be read)
 	readmeFor: {},        // id -> the payload excerpt the text was fetched against
 	logFull: new Set(),   // log entries showing their whole README (SHOW MORE)
+	diffOpen: null,       // iteration whose code change is open under the objective chart
+	diffs: {},            // id -> payload (null: could not be read, with diffTried)
+	diffFor: {},          // id -> the commit the payload was fetched for
+	diffTried: {},        // id -> browser time of a failed fetch
+	diffShown: null,      // what the panel last drew, so a poll redraws only a change
 };
 
 /* The version this script was fetched with. The mount bakes a cache-busting
-   query into the URL, so if the published front end has moved on, this copy
-   is the old one and only re-running the cell will replace it. */
+   query into the URL, so if the published front end differs from this copy,
+   this copy is stale and only re-running the cell replaces it. */
 const LOADED_ASSETS = (() => {
 	try {
 		return new URL(import.meta.url).searchParams.get('v');
@@ -1077,8 +1082,7 @@ function renderResources(resources) {
 	const host = resources.host || {};
 
 	// A sample with no GPUs after ones with GPUs is nvidia-smi failing or
-	// timing out (writers before the shared sample published that as an
-	// empty list), not the GPUs leaving: keep the last cards, and say how
+	// timing out, not the GPUs leaving: keep the last cards, and say how
 	// old they are, rather than drop the strip and jump the notebook.
 	let gpus = resources.gpus || [];
 	let sampledAt = resources.gpu_sampled_at;
@@ -1331,7 +1335,7 @@ function renderLineage(holderId, mapId, allNodes, options) {
 			const tally = make('g', { class: 'lineage-node lineage-tally' });
 			tally.append(make('rect', { x: at.x - 18, y: at.y - 9, width: 36,
 				// A transparent fill, not 'none': an unfilled rect takes no
-				// pointer events inside it, so its tooltip never showed.
+				// pointer events inside it, so it would show no tooltip.
 				height: 18, rx: 6, fill: 'transparent', stroke: resolved('--line'),
 				'stroke-dasharray': '3 2' }));
 			const count = make('text', { x: at.x, y: at.y + 4 });
@@ -1827,8 +1831,8 @@ function treeDepths() {
 	return depth;
 }
 
-/* Whether the search records idea-miner stages. A search begun before the
-   miner has none, and its boundaries fall back to tree generations. */
+/* Whether the search records idea-miner stages. Without them, boundaries
+   fall back to tree generations. */
 const minedStages = () => ((state.snapshot || {}).iterations || []).some(
 	(row) => !missing(row.mining_stage) && row.mining_stage > 0);
 
@@ -1964,21 +1968,12 @@ function renderMain() {
 			layer: 'below', line: { color: resolved('--purple'), width: 1.2,
 				dash: 'dash' } })) : [],
 	}), { selectable: true, ids: rows.map((row) => row.id), config: SELECT_CONFIG,
-		onClick: pinPoint });
+		onClick: openDiff });
 
 	renderScales('main', dense ? [{ which: 'y', values: ys, logable: true }]
 		: [{ which: 'x', values: rows.map(xOf), logable: false },
 			{ which: 'y', values: ys, logable: true }], renderMain);
 	renderMainLegend(dense, rows.length);
-}
-
-/* Clicking a point outlines its runs in Every run. A median's customdata is
-   its iteration id; a run dot's is "id:seed". */
-function pinPoint(key) {
-	// A mark with no iteration behind it (an abandoned one) pins nothing.
-	if (key === null || key === undefined) return;
-	const [id, seed] = String(key).split(':');
-	setPinned(Number(id), seed === undefined ? null : Number(seed));
 }
 
 /* A marker key for the status shapes, drawn the way Plotly draws them. */
@@ -2203,8 +2198,8 @@ function renderValidation() {
 			dragmode: false,
 			xaxis: axis({ dtick: 1, title: { text: 'round',
 				font: { size: 10, color: resolved('--text-faint') } } }),
-			// The panel title names the measure; a rotated y title in this
-			// fixed margin met the tick labels.
+			// The panel title names the measure; a rotated y title would
+			// collide with the tick labels in this fixed margin.
 			yaxis: axis({ automargin: false }),
 		}), { config: PLAIN_CONFIG });
 	}
@@ -2231,6 +2226,148 @@ function validationCard() {
 		...block.measures.map((name) => [withUnit(name), value(latest.measures[name])]),
 		['verdict', verdictWord(latest), latest.ok ? 'good' : 'bad'],
 	], (latest.note ? latest.note + '. ' : '') + NOT_A_GATE);
+}
+
+/* ==== SECTION: diff ==== */
+
+/* A click on a point of the objective chart opens that iteration's code
+   change against its parent under the chart, in two columns: the old file on
+   the left, the new on the right. A second click on the same point, or
+   'close', shuts it. A median's customdata is its iteration id; a run dot's
+   is "id:seed". */
+function openDiff(key) {
+	// A mark with no iteration behind it (an abandoned one) opens nothing.
+	if (key === null || key === undefined) return;
+	const id = Number(String(key).split(':')[0]);
+	if (!byId(id)) return;
+	state.diffOpen = state.diffOpen === id ? null : id;
+	state.diffShown = null;
+	renderDiff();
+	if (state.diffOpen !== null)
+		$('diff-card').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/* The publisher writes diffs/<id>.json once per commit; a failed read tries
+   again after ten seconds, since the writer fills the files in newest first. */
+async function loadDiff(row) {
+	const id = row.id;
+	if (!TRANSPORT || !TRANSPORT.diff || !row.commit || row.parent === null
+		|| row.parent === undefined || state.diffFor[id] === row.commit) return;
+	if (Date.now() - (state.diffTried[id] || 0) < 10000) return;
+	state.diffFor[id] = row.commit;
+	try {
+		const payload = await TRANSPORT.diff(id);
+		state.diffs[id] = payload && Array.isArray(payload.files) ? payload : null;
+	} catch (error) {
+		state.diffs[id] = null;
+	}
+	if (state.diffs[id] === null) {
+		delete state.diffFor[id];
+		state.diffTried[id] = Date.now();
+	}
+	if (state.diffOpen === id) renderDiff();
+}
+
+/* A hunk's rows as table rows: unchanged lines on both sides, and each run
+   of deletions beside the run of additions that follows it. */
+function diffHunkRows(hunk) {
+	const cell = (number, text, kind, side) => [
+		el('td', { class: 'num ' + kind + (side ? ' side' : ''),
+			text: number === null ? '' : String(number) }),
+		el('td', { class: kind, text: text === null ? '' : text })];
+	const out = [el('tr', {}, [el('td', { class: 'hunk', colspan: 4,
+		text: `@@ -${hunk.old} +${hunk.new} @@ ${hunk.head}` })])];
+	let oldNo = hunk.old, newNo = hunk.new, removed = [], added = [];
+
+	const flush = () => {
+		for (let i = 0; i < Math.max(removed.length, added.length); i++) {
+			const left = i < removed.length, right = i < added.length;
+			out.push(el('tr', {}, [
+				...cell(left ? oldNo : null, left ? removed[i] : null, left ? 'del' : 'empty'),
+				...cell(right ? newNo : null, right ? added[i] : null, right ? 'add' : 'empty', true)]));
+			if (left) oldNo++;
+			if (right) newNo++;
+		}
+		removed = [];
+		added = [];
+	};
+
+	for (const [mark, text] of hunk.rows) {
+		if (mark === '-') removed.push(text);
+		else if (mark === '+') added.push(text);
+		else {
+			flush();
+			out.push(el('tr', {}, [...cell(oldNo++, text, 'ctx'), ...cell(newNo++, text, 'ctx', true)]));
+		}
+	}
+	flush();
+
+	return out;
+}
+
+function diffFile(file, open) {
+	const rename = file.old && file.old !== file.path;
+	const note = file.binary ? 'Binary file.'
+		: file.truncated ? 'Too large to show here; the counts are complete.'
+		: !file.hunks.length ? (rename ? 'Renamed, no change to its lines.'
+			: 'No change to its lines (a mode change).') : null;
+
+	return el('details', { class: 'diff-file', open }, [
+		el('summary', {}, [
+			el('span', { class: 'diff-status', text: file.status }),
+			el('span', { class: 'diff-path', text: rename ? `${file.old} → ${file.path}` : file.path }),
+			el('span', { class: 'diff-add', text: '+' + fmt.int(file.additions) }),
+			el('span', { class: 'diff-del', text: '−' + fmt.int(file.deletions) })]),
+		note ? el('div', { class: 'diff-note', text: note })
+			: el('div', { class: 'diff-scroll' }, [el('table', { class: 'diff-table' }, [
+				el('colgroup', {}, ['num', 'code', 'num', 'code'].map((kind) =>
+					el('col', kind === 'num' ? { style: 'width:48px' } : {}))),
+				el('tbody', {}, file.hunks.flatMap(diffHunkRows))])])]);
+}
+
+function renderDiff() {
+	const card = $('diff-card');
+	const row = state.diffOpen === null ? null : byId(state.diffOpen);
+
+	if (!row) {
+		state.diffOpen = null;
+		state.diffShown = null;
+		card.hidden = true;
+		$('diff-summary').replaceChildren();
+		$('diff-files').replaceChildren();
+		return;
+	}
+
+	const hasParent = row.parent !== null && row.parent !== undefined;
+	const reading = hasParent && row.status !== 'running' && row.commit;
+	if (reading) loadDiff(row);
+	const payload = reading ? state.diffs[row.id] : undefined;
+
+	// A poll that changed nothing about this panel leaves it alone, so the
+	// files a reader collapsed stay collapsed.
+	const shown = [row.id, row.commit, row.status, payload ? 'ready'
+		: payload === null ? 'failed' : 'loading'].join('|');
+	if (shown === state.diffShown && !card.hidden) return;
+	state.diffShown = shown;
+
+	const message = !hasParent ? `${tag(row.id)} is the original code: there is no parent to compare it with.`
+		: row.status === 'running' ? `${tag(row.id)} is still running; its code change appears when it settles.`
+		: !row.commit ? `${tag(row.id)} has no commit to compare.`
+		: payload === null ? 'The code change could not be read yet; the publisher writes them newest first.'
+		: payload === undefined ? 'Loading the code change…' : null;
+
+	card.hidden = false;
+	$('diff-title').textContent = 'Code change';
+	$('diff-summary').replaceChildren(
+		el('span', { class: 'diff-idea', text: `${tag(row.id)} ${row.title || ''}`.trim() }),
+		hasParent ? el('span', { text: `against its parent ${tag(row.parent)}` }) : null,
+		hasParent ? diffLine(row) : null);
+
+	const files = payload ? payload.files : [];
+	$('diff-files').replaceChildren(...(message ? [el('p', { class: 'diff-note', text: message })]
+		: files.length ? files.map((file, index) => diffFile(file, index < 25
+			|| files.length <= 25))
+		: [el('p', { class: 'diff-note', text: 'No change to the code.' })]));
 }
 
 /* ==== SECTION: run-table ==== */
@@ -3108,6 +3245,7 @@ function renderCharts() {
 function renderAll() {
 	renderSummary();
 	renderCharts();
+	renderDiff();
 	renderTree();
 	renderSidebar();
 }
@@ -3191,7 +3329,7 @@ function setLive(on) {
 }
 
 /* Says what the publisher did with the request: its resources.json carries
-   `writer.live`. A publisher that never confirms is an old one. */
+   `writer.live`. A publisher that never confirms is running outdated code. */
 function updateLiveButton() {
 	const button = $('toggle-live');
 	if (!button) return;
@@ -3200,8 +3338,8 @@ function updateLiveButton() {
 	const confirmed = (((state.resources || {}).writer) || {}).live === true;
 
 	// The label says what the publisher is doing: with idle GPUs the cards
-	// look the same at one second as at three, so a toggle that only
-	// changed colour looked as if it did nothing.
+	// look the same at one second as at three, so a colour change alone
+	// would not show the toggle took effect.
 	button.textContent = state.liveError ? 'Live unavailable'
 		: !state.live ? 'Live'
 		: confirmed ? 'Live · 1 s' : 'Live · waiting';
@@ -3339,13 +3477,15 @@ function treeResize() {
 }
 
 /* Every id the render functions need. A notebook saved with its output and
-   reopened without re-running restores yesterday's markup under today's
-   script; this names what is missing instead of rendering half a page. */
+   reopened without re-running restores markup from an earlier script version
+   under the current script; this names what is missing instead of rendering
+   half a page. */
 const REQUIRED_IDS = ['pulse', 'updated', 'run-root', 'hero-value', 'hero-sub',
 	'tiles', 'sidebar', 'footer', 'clear-selection', 'tip',
 	'catbar', 'objective-note', 'toggle-runs', 'toggle-failed', 'toggle-stair',
 	'toggle-stages', 'toggle-ci',
 	'main-headline', 'main-chart', 'scales-main', 'main-legend',
+	'diff-card', 'diff-title', 'diff-summary', 'diff-files', 'diff-close',
 	'section-observers', 'observer-charts', 'section-validation',
 	'validation-note', 'validation-charts', 'ended-line',
 	'stage-strip', 'tree-holder',
@@ -3388,6 +3528,7 @@ function init() {
 	}
 
 	$('clear-selection').addEventListener('click', () => setSelection(null));
+	$('diff-close').addEventListener('click', () => { state.diffOpen = null; renderDiff(); });
 	toggle('toggle-live', setLive);
 	setLive(false);
 	toggle('toggle-runs', (on) => { state.showRuns = on; renderMain(); });
@@ -3416,9 +3557,9 @@ function init() {
 	timers.push(setInterval(updatePulse, 2000));
 }
 
-/* Mount into `root`, reading through `transport`. A newer copy is a separate
-   module instance with its own timers, so the previous one's are stopped
-   first; without this a re-run cell leaves a second copy polling. */
+/* Mount into `root`, reading through `transport`. Each copy of the script is
+   a separate module instance with its own timers, so the earlier instance's
+   are stopped first; without this a re-run cell leaves two copies polling. */
 window.startAutoopt = function (root, transport, options) {
 	options = options || {};
 
@@ -3458,6 +3599,7 @@ if (embedded) {
 
 	window.startAutoopt(document.body, {
 		readme: (id) => read('readmes/' + id + '.json'),
+		diff: (id) => read('diffs/' + id + '.json'),
 		state: () => read('state.json'),
 		resources: () => read('resources.json'),
 	}, { snapshot: data.generated });
@@ -3477,6 +3619,7 @@ if (embedded) {
 	const start = () => window.startAutoopt(document.body, {
 		state: () => json('state.json'),
 		readme: (id) => json('readmes/' + id + '.json'),
+		diff: (id) => json('diffs/' + id + '.json'),
 		resources: () => json('resources.json'),
 		live: async () => {
 			const response = await fetch('live.json', { method: 'PUT',

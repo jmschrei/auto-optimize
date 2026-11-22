@@ -92,7 +92,7 @@ nobody reads a checker's code to learn how to run it.
 ## A cached scratch build
 
 When the build compiles every source of a binary in one compiler command
-(common in older Makefiles), every variant or checker build pays the whole
+(common in Makefiles), every variant or checker build pays the whole
 compile. A tool can take the build's exact commands (`make -n -B <goal>`),
 compile each source separately under ccache with the same flags, and link
 with the same command, so a one-file change rebuilds in seconds. Pitfalls:

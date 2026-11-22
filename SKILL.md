@@ -1,5 +1,5 @@
 ---
-name: auto-optimize
+name: auto-optimize-code
 description: >-
   Search for a faster, leaner or smaller implementation of code by running
   many small experiments and keeping what survives. Use when asked to
@@ -17,11 +17,13 @@ description: >-
   before doing that step's work.
 ---
 
-# auto-optimize
+# auto-optimize-code
 
 Turn "make this better" into a search that runs itself: a benchmark that
 emits numbers, a baseline, then one subagent at a time, each trying one
 idea and reporting a median over seeds.
+
+Developed at the [Programmable Genomics Laboratory](https://programmable-genomics.github.io) @ UMass Chan Medical School.
 
 MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are as in RFC 2119.
 
@@ -165,15 +167,18 @@ subagent spawns iteration subagents and later miners and
 runs the rounds in phases the main session starts (`references/step3-rounds.md`,
 *The orchestrator subagent*). The main session reads only `status --brief` and
 the phases' reports, relays questions to the user and shows round summaries.
-It mines no ideas, measures nothing, promotes nothing, reads no code, logs, READMEs or outputs, and writes no summary
-prose: its context is rewritten at every wake-up. An iteration whose subagent is
+It mines no ideas, measures nothing, promotes nothing, reads no code, logs,
+READMEs or outputs, and writes no summary prose: its context is rewritten at
+every wake-up. An iteration whose subagent is
 gone goes to a new one (`references/step3-rounds.md`, *A subagent that goes
 quiet*).
 
 **No call lasts longer than four minutes**, for any agent: the prompt cache
 lives five, and the turn after a longer call writes the whole context to it
-again, at many times the price of reading it. A foreground command takes the Bash tool's `timeout: 240000`; one that may pass that starts in the
-background and is watched with `autoopt.py wait <log>` (it returns within 200 s with the new lines), repeated until it prints `wait: finished`.
+again, at many times the price of reading it. A foreground command takes the Bash tool's `timeout: 240000`; one that may
+pass that starts in the background and is watched with `autoopt.py wait <log>`
+(it returns within 200 s with the new lines), repeated until it prints `wait:
+finished`.
 `end`, `final`, `validate`, `run_iteration.py`, `width` and `prove` take
 `--background`; anything else is `autoopt.py bg $WORK <log> '<command>'` in the
 main session and `(<command>; echo "exit $?") > <log> 2>&1 &` in a subagent.

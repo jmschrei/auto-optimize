@@ -11,8 +11,8 @@ opposite directions:
      idea.
   2. **A different seed gives a different answer.** If it does not, the runs
      are one number repeated, the noise band comes out at zero, and every
-     keep verdict after that is made on a single sample dressed up as
-     five.
+     keep verdict after that is made on a single sample counted
+     as several.
 
 So this runs the benchmark twice on one seed and twice more on two others,
 and reports the two spreads side by side. What matters is their ratio: a
@@ -72,15 +72,13 @@ SOURCES = [
 UNSEEDABLE = re.compile(r'SystemRandom\(|os\.urandom\(|uuid4\(|'
 	r'seed\s*=\s*(time\.time|int\(time)')
 
-# A seeding call handed a literal. `random.seed(0)` in a benchmark that takes
-# `--seed` is the single most common way three seeds become one number
-# repeated, and an assignment-shaped pattern does not see it.
+# A seeding call handed a literal, such as `random.seed(0)` in a benchmark
+# that takes `--seed`. CONSTANT_SEED does not match this call form.
 SEED_CALL = re.compile(
 	r'(?<![a-z0-9_])((?:random|numpy|np|torch|torch\.cuda)\.)?'
 	r'(manual_seed_all|manual_seed|default_rng|seed)\(\s*(\d+)\s*\)')
 
-# A parameter that takes a seed and is being handed a constant is the single
-# most common way three "seeds" turn into one number repeated.
+# A seed parameter handed a constant, such as `random_state=0`.
 CONSTANT_SEED = re.compile(
 	r'(random_state|seed|random_seed)\s*=\s*(\d+)(?![\w.])')
 
@@ -117,10 +115,8 @@ def scan(directory):
 			except OSError:
 				continue
 
-			# Comments and docstrings describe what the code does, and a
-			# sentence mentioning torch.cuda is not a use of it. Stripping
-			# them is what stops the scan crying wolf on a well-documented
-			# benchmark.
+			# A comment or docstring that mentions torch.cuda is not a use
+			# of it, so prose is blanked before the scan.
 			text = strip_prose(text)
 			relative = os.path.relpath(path, directory)
 

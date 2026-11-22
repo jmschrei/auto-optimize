@@ -43,8 +43,7 @@ SHELLS = ('bash', 'sh', 'zsh', 'dash', 'fish', 'ksh')
 # The publisher's own processes mention the run directory on their command
 # line, so they would otherwise count as part of the run: the writer, the
 # scanner, and the mount script (`autoopt_monitor.py` here) while `--start`
-# waits for the writer. Rename
-# an entry when the dashboard renames that script.
+# waits for the writer. Keep each entry equal to its script's file name.
 SELF_MARKERS = ('monitor_writer.py', 'scan.py', 'autoopt_monitor.py')
 
 
@@ -415,10 +414,9 @@ def process_usage():
 	return session.usage() if session else pmon()
 
 
-# How old a shared GPU answer may be before a publisher asks again;
-# under the 3 s hardware clock, so each poll still sees a new sample. An
-# answer is dated when its call started: dated when it finished, a call over
-# 0.5 s left the answer fresh at the next tick and the strip moved every 6 s.
+# How old a shared GPU answer may be before a publisher asks again; under the
+# 3 s hardware clock, so each poll sees a new sample. An answer is dated when
+# its call started, so a slow call does not look fresh at the next tick.
 SHARED_SECONDS = 2.5
 # How long a publisher waits for another's call before showing the last
 # answer: long enough for a normal call, short of a stalled one.

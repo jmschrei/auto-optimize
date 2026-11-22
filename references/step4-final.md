@@ -83,7 +83,7 @@ is measured like any iteration (`run_iteration.py`). Its runner does not
 promote it; `promote --id` runs the preflight on it
 (`references/promotion.md`, *The preflight*), appends it to `winner_changes`
 and makes it the winner in `ended.json` and `ended.md`. Anything checked on
-or built from the old winner is then stale. `paired` in `ended.json` stays
+or built from the earlier winner is then stale. `paired` in `ended.json` stays
 the earlier winner's; `final` measures the new one. An iteration made without
 `--after-end` is never promoted after `end`.
 

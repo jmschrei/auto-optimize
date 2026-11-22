@@ -72,7 +72,7 @@ It makes `new`'s checks before writing anything (the parent exists and is
 |---|---|
 | `id N is taken (an iteration, a branch, or a directory set aside)` | use the next free id it names; `status` prints it too |
 | `id N is taken (a brief not yet started …)` | another brief holds that id: take the next one, or pass `--replace` to rewrite that brief |
-| `this search uses GPUs: pass --gpus …` | give the indices this iteration holds, or the command that allocates them on this machine |
+| `this search uses GPUs and records no gpu_command: pass --gpus …` | give the indices this iteration holds, or the command that allocates them on this machine |
 | `parent … is gate-failed` | `references/step3-rounds.md`, *Ids, parents and briefs* |
 | `refusing to brief an iteration: step 0 is not finished` | `references/step0-interview.md`, *Writing it down* |
 
@@ -86,7 +86,7 @@ It makes `new`'s checks before writing anything (the parent exists and is
 | `--sections` | the ledger tags that matter for this idea (`code:trunk`, `closed`) |
 | `--checks` | checks owed beyond that table, such as a guard path on an input the compare lacks |
 | `--predict`, `--predict-basis` | the expected change against the parent, in the objective's units, and where the number came from (`references/promotion.md`) |
-| `--gpus` | required unless `"gpu"` is false |
+| `--gpus` | required unless `"gpu"` is false or `gpu_command` is set, which it then takes |
 | `--validate` | ask for the approved external validation on this iteration |
 | `--note` | one more line; repeatable |
 

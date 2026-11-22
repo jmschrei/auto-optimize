@@ -119,7 +119,7 @@ which is 0 tests and 0% where it has none; "after" adds the new suite.
   tool and its version.
 - Measure "before" on the base commit itself, not on the suite's branch with the
   new tests deselected: a conftest or fixture the new suite adds can change what
-  the old tests reach.
+  the repository's own tests reach.
 
 Compiled Cython needs a traced build to be measured at all:
 `cythonize(..., compiler_directives={"linetrace": True})`, compiled with

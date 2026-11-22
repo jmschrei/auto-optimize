@@ -35,7 +35,7 @@
 | A tolerance nothing can satisfy, or one nothing can fail | `references/step2-baseline.md`, *Compute a numeric tolerance against real data* |
 | The same edit measured two values on two roots, a change came in short of its prediction, or a gain was predicted in percent | `references/promotion.md`, *Predicting what a change is worth* |
 | A timing harness or an in-process sweep gives a different answer each time | `references/subagent.md`, *Timing variants*; `references/measuring.md` for `paired.py` |
-| A brief aimed at a kernel that no longer dominates | `references/measuring.md`, *Profile the root you are actually on* |
+| A brief aimed at a kernel that does not dominate the profile | `references/measuring.md`, *Profile the root you are actually on* |
 | A variant is suspiciously fast | `references/measuring.md`, *A suspiciously large speedup is usually dead code* |
 | Assembly-instruction counts read 0 for everything, on both branches | `references/measuring.md`, *Reading the generated code* |
 | A numba error or warning: `TypingError`, `missing Environment`, `Cannot cache compiled function`, a segfault with no message | `references/algorithm.md`, *Numba* |
@@ -60,5 +60,5 @@
 | `the search ended on …: only an iteration made after the end`; `refusing to fork an iteration` after `end` | `references/step4-final.md`, *An iteration made after the end* |
 | A search is running and this session knows nothing about it | `references/resume.md` |
 | `has no git checkout: it was pruned, or made by hand`; the search directory has grown to tens of GB | `references/step5-finish.md`, *Reclaim the disk* |
-| `the harness changed since …`, `the winner relies on the toolchain` | `references/subagent.md`, *Toolchain*; `autoopt.py harness --accept --reason` for a change that is meant |
+| `the harness changed since …`, `the winner relies on the toolchain` | `references/subagent.md`, *Portability* (Toolchain); `autoopt.py harness --accept --reason` for a change that is meant |
 | Start the ideas over without re-running the baseline | `references/changes.md`, *Starting the ideas over* |

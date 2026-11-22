@@ -40,18 +40,19 @@ from gpu_scan import shared_dir
 ASSETS = ('dashboard.css', 'dashboard.js', 'index.html')
 PAYLOADS = ('state.json', 'resources.json')
 
-# The modules that decide the payload's shape. A writer imported them once,
-# so one started before a change keeps publishing the old shape for as long as
-# it lives; the mount compares this stamp and replaces a stale writer.
+# The modules that decide the payload's shape. A writer imports them once and
+# publishes that shape for as long as it lives; the mount compares this stamp
+# and replaces a writer whose stamp differs.
 SOURCES = ('scan.py', 'gpu_scan.py', 'monitor_writer.py',
 	os.path.join('..', 'autoopt.py'))
 
 logger = logging.getLogger('autoopt-monitor')
 
-# Two hosts can mount one payload directory (a network filesystem), and neither sees the
-# other's lock or pid: each would publish its own GPUs into it, and the page
-# would flip between them. So a publishing writer leaves a heartbeat beside
-# the payload, and a writer on another host with the weaker claim pauses.
+# Two hosts can mount one payload directory (a network filesystem), and
+# neither sees the other's lock or pid: each would publish its own GPUs into
+# it, and the page would flip between them. So a publishing writer leaves a
+# heartbeat beside the payload, and a writer on another host with the weaker
+# claim pauses.
 HOST = socket.gethostname()
 HEARTBEAT = 'writer.host'
 
@@ -397,15 +398,16 @@ def run(root, out_dir, interval, resource_interval):
 		installed = assets_version()
 		last_state = None
 		readme_seen = {}
+		diff_seen = {}
 		os.makedirs(os.path.join(out_dir, 'readmes'), exist_ok=True)
+		os.makedirs(os.path.join(out_dir, 'diffs'), exist_ok=True)
 		logger.info('publishing %s to %s', scanner.root, out_dir)
 
 		while not stopping.is_set():
 			start = time.time()
 
-			# The front end is copied in at start-up; a writer left running
-			# across a change to it would otherwise serve the old page
-			# indefinitely.
+			# The front end is copied in at start-up and again whenever it
+			# changes, so a long-running writer serves the current page.
 			if assets_version() != installed:
 				install_assets(out_dir)
 				installed = assets_version()
@@ -438,6 +440,15 @@ def run(root, out_dir, interval, resource_interval):
 					write_json(os.path.join(out_dir, 'readmes', '%d.json' % identifier),
 						{'id': identifier, 'text': text})
 					readme_seen[identifier] = mtime
+
+				# Each settled iteration's code change against its parent for
+				# the diff panel: written once per commit pair, newest first,
+				# a few seconds of git per scan at most.
+				for identifier, (payload, pair) in scanner.diffs(
+						snapshot['iterations'], diff_seen).items():
+					write_json(os.path.join(out_dir, 'diffs', '%d.json' % identifier),
+						payload)
+					diff_seen[identifier] = pair
 
 				if last_state is not None:
 					lap('state', start - last_state)

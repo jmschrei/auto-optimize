@@ -92,6 +92,7 @@ Panels, marks and interactions are specified in `scripts/dashboard/README.md`,
 | What is running now | hollow diamonds on the chart's floor; ringed points are measured iterations whose subagent is still writing its README |
 | Why an iteration scored what it did | click its tree node (the whole README) or log entry (the README, whole after SHOW MORE): every number, where the time went |
 | How much code an iteration changed | hover its point or open its log entry: lines added and deleted, files modified, added and deleted, against its parent |
+| What an iteration changed, line by line | click its point on the objective chart: its diff against its parent opens under the chart, old file left and new right; a second click or *close* shuts it |
 | Whether a fresh batch of ideas helped | the objective chart's stage boundaries: one dashed line where the idea miner's stage changes |
 | A gate or observer moving | *Every run* (a broken gate is red) and the observer charts |
 | External validation | its own section (`references/external-validation.md`) |
@@ -164,7 +165,7 @@ the next poll plus a re-run of the cell.
 | `could not load …/dashboard.css` (or `.js`) | the out directory is outside the root of the server the notebook runs on; `--status` shows where it publishes |
 | `connecting…` never clears | no `state.json` was read: the writer is not running or has not written yet. `--status`, then `writer.log` |
 | `could not reload <module>: …` above the output | the reload chain hit an error in that module, and the old copy stays loaded. Fix it and re-run the cell |
-| `TypeError: show() got an unexpected keyword argument` | the cell was written for an older `show()`; `--start` rewrites it |
+| `TypeError: show() got an unexpected keyword argument` | the cell passes an argument `show()` does not take; `--start` rewrites the cell |
 | `has no config.json` | pointed at something other than a search's `autooptimize/` or the directory holding it |
 | Empty, but the directory is right | no iteration has a `result.json` yet; in-flight ones are the hollow diamonds on the floor |
 | Numbers from another search | a publisher of another search held that output directory. `show()` replaces it and says so; `--status` shows which search each watches |

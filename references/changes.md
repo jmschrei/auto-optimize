@@ -4,7 +4,7 @@
 |---|---|
 | A different premise or a rewrite, whose numbers should not be compared with the iterations so far | a **new search** seeded from the current winner (`init` it with the winner's code as its baseline) |
 | The root reached `floor`: the benchmark is too small to resolve a further gain | a **new search** on a larger input, sized so that this root takes 20 to 50 times the floor; its baseline is this root's code, or the original code when the user wants the whole gain measured on the new input (ask which) |
-| The objective moved tenfold, so the noise band no longer fits | nothing: the next phase re-measures the band from the root (`references/step3-rounds.md`, *When the objective moves by an order of magnitude*) |
+| The objective moved tenfold, so the noise band does not fit | nothing: the next phase re-measures the band from the root (`references/step3-rounds.md`, *When the objective moves by an order of magnitude*) |
 | A gate that may be too strict, explored while the strict search goes on | run a **second search** beside it |
 | The objective, or how the benchmark computes it, turns out wrong, a benchmark bug included | a **new search** |
 | A gate's threshold the user wants changed in place | `config --set`, then re-judge the stored runs (*Changing a gate in place*) |
@@ -36,7 +36,7 @@ and run both:
 
 ## Changing the objective or a gate
 
-Every comparison already made was made under the old definition.
+Every comparison already made was made under the definition in force before the change.
 
 | Change | What it does to the record |
 |---|---|
@@ -46,11 +46,11 @@ Every comparison already made was made under the old definition.
 | `runs_per_iteration` raised | earlier iterations are `ok` with fewer runs; comparisons still hold. A gate against A0's output needs A0 to run the new seeds (`references/step2-baseline.md`, *A gate that compares against the baseline's output*) |
 
 **A changed objective is a new search**: `init` a new `$WORK`, copy the
-current winner's code in as its baseline, and tell the user the old search was
-superseded, and why. When the new search keeps an
-identity gate, copy the old search's `reference/` into it and compare against
+current winner's code in as its baseline, and tell the user the first search is
+closed in favor of the new one, and why. When the new search keeps an
+identity gate, copy the first search's `reference/` into it and compare against
 that, so outputs are still checked against the original's rather than
-drifting one search at a time. The only alternative is re-running every old
+drifting one search at a time. The only alternative is re-running every
 iteration, at what the search cost. `config --set` refuses the objective, the
 command and `seed_base` for this reason.
 
@@ -70,7 +70,7 @@ re-measured: running `run_iteration.py` on an iteration without `--rerun`
 re-judges its stored runs under the new gate. Do it for the baseline and for
 every iteration whose verdict the change could flip; one whose runs now pass
 the gates runs the unit tests and the compare it had skipped. Iterations in
-flight read `config.json` when they started and keep the old gate; re-judge
+flight read `config.json` when they started and keep the gate they began under; re-judge
 them once they settle. Tell the user.
 
 With the task's checks, change `compare.py`'s rule to the new gate in the same

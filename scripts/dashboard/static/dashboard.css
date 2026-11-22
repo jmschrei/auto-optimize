@@ -1,4 +1,4 @@
-/* dashboard.css -- the auto-optimize monitor.
+/* dashboard.css -- the auto-optimize-code monitor.
  *
  * Dark only. Every rule is scoped under .autoopt-root, this dashboard's root
  * class, so two dashboards in one Lab page cannot restyle each other.
@@ -90,13 +90,15 @@
 	--diff-add: #3fb950;
 	--diff-del: #f85149;
 	--diff-mod: #d29922;
+	--diff-add-bg: rgba(46, 160, 67, 0.15);
+	--diff-add-gutter: rgba(46, 160, 67, 0.30);
+	--diff-del-bg: rgba(248, 81, 73, 0.15);
+	--diff-del-gutter: rgba(248, 81, 73, 0.30);
 	/* The kind of a detail row, as a capitalised label: a gate, an observer,
 	   a seed. Muted hues, clear of green and red, which read as verdicts. */
 	--tag-gate: var(--yellow-muted);
 	--tag-obs: var(--cyan-muted);
 	--tag-seed: var(--purple-muted);
-	/* The title colour for `title-dot` and `title-colour`; ask the user.
-	--title-colour: var(--cyan); */
 
 	/* Line traces past the four slots take these before repeating; marker
 	   shape cannot separate lines. */
@@ -285,6 +287,9 @@
 }
 
 .autoopt-root footer { padding: 0 var(--space-4) var(--space-5); font-size: 10.5px; color: var(--text-faint); }
+.autoopt-root footer.credit { padding-top: 0; }
+.autoopt-root footer.credit a { color: var(--text-faint) !important; }
+.autoopt-root footer.credit a:hover { color: var(--cyan) !important; }
 
 /* ==== SECTION: summary ==== */
 
@@ -673,6 +678,30 @@
 .autoopt-root .k-tag.k-gate { color: var(--tag-gate); }
 .autoopt-root .k-tag.k-obs { color: var(--tag-obs); }
 .autoopt-root .k-tag.k-seed { color: var(--tag-seed); }
+
+/* ==== SECTION: diff ==== */
+
+.autoopt-root #diff-card[hidden] { display: none; }
+.autoopt-root .diff-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); padding: var(--space-2) var(--space-3); color: var(--text-dim); }
+.autoopt-root .diff-summary .diff-idea { color: var(--text); }
+.autoopt-root .diff-file { border-top: 1px solid var(--line-soft); }
+.autoopt-root .diff-file > summary { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-1) var(--space-3); cursor: pointer; font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text); }
+.autoopt-root .diff-path { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.autoopt-root .diff-status { color: var(--text-faint); width: 1.2em; }
+.autoopt-root .diff-note { padding: var(--space-1) var(--space-3) var(--space-2); color: var(--text-faint); }
+.autoopt-root .diff-scroll { overflow-x: auto; }
+/* The Lab overrides below make every table `auto` layout and every cell
+   transparent with `!important`; the diff table undoes that for itself, at
+   a higher specificity. */
+.autoopt-root .diff-table { width: 100% !important; min-width: 640px; table-layout: fixed !important; border-collapse: collapse; font-family: ui-monospace, Menlo, monospace; font-size: 12px !important; line-height: 1.5; }
+.autoopt-root .diff-table tbody td { padding: 0 var(--space-2); vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text) !important; font-size: 12px !important; border-bottom: 0 !important; text-align: left !important; }
+.autoopt-root .diff-table tbody td.num { text-align: right !important; color: var(--text-faint) !important; user-select: none; padding: 0 var(--space-1); }
+.autoopt-root .diff-table tbody td.hunk { color: var(--text-faint) !important; background: var(--panel-2) !important; }
+.autoopt-root .diff-table tbody td.del { background: var(--diff-del-bg) !important; }
+.autoopt-root .diff-table tbody td.add { background: var(--diff-add-bg) !important; }
+.autoopt-root .diff-table tbody td.num.del { background: var(--diff-del-gutter) !important; }
+.autoopt-root .diff-table tbody td.num.add { background: var(--diff-add-gutter) !important; }
+.autoopt-root .diff-table tbody td.side { border-left: 1px solid var(--line-soft) !important; }
 
 /* ==== SECTION: jupyterlab-overrides ==== */
 

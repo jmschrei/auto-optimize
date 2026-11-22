@@ -322,7 +322,7 @@ def search_action(work, root, state, config, after, rows):
 
 	if word == 'floor':
 		return 'stop', ('the root reached the floor the user set ({0}): this '
-			'benchmark no longer resolves a gain. Ask the user: end here '
+			'benchmark cannot resolve a gain. Ask the user: end here '
 			'(python3 {1} end {2} --reason floor --background), a new search '
 			'on a larger input seeded from this root (references/changes.md), '
 			'or go on here with a lower floor or none (python3 {1} config {2} '

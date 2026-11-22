@@ -3,11 +3,10 @@
 The orchestrator's part is the loop below; what it never does is in
 `SKILL.md`, *Rules that hold everywhere*. The idea miner fills `ideas.md`
 (`references/idea-miner.md`), each iteration's runner promotes on the keep
-rule unless `promote` is `orchestrator`
-(`references/promotion.md`), and `autoopt.py` assembles each
-round's summary. Every file under `iterations/` is written by a
-subagent, `run_iteration.py` or `autoopt.py`. The one runner call the
-orchestrator makes is re-judging stored runs after a gate changed
+rule unless `promote` is `orchestrator` (`references/promotion.md`), and
+`autoopt.py` assembles each round's summary. Every file under `iterations/`
+is written by a subagent, `run_iteration.py` or `autoopt.py`. The one runner
+call the orchestrator makes is re-judging stored runs after a gate is changed
 (`references/changes.md`).
 
 **Read little.** Everything the orchestrator reads stays in its context, and
@@ -16,8 +15,8 @@ expires. After each report, read `autoopt.py status --brief` and
 the subagent's short report; do not read its logs, run outputs, probe files
 or README, and do not read code. Cap any other output (`| tail -n 40`).
 
-A0 carries **round 0**, which holds no ideas; rounds of ideas are numbered from 1, and a round closes when an iteration is promoted, so
-`summary --round 1` covers the iterations forked from A0 up to the first
+A0 carries **round 0**, which holds no ideas. Rounds of ideas are numbered
+from 1, and a round closes when an iteration is promoted, so `summary --round 1` covers the iterations forked from A0 up to the first
 promotion. A same-code control (`brief --control`, run by a subagent) is a row
 in its round but does not count toward the iterations the user budgeted.
 
@@ -26,8 +25,8 @@ in its round but does not count toward the iterations the user budgeted.
 From the first iteration on, *The loop* is run by an orchestrator subagent, not
 the main session. The main session carries the whole conversation, and every
 wake-up after a quiet spell writes all of it to the prompt cache again, so
-the rounds run in a context that holds only the search. What the main session does from the first iteration
-on is `references/main-session.md`.
+the rounds run in a context that holds only the search. What the main session
+does from the first iteration on is `references/main-session.md`.
 
 The orchestrator subagent reads its prompt (`briefs/loop-<n>.md`), `SKILL.md`
 and this file, and runs *The loop*. Where this file says to tell or ask the
@@ -41,7 +40,7 @@ iteration starts from it.
 
 ```
 start:
-    once status no longer prints `first iteration: waiting for …`: the setup
+    once status stops printing `first iteration: waiting for …`: the setup
       subagent and the idea miner's S1 are both done
       (references/step0-interview.md, *Handing off step 2*)
     autoopt.py brief $WORK --next   # a brief and a spawn prompt for the one
@@ -74,12 +73,11 @@ whenever the subagent reports, and at every wake-up:
     spawn what it printed, as at the start
     a STALLED subagent: hand its iteration to a new subagent (*A subagent that
       goes quiet*); `brief --next` counts its slot as taken
-    `promote: auto`: nothing to do, but for
-      a report whose `keep:` line reads `not promoted: …`: `promote --id <it>`
-      before the next `brief --next`.
-      The iteration's runner promoted it if it
-      passed the keep rule while its parent was still the root, and ran the
-      closed round's approved validation (its `keep:` line)
+    `promote: auto`: the iteration's runner promoted it if it passed the keep
+      rule while its parent was still the root, and ran the closed round's
+      approved validation (its `keep:` line). Nothing to do, except for a
+      report whose `keep:` line reads `not promoted: …`: `promote --id <it>`
+      before the next `brief --next`
     `promote: orchestrator` (a keep rule in the user's own words): read
       `status --brief` first, promote, then `brief --next`, so the new brief
       forks from the new root:

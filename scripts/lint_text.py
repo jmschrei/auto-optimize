@@ -8,7 +8,7 @@
 
 `body` checks a rendered body, `title` a title, `commits` the messages of
 `BASE..REF`, `diff-comments` the comments on the lines `BASE..REF` adds. Exit
-1 lists every hit with its line; exit 0 prints nothing but a count.
+1 lists every hit with its line; exit 0 prints `no hits`.
 
 Published text never names the search: its words (winner, winning iteration,
 baseline, gate, "the search", "the base" for the original code, a round,
@@ -20,9 +20,9 @@ Words that are also real code words pass: "binary search", "iteration over
 the records" and "the base pair" are not hits. The exceptions are narrow and
 fixed here:
 
-* a search word inside an inline code span or a fenced block with no space in
-  it (`--search`, `search.c`, `binary_search`) is a file, option or function
-  name; a path or a label is a hit wherever it stands;
+* a search word inside an inline code span with no space in it (`--search`,
+  `search.c`, `binary_search`) is a file, option or function name; a path or
+  a label is a hit wherever it stands, and a fenced block is read as written;
 * URLs and link targets are not read;
 * a table cell shorter than 60 characters with no sentence in it is a label,
   and is read strictly: there `search`, `iteration` and `base` are hits unless
