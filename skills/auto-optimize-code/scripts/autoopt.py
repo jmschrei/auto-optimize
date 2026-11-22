@@ -155,15 +155,15 @@ if os.environ.get('AUTOOPT_TMPDIR'):
 # one adds the answers
 # it reads with `register_after`; a key no table names is kept as it is (it
 # belongs to whatever extension wrote it).
-AFTER_DEFAULTS = {'stop': 'ask', 'budget_hours': None, 'disk': 'ask',
-	'oldest_toolchain_command': None, 'tests_driver_edit': 'ask',
+AFTER_DEFAULTS = {'stop': 'ask', 'budget_hours': None, 'budget_stages': None,
+	'disk': 'ask', 'oldest_toolchain_command': None, 'tests_driver_edit': 'ask',
 	'commit_trailer': None, 'pair_cap_hours': 4, 'setup_questions': 'ask',
 	'build_outputs': []}
 AFTER_CHOICES = {'stop': ('ask', 'auto'), 'disk': ('ask', 'keep', 'prune'),
 	'tests_driver_edit': ('ask', 'yes', 'no'), 'setup_questions': ('ask',
 	'recommended')}
 # Keys that hold a whole number of 1 or more, and a number of 0 or more.
-AFTER_WHOLE = []
+AFTER_WHOLE = ['budget_stages']
 AFTER_NONNEG = []
 # Functions `check(after)` that fail on a bad value of their own key.
 AFTER_CHECKS = []
@@ -190,7 +190,8 @@ def path_list(text):
 
 # The keys `config --set after.X=V` changes, and how each value is read.
 AFTER_KINDS = {'stop': str, 'disk': str, 'budget_hours': float,
-	'oldest_toolchain_command': str, 'tests_driver_edit': str,
+	'budget_stages': int, 'oldest_toolchain_command': str,
+	'tests_driver_edit': str,
 	'commit_trailer': str, 'pair_cap_hours': float, 'setup_questions': str,
 	'build_outputs': path_list}
 
@@ -1930,6 +1931,25 @@ def idea_counts(root):
 		sum(1 for line in lines if TRIED_LINE.match(line)))
 
 
+def stage_budget(root, config, state=None):
+	"""The search against `after.budget_stages`, the number of idea-miner
+	stages the user agreed to: `budget` (None when there is none), `done`
+	(the last stage closed), `spent` (that many stages have closed, so no
+	further one opens) and `exhausted` (spent, no stage open, and every idea
+	tried or dropped: the search stops for `budget`)."""
+
+	state = load_state(root) if state is None else state
+	budget = (config.get('after') or {}).get('budget_stages')
+	mining = state.get('mining') or {}
+	done = mining.get('done') or 0
+	spent = bool(budget) and done >= budget
+	untried, _ = idea_counts(root)
+
+	return {'budget': budget, 'done': done, 'spent': spent,
+		'exhausted': spent and (mining.get('stage') or 0) <= done
+			and untried == 0}
+
+
 def write_spec_template(root, config):
 	path = spec_path(root)
 
@@ -2381,6 +2401,17 @@ def mine(args):
 				'miner runs at a time. If its subagent died, pass --force to '
 				'open the next stage'.format(mining['stage'],
 					mining.get('started', '?')))
+
+		budget = (config.get('after') or {}).get('budget_stages')
+
+		if budget and mining['done'] >= budget:
+			fail('the budget is {} idea-miner stage(s) (after.budget_stages) '
+				'and S{} has closed, so no further stage opens. Brief the {} '
+				'untried idea(s) left; once none is left the search stops for '
+				'`budget` (references/step3-rounds.md, *When to stop*). With '
+				'the user\'s yes, raise it: `autoopt.py config <work> --set '
+				'after.budget_stages=<more> --reason "<their words>"`'.format(
+					budget, mining['done'], idea_counts(root)[0]))
 
 		settled = sorted(r['id'] for r in all_results(root))
 		seen = set(mining.get('seen') or [])
@@ -4058,6 +4089,14 @@ def end_reason(root, config, state, text):
 			root, state.get('root', 0))['objective']['median']), fmt(config[
 			'floor']))}
 
+	stages = stage_budget(root, config, state)
+
+	if stages['exhausted']:
+		return {'criterion': 'budget', 'text': '{} (derived: S{} closed '
+			'against a budget of {} idea-miner stage(s), and every idea is '
+			'tried or dropped)'.format(REASONS['budget'], stages['done'],
+			stages['budget'])}
+
 	handback = config.get('loop_handback') or LOOP_HANDBACK
 	count = len(settled_since_promotion(root, state))
 
@@ -4960,8 +4999,12 @@ def brief_next(args):
 		picks = next_ideas(root, count)
 
 	if not picks:
+		stages = stage_budget(root, config)
 		print('\nbrief --next: no untried idea left that is not already '
-			'briefed; run `autoopt.py mine` if no miner runs')
+			'briefed; {}'.format('the budget of {} idea-miner stage(s) is '
+			'spent, so the search stops for `budget` once the iterations in '
+			'flight settle: hand back'.format(stages['budget'])
+			if stages['spent'] else 'run `autoopt.py mine` if no miner runs'))
 		return 0
 
 	state = load_state(root)
@@ -5938,6 +5981,15 @@ def config_change(args):
 						field, ', '.join(BUILD_VARS)))
 
 				holder, kind = raw.setdefault('build_env', {}), str
+			elif key == 'command':
+				# Until the baseline has run, nothing was measured under the
+				# command, so fixing it is not a new search.
+				if load_result(root, 0) is not None or glob.glob(os.path.join(
+						iteration_dir(root, 0), 'runs', 'seed-*')):
+					fail('the command is set before the baseline runs; A0 has '
+						'run under it, so a change to it is a new search '
+						'(references/changes.md)')
+				holder, field, kind = raw, key, str
 			elif key in SETTABLE:
 				holder, field, kind = raw, key, SETTABLE[key]
 				if '.' in key:
@@ -5951,18 +6003,22 @@ def config_change(args):
 							'it is added with `init --force`'.format(block, key))
 					holder = raw[block]
 			else:
-				fail('{!r} cannot be set here. Settable: {}, gates.<name>.<{}>. '
-					'The objective, the command and seed_base are not: a '
-					'change to any of them is a new search '
+				fail('{!r} cannot be set here. Settable: {}, gates.<name>.<{}>, '
+					'and the command until the baseline runs. The objective, '
+					'seed_base and, after the baseline, the command are not: '
+					'a change to any of them is a new search '
 					'(references/changes.md)'.format(key,
 						', '.join(sorted(SETTABLE)), '|'.join(GATE_FIELDS)))
 
 			try:
-				value = parse_value(kind, text.strip())
+				# `null` unsets an `after` answer of any kind.
+				value = None if key.startswith('after.') and text.strip() \
+					.lower() in ('null', 'none') else parse_value(kind,
+						text.strip())
 			except ValueError:
 				fail('{} takes a {}; got {!r}'.format(key, kind.__name__, text))
 
-			if kind is int and value < 1:
+			if kind is int and value is not None and value < 1:
 				fail('{} must be at least 1; got {}'.format(key, value))
 
 			if key == 'promote' and value not in PROMOTE_MODES:
@@ -6250,8 +6306,11 @@ def resume_lines(root, config, state):
 
 	upcoming = next_ideas(root, 5)
 	lines += ['', '## The next untried ideas, as brief --next takes them', '']
-	lines += ['  ' + line[:200] for _, line, _ in upcoming] or ['  none: run '
-		'`autoopt.py mine <work>`']
+	lines += ['  ' + line[:200] for _, line, _ in upcoming] or (['  none: the '
+		'budget of {} idea-miner stage(s) is spent, so the search stops for '
+		'`budget`'.format(stage_budget(root, config, state)['budget'])]
+		if stage_budget(root, config, state)['spent'] else ['  none: run '
+		'`autoopt.py mine <work>`'])
 	lines += ['', 'Act on each verdict above, then go on with the loop in '
 		'references/step3-rounds.md (`brief --next`).']
 
@@ -6648,12 +6707,14 @@ def status(args):
 	untried, tried = idea_counts(root)
 	mining = state.get('mining') or {}
 	miner_open = mining.get('stage', 0) > mining.get('done', 0)
+	stages = stage_budget(root, config, state)
 	print('ideas: {} untried, {} tried; idea miner: {}; the next stage is '
-		'called for below {} untried'.format(untried, tried,
+		'called for below {} untried{}'.format(untried, tried,
 		'stage S{} running since {}'.format(mining['stage'], mining.get(
 			'started', '?')) if miner_open else 'stage S{} done'.format(
 				mining['done']) if mining.get('done') else 'not run yet',
-		MIN_UNTRIED))
+		MIN_UNTRIED, '; budget: {} idea-miner stage(s)'.format(
+			stages['budget']) if stages['budget'] else ''))
 
 	print('subagent model: {}'.format(config.get('subagent_model') or 'opus'))
 
@@ -6679,7 +6740,16 @@ def status(args):
 		print('machine: load {:.1f} on {} cores, {:.0f}% busy, this search\'s '
 			'runs included'.format(load, cores, 100 * load / cores))
 
-	if untried < MIN_UNTRIED and not miner_open:
+	if stages['exhausted']:
+		print('the budget of {} idea-miner stage(s) is spent and every idea '
+			'is tried or dropped: the search stops for `budget` '
+			'(references/step3-rounds.md, *When to stop*)'.format(
+				stages['budget']))
+	elif untried < MIN_UNTRIED and not miner_open and stages['spent']:
+		print('the budget of {} idea-miner stage(s) is spent, so no new '
+			'stage opens: brief the {} idea(s) left; once none is left the '
+			'search stops for `budget`'.format(stages['budget'], untried))
+	elif untried < MIN_UNTRIED and not miner_open:
 		print('fewer than {} untried ideas: run `autoopt.py '
 			'mine <work>` and spawn the idea miner with what it prints '
 			'(references/step3-rounds.md, *Keeping the ideas*)'.format(

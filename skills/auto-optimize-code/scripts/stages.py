@@ -220,9 +220,11 @@ def hours_since(stamp):
 
 
 def stop_word(root, config, state, after):
-	"""The When-to-stop criterion that is reached, or None: `stalled` (the
-	open round holds a phase's worth of settled iterations) or `budget`
-	(wall clock since step 2 began passes `after.budget_hours`)."""
+	"""The When-to-stop criterion that is reached, or None: `floor`,
+	`stalled` (the open round holds a phase's worth of settled iterations) or
+	`budget` (every idea from the `after.budget_stages` idea-miner stages is
+	tried or dropped, or the wall clock since step 2 began passes
+	`after.budget_hours`)."""
 
 	derived = autoopt.end_reason(root, config, state, None)['criterion']
 

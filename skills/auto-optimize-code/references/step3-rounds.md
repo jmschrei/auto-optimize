@@ -18,7 +18,7 @@ or README, and do not read code. Cap any other output (`| tail -n 40`).
 A0 carries **round 0**, which holds no ideas. Rounds of ideas are numbered
 from 1, and a round closes when an iteration is promoted, so `summary --round 1` covers the iterations forked from A0 up to the first
 promotion. A same-code control (`brief --control`, run by a subagent) is a row
-in its round but does not count toward the iterations the user budgeted.
+in its round but tries no idea.
 
 ## The orchestrator subagent
 
@@ -217,6 +217,10 @@ that reading lands in the orchestrator's. It runs:
   the miner's prompt; spawn one subagent with it, unedited. Keep briefing from
   what is left while it works. One miner runs at a time; if its subagent
   died, `mine --force` opens the next stage.
+- **never past the user's stage budget**, `after.budget_stages`: once that
+  many stages have closed, `mine` refuses, `status` says the budget is spent,
+  and the ideas left are briefed until none is; then the search stops for
+  `budget` (*When to stop*).
 
 Each stage is an `S<n>`: `new` stamps the last finished one on every
 iteration, and the dashboard's stage boundaries mark where a fresh batch of
@@ -335,7 +339,7 @@ Stop and tell the user when one of these is reached. `autoopt.py end
 |---|---|
 | `stalled` | the root has not moved through a phase's worth of settled iterations (`loop_handback`) |
 | `variations` | the remaining ideas are variations of ones that failed |
-| `budget` | the compute spent has passed what the user agreed to |
+| `budget` | the compute spent has passed what the user agreed to: every idea from the `after.budget_stages` idea-miner stages is tried or dropped (`status` says so, and `mine` refuses a further stage), or the wall clock since step 2 began has passed `after.budget_hours` |
 | `noise` | the frontier's improvements are smaller than the noise band |
 | `floor` | a minimized objective's root is at or under `floor`, the smallest value the user called worth measuring (step 0). `stages.py next` stops for the user even under `after.stop=auto`: end, or a new search on a larger input seeded from this root (`references/changes.md`) |
 
