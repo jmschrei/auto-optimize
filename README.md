@@ -112,12 +112,158 @@ code per iteration. Then, without you:
 5. the winner is copied out with a final report, and the disk is reclaimed
    once you agree.
 
-`examples/word-count/` is a slow, correct word counter to try this on.
+`examples/one-hot/` is a slow, correct one-hot encoder to try this on;
+the walkthrough below is a search on it.
 
 **What it costs.** Every iteration is a subagent session, and so is each
 setup, mining and orchestration phase, so a search of a few dozen iterations
 runs that many agent sessions. `autoopt.py tokens <work>` adds up what a
-search's agents spent, from Claude Code's transcripts.
+search's agents spent, from Claude Code's transcripts; the walkthrough's
+numbers are at its end.
+
+## Walkthrough: a one-hot encoder, 1,070 times faster
+
+A real search with this skill on a shared 256-core Linux server. The numbers,
+the dashboard and the code below come from that run; the home directory is
+written as `~`, and the dashboard's host and GPU strip is left out of the
+pictures.
+
+**The code.** `examples/one-hot/onehot.py` is correct and slow: two nested
+loops test each position against each letter.
+
+```python
+def one_hot_encode(sequence, alphabet='ACGT', dtype=numpy.int8):
+	ohe = numpy.zeros((len(alphabet), len(sequence)), dtype=dtype)
+
+	for i, character in enumerate(sequence):
+		for j, letter in enumerate(alphabet):
+			if character == letter:
+				ohe[j, i] = 1
+
+	return ohe
+```
+
+**The prompt**, in Claude Code, from that folder:
+
+![The prompt in Claude Code](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/01-prompt.png)
+
+**The interview.** Three rounds of questions pinned the search down. Every
+answer, and each default taken without asking, went into the search's
+`spec.md`, which every subagent reads.
+
+| Question | Answer |
+|---|---|
+| Where the search lives | `~/auto-optimization/2026-11-21-one-hot/` |
+| Objective | seconds per call, lower is better |
+| Benchmark input | one 10 Mbp sequence, about 1% N and 1% lowercase bases |
+| What must not change | the output, bitwise: values, dtype and shape |
+| Runs per iteration | 5 |
+| Dependencies | numba may be added; the signature and behavior stay |
+| Tracked, not gated | 1 bp, 50 Mbp, all lowercase, all N and one repeated base |
+| Threads in the timed call | up to 4 |
+| Iteration subagents | sonnet |
+| Budget | 15 iterations |
+
+**Setup.** A setup subagent wrote the benchmark and proved the gate before
+measuring anything: unchanged code and a loop-order swap gave 0 mismatches,
+and a case-insensitive version gave 100,300 and failed. It checked that the
+seed changes the input but not the timing, and that two runs at once do not
+disturb each other. It stopped once to ask whether to run beside another job
+on the machine (the answer was yes). The baseline, A0: a median of 1.507 s
+over 5 runs.
+
+**The search.** An idea miner read A0's profile, which put the whole call in
+`one_hot_encode`, and wrote seven ideas. An orchestrator subagent handed them
+to iteration subagents one at a time. The first, A1, replaced the loops with
+a numba kernel and took the call from 1.507 s to 3.5 ms. A change of more
+than tenfold stops the orchestrator: one 3.5 ms call is noisy (A1's runs
+spanned 3.1 to 4.5 ms), so it asked whether to go on, start a new search
+whose benchmark repeats the call, or stop. Nobody answered within ten
+minutes, so the main session took the answer that does the least damage if
+wrong, going on, and wrote it down in `ideas.md`. Four more idea-miner
+stages refilled the ideas as they ran out.
+
+The dashboard in JupyterLab, after the search ended:
+
+![The dashboard in JupyterLab](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/02-dashboard.png)
+
+The objective by iteration, on a log axis. Each point is one iteration's
+median over its 5 runs, colored by the kind of idea; the dotted pink
+staircase is the best so far, and the dashed purple lines mark each new batch
+of ideas:
+
+![Objective by iteration](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/03-objective.png)
+
+Three changes were kept, each forking the next generation: A1, the numba
+kernel; A3, which reads an ASCII string's own buffer in place of an `encode`
+copy (2.74 ms, and 9.5 MB less peak memory); and A7, which runs the kernel on
+4 threads over contiguous chunks above 2^20 positions (1.405 ms). The
+dashboard's frontier names A11 (1.343 ms), the best median measured: its gain
+over A7 was inside the noise band, so the keep rule did not take it, and A7
+is the winner.
+
+**Clicking an iteration.** A click on A1's point on the chart opens its code
+change against its parent: the loops became a kernel over the sequence's
+bytes, with the original loop kept for the inputs the kernel does not handle.
+
+![A1's code change, opened from the chart](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/04-diff-a1.png)
+
+A click on A7 in the search tree opens its README: the idea, what happened,
+every run, and its notes, which say that the one-thread time rose by 0.5 ms
+and that the cause was not found.
+
+![The search tree with A7's README open](https://raw.githubusercontent.com/jmschrei/auto-optimize/main/docs/walkthrough/05-tree-a7.png)
+
+**The end.** At the 15-iteration budget, `end` timed A7 against A0 in
+alternating separate processes and wrote `ended.md`:
+
+```
+- Objective `seconds` (min): the median goes from 1.507 in A0 to 0.001405 in A7: 1.507 -> 0.001405 s (-1.505, -99.9%).
+- Gates, worst run of A7: `n_mismatch_vs_base == 0`: pass (0).
+- Paired, on the search's own input: A7 vs A0, B better, -1.5, 9/9, p = 0.0039; at 4 threads, B better, -1.5, 9/9, p = 0.0039.
+```
+
+The read-only commands answer questions about it afterwards:
+
+```
+$ python3 $AO/autoopt.py table ~/auto-optimization/2026-11-21-one-hot --status ok --sort best --limit 5 \
+	--fields id,category,title,median,vs_base_pct,keep
+id   category      title                                     median    vs_base_pct  keep
+---  ------------  ----------------------------------------  --------  -----------  ----
+A11  PARALLEL      _encode4_threaded: replace the ThreadPoo  0.001343  -99.91       fail
+A7   PARALLEL      _one_hot_fast: above one fixed size cuto  0.001405  -99.91       pass
+A9   CACHE_MISS    _encode4: change the loop order from one  0.001406  -99.91       fail
+A15  OPTIMIZATION  _one_hot_fast: on Linux only              0.001455  -99.9        fail
+A14  PARALLEL      _encode4_threaded: when the output dtype  0.001468  -99.9        fail
+
+$ python3 $AO/autoopt.py show ~/auto-optimization/2026-11-21-one-hot A7     # an excerpt
+A7  _one_hot_fast: above one fixed size cutoff
+category   PARALLEL, round 3, parent A3, branch autoopt/7, commit 89b13cd92e90
+status     ok at 5 runs
+median     0.0014054 s (std 0.00021, range 0.00128587 to 0.0018017, 5 runs)
+vs parent  -0.001337 (-48.8%) against A3's 0.00274276
+vs A0      -1.505 (-99.9%) against A0's 1.50683
+keep       pass: its median beats its parent's by 0.001337 > the noise band 0.000576
+gate       n_mismatch_vs_base == 0: pass (worst 0)
+check      cold first call 0.2417 s (parent 0.2416 s); compare pass (57 inputs identical)
+change     1 file changed, 51 insertions(+), 1 deletion(-); git -C … diff autoopt/3...autoopt/7
+…
+```
+
+The 12 iterations that were not kept all passed the gate; they were slower
+or inside the noise band. Among them: numba's `prange` over the kernel's
+loop (A2, slower than the serial kernel), two numpy-only versions (3.6 and
+2.1 times slower than the kernel they were measured against), and a
+huge-page-aligned output. The observers recorded what the
+winner costs elsewhere: a cold first call of 0.24 s for numba's compile
+(once per machine, since the kernels are cached), and a 1 bp input at
+3.1 µs where the loop took 0.43 µs.
+
+**What it took.** 15 iterations and the baseline, 80 runs and 217 s of
+benchmark time. The wall clock was 2 h 9 min, about 30 minutes of it
+waiting on questions nobody was there to answer. By `autoopt.py tokens`,
+25 agent sessions spent 9.5 million weighted tokens (cache reads weigh 0.05,
+output 5); each iteration subagent averaged 131 thousand.
 
 ## Watching it
 
@@ -176,7 +322,8 @@ src/auto_optimize/       the installer (standard library only)
 tests/
   code/                  the skill's script suites; dashboard/ holds the browser tests
   package/               the installer and the shipped files (pytest)
-examples/word-count/     a slow program to try a first search on
+examples/one-hot/        the slow function the walkthrough optimizes
+docs/walkthrough/        the walkthrough's screenshots
 ```
 
 ## Development

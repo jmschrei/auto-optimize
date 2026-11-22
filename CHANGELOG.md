@@ -37,6 +37,15 @@ it.
   and the shipped files are tested in `tests/package/` with pytest.
 - The Python floor is 3.9.
 
+### Documentation
+
+- The README walks through a real search on `examples/one-hot/`, a for-loop
+  one-hot encoder made about 1,070 times faster: the prompt, the interview's
+  answers, setup, the dashboard, an iteration's code change opened from the
+  chart, an iteration's README from the search tree, the end and what the
+  search cost. The screenshots are in `docs/walkthrough/`.
+- `examples/one-hot/` replaces `examples/word-count/` as the example to try.
+
 ### Claude Code skill
 
 - `autoopt.py table` prints one row per iteration, in-flight ones included,
