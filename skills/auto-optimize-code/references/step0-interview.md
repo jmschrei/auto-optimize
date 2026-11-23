@@ -46,7 +46,7 @@ subagent prices it at step 2 and brings back any that is large
 | 2 | Does the task name a worker, rank or thread count (`-p 4`, 8 threads)? An algorithm search asks its thread-count row instead, and this is that answer | the count; none | none | `config.json` `workers` (`init --workers`): A0 must show that many threads running at once |
 | 2 | Is the code compiled? How is it built, and which compiler and flags must every build use? They are fixed for A0 and every iteration | the project's own build command and defaults, no variables (Recommended); name them (`CC=…`, `CFLAGS=…`) | the project's own | `init --build-env VAR=VALUE` (`config.json` `build_env`); the build at the start of `--command` |
 | 2 | GPU search: how many GPUs does one iteration hold? Otherwise: how many of an iteration's runs go at once? | 1 (Recommended); 2; 4; the shapes in *Runs and GPUs* | 1 | Plan (`--gpus-per-agent`) |
-| 2 | GPU search: which command gives a run its GPUs? | where the machine has an allocator or a scheduler, its words before a command, such as `srun --gres=gpu:1` (Recommended there); on a machine the user has to themselves, `env CUDA_VISIBLE_DEVICES=<index>` with the index they name (Recommended there); none, in plain mode only. On a machine shared with other jobs, never offer a fixed index | none: always asked in a GPU search | `config.json` `gpu_command` (`init --gpu-command`) |
+| 2 | GPU search: which command gives a run its GPUs? | where the machine has an allocator or a scheduler, its words before a command, such as `srun --gres=gpu:1` (Recommended there); on a machine the user has to themselves, `env CUDA_VISIBLE_DEVICES=<index>` with the index they name (Recommended there). On a machine shared with other jobs, never offer a fixed index | none: always asked in a GPU search | `config.json` `gpu_command` (`init --gpu-command`) |
 | 3, the rules | How many runs per iteration? | 5 (Recommended); 1; 3; 10 | 5 | Plan |
 | 3 | Which observers should every run record? | your proposed list (Recommended); fewer | your proposal | Observers |
 | 3 | What earns a promotion, and what breaks a tie? | a median beyond the noise band of the parent's (Recommended); plus a tie rule such as "compile time decides a runtime tie" | no tie rule | Keep rule |
@@ -58,9 +58,9 @@ subagent prices it at step 2 and brings back any that is large
 | 4 | Plain mode: is there a test suite to run on every iteration? | its command, with thread pools pinned; none | none | `init --tests` |
 | 4 | Are there bugs you already know of in this code? Do the inputs or model weights carry license terms that restrict their use? | none (Recommended); the bugs, in the user's words; the terms, or where they are | none | `$WORK/interview/known-bugs/`; `$WORK/interview/TERMS.md` |
 | 5, running it | Setup's own questions (a busy machine, a tolerance, a faster documented flag): ask each, or take the recommended answer and report it? | ask (Recommended); take the recommended answers | ask | `config --set after.setup_questions=recommended` |
-| 5 | Which model runs the iteration subagents? | opus (Recommended); sonnet; haiku; fable | opus | `config.json` `subagent_model` (`init --subagent-model`) |
+| 5 | Which model runs the iteration subagents and the setup subagent? (The idea miner and the orchestrator run on this session's model.) | opus (Recommended); sonnet; haiku; fable | opus | `config.json` `subagent_model` (`init --subagent-model`) |
 | 5 | How will you watch the search? | the notebook, where JupyterLab runs on this machine (Recommended); a static HTML page; the terminal only | the notebook where JupyterLab is found, else the terminal | which line of the first table of `references/dashboard.md` the user is told; the publisher starts either way |
-| 5 | How much may the search spend? | no limit: the stop criteria decide (Recommended); a number of idea-miner stages (each stage is one batch of ideas the miner writes from the root's profile; the search stops once every idea from them is tried or dropped); wall-clock hours | no limit | stages: `after.budget_stages`; hours: `after.budget_hours`. Either is the `budget` reason to stop |
+| 5 | How much may the search spend? | no limit: the stop criteria decide (Recommended); a number of iterations (A0 and same-code controls do not count); a number of idea-miner stages (each stage is one batch of ideas the miner writes from the root's profile; the search stops once every idea from them is tried or dropped); wall-clock hours | no limit | iterations: `after.budget_iterations`; stages: `after.budget_stages`; hours: `after.budget_hours`. Each is the `budget` reason to stop |
 | 5 | Will you be away while it runs? | answering when asked (Recommended); away: unanswered questions continue on the answer that does the least damage | answering | Goal and scope; when away, offer Claude Code's `askUserQuestionTimeout` setting (`references/step3-rounds.md`, *Questions while the search runs*) |
 | 6, after the search | End the search on the stop criteria, or ask you? Reclaim the disk at the end? | `stop`: `ask` (Recommended) or `auto`; `disk`: `ask` (Recommended), `keep` or `prune`; `pair_cap_hours`: 4 (Recommended), the most the paired timing at `end` may take | `ask`, `ask`, 4 | `config.json` `after` (`init --after JSON`, `config --set after.X=V`) |
 | 6 (repository mode) | The oldest toolchain the repository supports? May the new unit tests edit the repository's test driver? The trailer line every commit message ends with? | `oldest_toolchain_command`: a command that builds and tests a tree, `{src}`, with the oldest compiler or library the repository supports, or null when there is none (`references/promotion.md`, *The preflight*); `tests_driver_edit` `yes`, `no` or `ask`; `commit_trailer` from the main session's instructions, verbatim | null; `ask`; no trailer | the same `after` block |
@@ -260,10 +260,8 @@ already knows, so later steps do not report them as new. What the benchmark
 reads (data, the environment, toolchains) goes in `$WORK/inputs/` (`data/`,
 `env/`, `toolchains/`), not at the top of `$WORK`.
 
-**Every rule is in `spec.md` before it is used.** A changed setting goes
-through `autoopt.py config --set … --reason "<the user's words>"`, which also
-writes the dated rule; any other rule is written under *Rules added during the
-search* with the date and the user's words, **before** acting on it.
+**Every rule is in `spec.md` before it is used** (`SKILL.md`, *Rules that
+hold everywhere*).
 
 If the surrounding project is a git repository, add `autooptimize/` to its
 ignore list: it holds a git repository of its own and every run's outputs.
@@ -280,42 +278,21 @@ the interview is not written down`):
 python3 $AO/autoopt.py setup $WORK   # opens step 2; prints the setup subagent's prompt (briefs/setup.md)
 ```
 
-Spawn it with the printed prompt unedited, then end your turn: its report
-wakes you, a setup question included, so start no timer, watch or polling
-loop. With a new unit-test suite, `init` comes at the end of step 1, and it
-starts then.
+Spawn it with the printed prompt unedited, with the description and model
+its stderr line names, then end your turn: its report wakes you, a setup
+question included, so start no timer, watch or polling loop. With a new
+unit-test suite, `init` comes at the end of step 1, and it starts then.
 
-When the setup subagent reports done, open the miner and spawn it:
+`setup` alone refuses while step 2 is open (`step 2 is already with a setup
+subagent`; `setup --force` prints a prompt that continues from
+`autooptimize/setup/notes.md`), and `--ask`, `--answer`, `--force` and
+`--done` refuse when none is (`no setup is open`). `brief` refuses (`step 2
+is still with the setup subagent`) until `setup --done`. `mine` refuses stage
+S1 while `checks.profile` is registered and `iterations/0/profile.txt` does
+not exist; `--without-profile` starts it blind. `status` prints `first
+iteration: waiting for setup (step 2) and the idea miner's S1`, naming
+whichever is not done.
 
-```bash
-python3 $AO/autoopt.py mine $WORK    # opens stage S1; prints the idea miner's prompt
-```
-
-`mine` refuses stage S1 while `checks.profile` is registered and `iterations/0/profile.txt`
-does not exist; `--without-profile` starts it blind.
-
-The setup subagent does all of step 2 (`references/step2-baseline.md`) and
-reports its *Gate proof* and *Width measured* lines, A0's runner block and
-each check's proof. While it works:
-
-- **Questions for the user** (`references/step2-baseline.md`, *Decisions
-  that are the user's*). The subagent records them with `setup --ask`, does
-  everything that does not depend on them, and stops once; `status` prints
-  them on its `setup (step 2): waiting for the user:` line. Ask them in one
-  AskUserQuestion call, then run `python3 $AO/autoopt.py setup $WORK --answer
-  "<their words>"`, which writes the dated line in `spec.md` (a setting they
-  change is also `config --set … --reason`), and send the message it prints
-  to the setup subagent (SendMessage); if that subagent is gone, spawn a new
-  one with the prompt it prints after the message.
-- **A setup subagent that died** without reporting: `setup --force` prints a
-  prompt for a new subagent that continues from its notes,
-  `autooptimize/setup/notes.md`. `setup` alone refuses while step 2 is open
-  (`step 2 is already with a setup subagent`), and `--ask`, `--answer`,
-  `--force` and `--done` refuse when none is (`no setup is open`).
-- **`brief` refuses** (`step 2 is still with the setup subagent`) until the
-  subagent closes step 2 with `setup --done`.
-
-`status` prints `first iteration: waiting for setup (step 2) and the idea
-miner's S1`, naming whichever is not done, until both are done. Then start the
-orchestrator subagent; from here on, `references/main-session.md` lists what
-the main session does at each event.
+From here on, `references/main-session.md` lists what the main session does
+at each event: a setup question, the setup subagent's report, the idea miner
+and the orchestrator subagent.

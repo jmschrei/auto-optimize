@@ -4,8 +4,12 @@ A live dashboard over an `autooptimize/` directory, mounted in a JupyterLab
 notebook output. It needs nothing instrumented and works against a finished
 search or one this session did not start. It writes only its notebook
 (`$WORK/dashboard.ipynb`, beside `autooptimize/`), its payload directory
-(`autooptimize/monitor/` by default) and an index entry under
-`~/.cache/autoopt-monitor/`; it never touches iterations, records or code.
+(`autooptimize/monitor/` by default, else
+`~/autoopt-monitor/<project>-<8 hex of the search's path>/`), an index entry
+under `~/.cache/autoopt-monitor/`, and the GPU sample its publishers share and
+the writer lock in `/dev/shm/dashboard-monitor-<uid>/` (the temporary
+directory where `/dev/shm` is not writable); it never touches iterations,
+records or code.
 
 ```bash
 DASH=$AO/dashboard

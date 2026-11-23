@@ -15,6 +15,8 @@ does nothing.
 | `promoted to the root (…); round N closed` | it is the root; every iteration briefed after it forks from it |
 | `no, its median is within the noise band …` | kept out, for the reason given |
 | `passes (…); promotion is the orchestrator's (config "promote")` | `promote: orchestrator` |
+| `passes; already on the root's path` | it is the root or one of its ancestors already, as on a re-run of a promoted iteration |
+| `` passes (…); not promoted: an iteration made after the end becomes the winner only by `promote --id` `` | made with `--after-end`: its runner never promotes it (`references/step4-final.md`, *An iteration made after the end*) |
 | `passes (…); not promoted: <reason>` | `promote` refused it (*The preflight*, the toolchain scan, a root that moved): the subagent fixes what the reason names and runs `finish`; the orchestrator then runs `promote --id <it>` |
 | `passes (…); not promoted (--no-promote)` | the runner was told not to: a re-measurement |
 

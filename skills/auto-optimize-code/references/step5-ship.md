@@ -170,8 +170,10 @@ from the user's fork. Ask for it (create it with `gh repo fork OWNER/REPO
 python3 $AO/autoopt.py config $WORK --set after.pr_remote=<remote name or URL> --set after.pr_head_owner=<their account> --reason "<their words>"
 ```
 
-Branches are pushed to the fork and the PRs open on the original with head
-`OWNER:BRANCH`. The bug report opens on the original either way.
+Record the fork's URL rather than a remote name: `gh repo fork
+--clone=false` adds no remote, and a name added to one clone is unknown to
+the others. Branches are pushed to the fork and the PRs open on the original
+with head `OWNER:BRANCH`. The bug report opens on the original either way.
 
 ### Separate from the unit tests
 
@@ -197,10 +199,15 @@ benchmark on the result.
 |---|---|
 | `has not ended` | step 4 first |
 | `is gate-failed …`, `something was committed after the measurement`, `uncommitted changes that were never measured` | ship the winner (`--id best`); a change made after the measurement is measured as an iteration made with `--after-end` |
-| `changed since the search copied it` (apply) | ask the user: their edit stays, and the change is applied by hand (`git -C $WORK/autooptimize/repo.git diff autoopt/0 autoopt/<id>` prints it); then `apply --yes` records the files that hold it |
-| `exists already, and the change adds it`, `is missing; the search copied it from there` (apply) | show the user the file; the change is applied by hand as above |
+| `changed since the search copied it` (apply) | ask the user: their edit stays, and the change is applied by hand (`git -C $WORK/autooptimize/repo.git diff autoopt/0 autoopt/<id>` prints it). Once they say each file holds it, `apply --by-hand` previews the files as applied by hand and `apply --by-hand --yes` records them, writing nothing |
+| `exists already, and the change adds it` (apply) | show the user the file; the change is applied by hand as above |
+| `is missing; the search copied it from there` (apply) | show the user where the file was; they restore it, or apply the change elsewhere and pass `--to DIR` |
+| `is new, and the copied files came from more than one folder` (apply) | ask the user which folder the new file belongs in: `--to DIR` |
+| `the change touches none of the copied files` (apply) | the winner changed only files the search wrote itself (the benchmark); tell the user there is nothing to ship |
+| `after.ship is …: the original files are written only on the user's choice` (apply), `… a branch is made in the original repository only on the user's choice` (branch) | ask with `ship.py plan` and record the route (`config --set after.ship=…`) |
 | `this is a repository search`, `this search was made with init --copy` | the route does not fit the mode: ask again with `ship.py plan` |
-| `the user has not said whether the branch names start with auto-optimize/` | ask the third question of `ship.py plan` and record `after.branch_prefix` |
+| `the user has not said whether the branch names start with auto-optimize/` | ask the third question of `ship.py plan` and record `after.branch_prefix`; a branch name the user gave (`--name`) needs no answer |
+| `holds the tables of …, not of …` (optimization PR) | the winner changed since the tables were written (an iteration made with `--after-end`): run `opt_pr_tables.py` again and have the writer render the body again |
 | `after.ship is …: the GitHub documents are for a user who chose them`, `after.ship_documents names no document`, `after.ship_documents names …, which this search does not offer` | ask with `ship.py plan` and record the answers |
 | `is not on <owner/repo>/<branch>, so the PR would carry commits nobody measured. Push … first` | the user pushes their branch; the search never writes to it |
 | `is not <login>'s own account` | show the user the repository, then `--other-owner` |

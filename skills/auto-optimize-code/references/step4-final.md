@@ -10,7 +10,7 @@ python3 $AO/autoopt.py end $WORK --reason <stalled|variations|budget|noise|floor
 python3 $AO/autoopt.py wait $WORK/autooptimize/end.log   # again, until it prints `wait: finished`
 ```
 
-`--reason` is the word of the *When to stop* criterion reached (`references/step3-rounds.md`) or the user's own words. Without it, `end` records `floor` when the root is at the floor, `stalled` when the open round holds a phase's worth of settled iterations, and `none stated` otherwise. `--id` names another winner than `best`.
+`--reason` is the word of the *When to stop* criterion reached (`references/step3-rounds.md`) or the user's own words. Without it, `end` records `floor` when the root is at the floor, `budget` when the idea-miner stage budget is closed with every idea tried or dropped, or `after.budget_iterations` iterations have settled, `stalled` when the open round holds a phase's worth of settled iterations, and `none stated` otherwise. `--id` names another winner than `best`.
 
 ## Refusals
 
@@ -21,9 +21,17 @@ python3 $AO/autoopt.py wait $WORK/autooptimize/end.log   # again, until it print
   starts. A brief that will never be spawned is withdrawn by deleting the
   `briefs/<id>.md` the refusal names;
 - a phase of the orchestrator subagent is open (the orchestrator closes it
-  when told to stop; `loop --force` after one that died);
+  when told to stop; `loop --done` after one that died);
 - the search already ended (`end --reopen`);
-- the winner is A0: nothing was kept.
+- `--id 0` while a change was kept: A0 is never chosen over one.
+
+A search that kept nothing ends on A0: there is no paired timing, `ended.md`
+says "No change was kept", and step 5 has nothing to ship (`stages.py`
+marks it complete), so the next step is step 6.
+
+A failed `end` (`end.log` ends with a non-zero exit) makes `stages.py next`
+return `stop` with the error, rather than run `end` again: fix what it names,
+or tell the user, then run `end` again.
 
 ## What it does, in order
 
@@ -47,7 +55,7 @@ python3 $AO/autoopt.py wait $WORK/autooptimize/end.log   # again, until it print
    and leaves the publisher running. Step 6 stops it. A missing `plotly`
    leaves no snapshot and says so.
 6. Prints the next step: step 5, shipping, which starts by asking the user
-   how to ship (`references/step5-ship.md`).
+   how to ship (`references/step5-ship.md`), or step 6 when nothing was kept.
 
 Show the user `ended.md`, the paired verdict beside the medians, and quote the
 paired line in the final report.

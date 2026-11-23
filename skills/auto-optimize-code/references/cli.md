@@ -8,7 +8,7 @@ command*). What the commands read and write on disk is in
 
 ## `autoopt.py` — the search tree
 
-`--id` names an existing iteration; `new` and `brief` take `--new-id` (or `--id`) for the one they create. `--id` defaults to the winner (`best`) in `path`, `final`, `end` and `archive`, to the root in `check`, `profile` and `validate`, and is required where one iteration is acted on (`finish`, `readme`, `promote`, `variant`, `restore`, `checkers`).
+`--id` names an existing iteration; `new` and `brief` take `--new-id` (or `--id`) for the one they create. `--id` defaults to the winner (`best`) in `path`, `final`, `end` and `archive`, to the root in `profile` and `validate`, and is required where one iteration is acted on (`finish`, `readme`, `promote`, `variant`, `restore`, `checkers`); `check` takes `--id` or `--reference`.
 
 ```bash
 python3 $AO/autoopt.py init <work> --task … --command … --objective … --direction max|min [--unit U] [--gates JSON] [--observers a,b]
@@ -22,7 +22,7 @@ python3 $AO/autoopt.py tests-branch --work <work> --squash -m '<message>'
 python3 $AO/autoopt.py spec <work> --set FIELD VALUE …
 python3 $AO/autoopt.py config <work> [--set KEY=VALUE … --add-observer NAME … --reason '…']
 python3 $AO/autoopt.py setup <work> [--ask Q [--recommend A] | --answer A | --force | --done]
-python3 $AO/autoopt.py prove <work> [--make NAMES] [--dir DIR] [--compare CMD] [--background]
+python3 $AO/autoopt.py prove <work> [copies …] [--make NAMES] [--dir DIR] [--compare CMD] [--background]   # copies: default every one in the scratch directory
 python3 $AO/autoopt.py prove <work> --id A7 --checker PATH --checker-row FILE --faults FILE [--timeout 240]
 python3 $AO/autoopt.py width <work> [--counts 1,2,4] [--reps N] [--write] [--background]
 python3 $AO/autoopt.py busy <work> [--seconds 2]
@@ -30,11 +30,11 @@ python3 $AO/autoopt.py price <work>                       # after A0: what the l
 python3 $AO/autoopt.py harness <work> [--accept --reason '…']
 python3 $AO/autoopt.py mine <work> [--done] [--force] [--without-profile]
 python3 $AO/autoopt.py drop <work> --idea-line N|TEXT --reason '…'
-python3 $AO/autoopt.py loop <work> [--force | --done]
+python3 $AO/autoopt.py loop <work> [--force | --done | --stop]   # --stop: the open phase's next `brief --next` briefs nothing and says to hand back
 python3 $AO/autoopt.py brief <work> --new-id A3 --title '…' --category CACHING --idea '…'|@file --tried none|'…'|@file --gpus '…'
                               [--idea-line N|TEXT] [--parent A0] [--topic T] [--predict D --predict-basis '…'] [--sections tags]
                               [--checks '…'] [--note '…' …] [--validate] [--control] [--after-end] [--replace]
-python3 $AO/autoopt.py brief <work> --next [--count N]    # status --brief, new summaries, then a brief for each free slot
+python3 $AO/autoopt.py brief <work> --next [--count N]    # status --brief, new summaries, then a brief when the one slot is free
 python3 $AO/autoopt.py brief <work> --prompt A3           # an existing brief's spawn prompt again
 python3 $AO/autoopt.py new <work> --brief A3              # the iteration a brief describes
 python3 $AO/autoopt.py new <work> --new-id A3 --title '…' --category CACHING [--parent A0] [--topic T]
@@ -42,7 +42,7 @@ python3 $AO/autoopt.py new <work> --new-id A3 --title '…' --category CACHING [
 python3 $AO/autoopt.py finish <work> --id A3 [--ledger FILE] [--checker PATH --checker-row FILE]
 python3 $AO/autoopt.py readme <work> --id A3 [--template]
 python3 $AO/autoopt.py ledger <work> --by A7 --add FILE
-python3 $AO/autoopt.py check <work> [--id A7 | --reference]
+python3 $AO/autoopt.py check <work> (--id A7 | --reference)
 python3 $AO/autoopt.py checkers <work> --id A7 [--name NAME … | --touched] [--timeout 1800]
 python3 $AO/autoopt.py profile <work> [--id N]
 python3 $AO/autoopt.py variant <work> --id A7 NAME [--parent] [--no-build]
@@ -87,7 +87,7 @@ complete`; `--run` starts a `run` move.
 
 ```bash
 python3 $AO/ship.py plan <work> [--json]                 # what this search can ship, and the question to ask
-python3 $AO/ship.py apply <work> [--id best] [--to DIR] [--yes]
+python3 $AO/ship.py apply <work> [--id best] [--to DIR] [--by-hand] [--yes]
 python3 $AO/ship.py branch <work> [--id best] [--name N] [--repo PATH] [--yes]
 python3 $AO/ship.py brief <work>                         # the document writer's prompt
 python3 $AO/ship.py status <work>
@@ -96,7 +96,9 @@ python3 $AO/ship.py rehearse <work> [--branch DOC=NAME …]
 python3 $AO/ship.py post <work> all --approved --digest D [--branch DOC=NAME …] [--other-owner]
 ```
 
-`apply` and `branch` preview until `--yes`. `post` refuses any digest but the
+`apply` and `branch` preview until `--yes`. `apply --by-hand` records as
+applied, and leaves as it is, a file the user merged the change into by hand.
+`post` refuses any digest but the
 last rehearsal's, inputs changed since, and `--branch` flags other than the
 rehearsal's (`references/step5-ship.md`). `--branch optimization=NAME` or
 `tests=NAME` names the branch a PR pushes, in place of the one its title or
@@ -108,10 +110,13 @@ The documents' own scripts (`references/pr-optimization.md`,
 ```bash
 python3 $AO/opt_pr_tables.py <work> [--id best] [--out D] [--tests-format KEY=REGEX …]
 python3 $AO/opt_pr_body.py D (--template | --title T --out D/body.md)
-python3 $AO/tests_pr_tables.py collection|files|coverage|names …
-python3 $AO/tests_pr_body.py D (--template | --title T --out D/body.md) [--config FILE] [--allow-source PATH …]
-python3 $AO/tests_pr_push.py D --repo OWNER/REPO [--post | --edit] [--other-owner]
-python3 $AO/issue_body.py template|dupes|verify|status|render|renumber|file|link D …
+python3 $AO/tests_pr_tables.py collection --collect-output FILE [--root DIR] [--marker REGEX] --out D
+python3 $AO/tests_pr_tables.py files|coverage|names …
+python3 $AO/tests_pr_body.py D (--template | --title T --out D/body.md) [--prose FILE] [--config FILE] [--allow-source PATH …]
+python3 $AO/tests_pr_push.py D --repo OWNER/REPO [--suite DIR] [--branch B] [--base COMMIT] [--remote-branch B] [--target-branch B]
+                              [--remote R] [--head OWNER:BRANCH] [--allow-source PATH …] [--post | --edit] [--other-owner]
+python3 $AO/issue_body.py template|dupes|verify|status|render|renumber|file|link D …   # --prose FILE on all but template and link
+python3 $AO/issue_body.py dupes D [--repo OWNER/REPO | --issues FILE] [--top 3] [--min-score 4] [--max-issues 2000]
 python3 $AO/attribution.py check --kind optimization|tests|issue --title T --body FILE
 ```
 

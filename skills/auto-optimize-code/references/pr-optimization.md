@@ -109,8 +109,11 @@ unit-test suite the commits sit on the original's commit
 (`references/step5-ship.md`, *Separate from the unit tests*).
 
 `--post` (run by `ship.py post`) pushes the branch, opens the PR with `gh`,
-and records it in `$D/pr.json`; a second post opens nothing. `--edit`
-replaces an open PR's title and body after a change, and pushes nothing.
+and records it in `$D/pr.json`; a second post opens nothing. Once the PR
+is open, the plain preview prints the title and body that `--edit` would put
+on it when they changed; show the user, and on their yes `--edit` replaces
+them and pushes nothing. `--edit` refuses when the winner changed after the
+PR was opened, since the PR would describe commits it does not carry.
 
 ## When it refuses
 

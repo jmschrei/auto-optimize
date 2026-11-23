@@ -51,8 +51,9 @@ closed in favor of the new one, and why. When the new search keeps an
 identity gate, copy the first search's `reference/` into it and compare against
 that, so outputs are still checked against the original's rather than
 drifting one search at a time. The only alternative is re-running every
-iteration, at what the search cost. `config --set` refuses the objective, the
-command and `seed_base` for this reason.
+iteration, at what the search cost. `config --set` refuses the objective and
+`seed_base` for this reason, and the command once A0 has run; before that,
+nothing was measured under the command, so it may be fixed.
 
 ### Changing a gate in place
 

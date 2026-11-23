@@ -182,13 +182,17 @@ it.
   field and is read as before.
 - `config.json`, `state.json`, `result.json` and `ended.json` carry
   `schema_version` (1), for tools that read them.
-- A search's budget can be a number of idea-miner stages
-  (`after.budget_stages`), in place of the number of iterations the
-  interview offered, which no script enforced: `stages.py next` called for
-  another phase after such a budget was spent. Once that many stages have
-  closed, `mine` refuses a further one, `status` says so, and the search
-  stops for `budget` when every idea from those stages is tried or dropped.
-  A budget in wall-clock hours (`after.budget_hours`) is unchanged.
+- A search's budget can be a number of iterations
+  (`after.budget_iterations`; A0, same-code controls and iterations made
+  after the end do not count), a number of idea-miner stages
+  (`after.budget_stages`) or wall-clock hours (`after.budget_hours`). The
+  interview offered a number of iterations before, which no script
+  enforced: `stages.py next` called for another phase after such a budget
+  was spent. Now `brief --next` briefs nothing once the iterations are used
+  or the hours have passed, so the orchestrator hands back at the budget
+  rather than at the end of its phase; `mine` refuses once the iterations
+  are used or the stages have closed; `status` shows what is used; and the
+  search stops for `budget`.
 - `config --set command=…` works until the baseline has run. It was refused
   outright, so a command written without `{iteration}` at step 0 left the
   setup subagent to work around it.
@@ -197,3 +201,60 @@ it.
   `cProfile` imports, so the check failed on its first run.
 - The dashboard opens an iteration's diff against its parent when its point
   on the objective chart is clicked.
+- A search that kept nothing ends: `end` refused when the winner was A0, so
+  such a search could not reach steps 5 and 6, and under `after.stop=auto`
+  `stages.py next --run` started the refused `end` again and again. It now
+  ends on A0 with no paired timing, `ended.md` says no change was kept, and
+  the ship stage is complete with nothing to ship. `end --id 0` is still
+  refused when a change was kept. `stages.py next` stops and shows a failed
+  `end` (its log's last lines) rather than starting it again.
+- An iteration made with `--after-end` is never promoted by its runner, as
+  `references/step4-final.md` said; it becomes the winner only by
+  `promote --id`.
+- `setup --done` requires `gpu_command` in every GPU search, as `SKILL.md`
+  said; only repository mode required it, and `end` then refused for want
+  of a GPU lease.
+- `autoopt.py loop --stop` asks the open orchestrator phase to stop: its
+  next `brief --next` briefs nothing and tells it to hand back. A session
+  without SendMessage had no way to stop a running phase.
+- `autoopt.py busy` honors `AUTOOPT_SKIP_QUIET_CHECK=1`, which its own
+  refusal on a machine without `/proc` named.
+- Step 5's safety checks: `ship.py apply --yes` and `branch --yes` refuse
+  until the user's choice is recorded (`after.ship`). `apply --by-hand`
+  records a file the user merged the change into by hand, which `apply`
+  refused for good before, leaving the stage open. `branch --name` needs no
+  answer to the prefix question, so the README's command works. Once a PR is
+  open, `autoopt.py pr` previews the title and body `--edit` would put on it,
+  and `--edit` refuses when the winner changed after the PR was opened. The
+  rehearsal's digest covers the unit-test branch's tip commit, so a commit
+  made after the review is never pushed unreviewed, and the optimization
+  PR's body reads the chosen documents from the live config, so a document
+  the user dropped is not cited.
+- `config --set after.ship=none`, the command `ship.py plan` prints for "not
+  now", was refused: the setter read `none` as null for every `after` key.
+  `none` is now the choice where a key offers it, and still unsets the rest.
+- `ended.md` names the paired timing as seconds per call when the objective
+  is not a time, where it printed a bare number under a memory result.
+- The dashboard's run table and iteration log give the smallest value of a
+  column four significant figures: after a 600-fold speedup the root's
+  0.002741 s printed as 0.003 beside the baseline's 1.671. The summary tiles
+  write the unit in parentheses (`seconds (s)`, not `seconds s`), and an
+  iteration axis spanning 15 or fewer iterations ticks at whole numbers.
+- `status` says the watch is the orchestrator's to start, since the main
+  session starts none; `ship.py plan` rounds the medians it quotes.
+- `docs/walkthrough/capture_dashboard.py` takes `--redact OLD=NEW` for a
+  path to write differently in the pictures.
+- The final report's *Result* keeps a `<<FILL` mark for the spreads and the
+  paired verdict, which `references/step6-finish.md` asks for and `archive`
+  did not leave.
+- The installer's `doctor` checks the `python3` Claude Code runs, passing
+  over the environment `uvx`, `pipx` or `uv run` put first on `PATH`, where
+  it reported the tool's own interpreter and suggested installing the
+  dashboard's modules into it. `list` and `doctor` show only this package's
+  skills, not another author's that share the `auto-optimize-` prefix, and
+  flag a clone from before 0.1.0 named `auto-optimize`, which answers the
+  same requests.
+- `examples/` gains three short searches with their prompts, dashboards and
+  results: `fasta-stats/` (a command-line tool, output byte-identical),
+  `kmer-memory/` (peak memory as the objective, time observed) and
+  `smooth-coverage/` (a 1e-9 tolerance gate).

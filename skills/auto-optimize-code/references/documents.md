@@ -26,8 +26,8 @@ own except to repair one post.
   document writer writes `prose.md` (fields that each start with `=== <field>`), and
   the renderer joins them; the same inputs give the same bytes. A change goes
   to the tables or the prose and is rendered again. Prose writes a
-  `{{token}}` where it needs a number a table gives; a renderer refuses the
-  number typed.
+  `{{token}}` where it needs a number a table gives; the optimization PR's
+  renderer refuses the number typed.
 - **Nothing about how it was written.** No renderer adds a line naming the
   tool, the model or the lab; the document writer adds none either.
 

@@ -60,7 +60,7 @@ never end a turn with work in flight and nothing to wake the session:
     hour), after 3 hours, or once nothing has been in flight for 30
     minutes. Never a `sleep` timer: a wake-up after a quiet spell
     rewrites the whole context, and a timer wakes the session to find
-    nothing to do. Inside /loop, also ScheduleWakeup at 3600 s
+    nothing to do
 
 whenever the subagent reports, and at every wake-up:
     autoopt.py brief $WORK --next   # status --brief (working, STALLED,
@@ -96,7 +96,8 @@ whenever the subagent reports, and at every wake-up:
 ```
 
 The loop hands back after `loop_handback` settled iterations
-(`autoopt.py loop`), and at *When to stop*.
+(`autoopt.py loop`), at *When to stop*, and whenever `brief --next` says to
+(a budget spent, or the main session's `loop --stop`).
 
 ## Questions while the search runs
 
@@ -114,9 +115,7 @@ search until morning. Once the first iteration is in flight:
 3. Write the question, the answer taken and why in `ideas.md` under
    *Decisions taken while the user was away*, and say it in the next message.
 4. When the user answers, apply it and re-run what the default decided
-   wrongly. A changed setting goes through `autoopt.py config --set …
-   --reason "<their words>"`; any other new rule goes under *Rules added during
-   the search* in `spec.md`, dated and in their words, before it is used.
+   wrongly, recording it first (`SKILL.md`, *Rules that hold everywhere*).
 
 Claude Code's `askUserQuestionTimeout` setting (`60s`, `5m`, `10m`, or
 `never`, in the user's `settings.json` or `/config`) lets an unanswered
@@ -198,10 +197,8 @@ that it was measured under contention.
 `autooptimize/ideas.md` holds one line per idea, in the form at its top
 (`- [CATEGORY] where: what. Why: … Gain: … Exact: … (S<n>)`), so `status`
 can count what is left. `brief --next` takes the top of the miner's latest
-stage and, when `--count` briefs more than one, keeps them on different
-functions while it can. Ideas briefed together must be **different from each
-other**, and an idea that is one parameter swept over four values is one
-iteration, not four. Pass `--idea-line` with text only that line holds (a
+stage for the one free slot; do not pass `--count` above it. An idea that is
+one parameter swept over four values is one iteration, not four. Pass `--idea-line` with text only that line holds (a
 number shifts when lines are added above it) to choose another, and strike a
 line whose premise is gone with `autoopt.py drop $WORK --idea-line <text>
 --reason <why>`, or `brief --next` picks it again. The subagent's `finish` strikes the line with its label
@@ -219,6 +216,9 @@ that reading lands in the orchestrator's. It runs:
   the miner's prompt; spawn one subagent with it, unedited. Keep briefing from
   what is left while it works. One miner runs at a time; if its subagent
   died, `mine --force` opens the next stage.
+- **never past the user's iteration budget**, `after.budget_iterations`:
+  once that many iterations are briefed, `brief --next` briefs nothing, `mine`
+  refuses, and the search stops for `budget` when they settle;
 - **never past the user's stage budget**, `after.budget_stages`: once that
   many stages have closed, `mine` refuses, `status` says the budget is spent,
   and the ideas left are briefed until none is; then the search stops for
@@ -341,7 +341,7 @@ Stop and tell the user when one of these is reached. `autoopt.py end
 |---|---|
 | `stalled` | the root has not moved through a phase's worth of settled iterations (`loop_handback`) |
 | `variations` | the remaining ideas are variations of ones that failed |
-| `budget` | the compute spent has passed what the user agreed to: every idea from the `after.budget_stages` idea-miner stages is tried or dropped (`status` says so, and `mine` refuses a further stage), or the wall clock since step 2 began has passed `after.budget_hours` |
+| `budget` | the compute spent has passed what the user agreed to: `after.budget_iterations` iterations have settled, every idea from the `after.budget_stages` idea-miner stages is tried or dropped (`status` says so, and `mine` refuses a further stage), or the wall clock since step 2 began has passed `after.budget_hours`. Once the iteration or hour budget is spent, or the stage budget's last idea is briefed, `brief --next` briefs nothing and says to hand back, so the phase hands back when the iteration in flight settles |
 | `noise` | the frontier's improvements are smaller than the noise band |
 | `floor` | a minimized objective's root is at or under `floor`, the smallest value the user called worth measuring (step 0). `stages.py next` stops for the user even under `after.stop=auto`: end, or a new search on a larger input seeded from this root (`references/changes.md`) |
 

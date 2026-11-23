@@ -14,10 +14,10 @@ the user wants it there), because section 3 deletes most of what is in
 shipped the change:
 
 ```bash
-python3 $AO/autoopt.py archive $WORK        # --id <it> for another iteration; --dest DIR outside $WORK; --force to write over an archive
+python3 $AO/autoopt.py archive $WORK        # --id <it> for another iteration; --dest DIR outside $WORK; --force to write over an archive, and over the report, filled prose included
 ```
 
-It writes `idea.patch`, `code/`, the README and `result.json`, and the report's skeleton (section 2) with *What was optimized*, *Result*, *The path* and *Where things are* filled in and `<<FILL: …>>` marks left. Run it after step 5, so *Where things are* lists what step 5 did; run before, it leaves a mark there.
+It writes `idea.patch`, `code/`, the README and `result.json`, and the report's skeleton (section 2) with *What was optimized*, *The path* and *Where things are* filled in, the two medians in *Result*, and `<<FILL: …>>` marks left. Run it after step 5, so *Where things are* lists what step 5 did; run before, it leaves a mark there.
 
 Quote the iteration's median, never the single run in `best_run`.
 
@@ -29,7 +29,7 @@ Quote the iteration's median, never the single run in `best_run`.
 | Heading | Holds |
 |---|---|
 | *What was optimized* | written by `archive` |
-| *Result* | the baseline's and the winner's median with the spread across seeds on both, and the change in the objective's units; `final.json`'s verdict beside them, labeled "paired", when the search has a timing probe |
+| *Result* | `archive` writes the two medians; add the baseline's and the winner's median with the spread across seeds on both, and the change in the objective's units; `final.json`'s verdict beside them, labeled "paired", when the search has a timing probe |
 | *The path* | written by `archive` from `path --markdown` |
 | *What produced the gains* | the gain by category, and one line per iteration on the path; the category breakdown goes in `$WORK/finish/speedup-breakdown/` |
 | *What was tried and failed* | the closed ideas worth knowing, from `ideas.md` and the ledger's `[closed]` entries |

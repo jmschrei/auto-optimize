@@ -12,11 +12,16 @@ to a codebase which optimize a given performance measure (or set of such measure
 This repository is a Claude Code skill that implements auto-optimization with all
 the quality-of-life features I always wished I had in the past, including:
 
-- an interview at the beginning
-- separation of "runs" from "iterations", where each "iteration" is an idea and multiple "runs" can be done to establish performance distributions
+- an interview at the beginning: the number to improve, what must not change and how strictly (bitwise, a tolerance, a correlation), and a budget in iterations, batches of ideas or hours
+- separation of "runs" from "iterations", where each "iteration" is an idea and multiple "runs" can be done to establish performance distributions; a change is kept only when its median beats its parent's by more than the noise band
+- a setup subagent that writes the benchmark and proves that each gate catches a planted fault before the baseline is measured
 - a unit-test gate run on every iteration, and an optional external validation, once a round, on inputs the search never measures, such as a complete processing step, to ensure no drift
-- observational measures that are also recorded each iteration but not used to decide (e.g., memory usage, first run compile time)
+- observational measures that are also recorded each iteration but not used to decide (e.g., memory usage, first run compile time, timings on tiny or very large inputs)
+- an idea miner that reads the profile and writes ideas by category, one subagent per idea in its own git worktree, and each kept change becoming the root the next ideas build on
+- the winner timed against the baseline in alternating, separate processes at the end
 - a pretty interactive dashboard to monitor progress
+- repository mode: a copy of a git repository is searched, optionally after a new unit-test suite is written for it, and the original is never touched
+- shipping the winner into your files, as a branch, or as GitHub pull requests and a bug report that you review before anything is posted
 - clean logging, formatting, usage of git worktrees, and documentation at each step, with instructions for future agents to build on top of what I have built here
 - clean division of work done by subagents and work done by deterministic scripts, to give consistent and robust results
 
@@ -49,7 +54,8 @@ Developed at the [Programmable Genomics Laboratory](https://programmable-genomic
 ## Requirements
 
 - Claude Code. The skill spawns subagents and asks you questions, so it needs
-  Claude Code's Agent and AskUserQuestion tools.
+  Claude Code's Agent and AskUserQuestion tools; the orchestrator, itself a
+  subagent, spawns the iteration subagents.
 - Linux, Python 3.9 or later as `python3`, git and tar. The skill's scripts use
   only the standard library.
 - For the dashboard in a notebook: JupyterLab, IPython and plotly; psutil for
@@ -93,7 +99,7 @@ copy it made itself; `--force` replaces anything else at that path.
 |---|---|
 | `auto-optimize install [--project [DIR] \| -d DIR] [--symlink] [-f]` | copy (or link) the skill into a skills folder |
 | `auto-optimize uninstall [--project [DIR] \| -d DIR] [-f]` | remove a copy the installer made |
-| `auto-optimize list` | every copy Claude Code would load from here: user, project and plugin |
+| `auto-optimize list` | every copy Claude Code would load from here: user, project and plugin, and a clone of this repository from before 0.1.0, which competes with the skill |
 | `auto-optimize path` | the installed skill's folder |
 | `auto-optimize doctor` | check Linux, `python3`, git, tar, the dashboard's modules and the installed copies |
 
@@ -169,8 +175,9 @@ search of a few dozen iterations
 runs that many agent sessions. `autoopt.py tokens <work>` adds up what a
 search's agents spent, from Claude Code's transcripts; the walkthrough's
 numbers are at its end. Its 15 iterations took about two hours, so for a
-first try give the interview a smaller budget, such as 5 iterations, and a
-smaller model for the iteration subagents.
+first try give the interview a smaller budget, such as 4 or 5 iterations, and
+a smaller model for the iteration subagents, as the [shorter
+examples](#more-examples) do.
 
 ### Before you leave it running
 
@@ -341,6 +348,22 @@ waiting on questions nobody was there to answer. By `autoopt.py tokens`,
 25 agent sessions spent 9.5 million weighted tokens (cache reads weigh 0.05,
 output 5); each iteration subagent averaged 131 thousand.
 
+## More examples
+
+Three shorter searches, each with a budget of 4 iterations and sonnet
+subagents, show other parts of the skill. Each folder holds the slow code,
+the prompt, the dashboard when the search ended, and what it found.
+
+| Example | What it shows | Result | Time |
+|---|---|---|---|
+| [`examples/fasta-stats/`](examples/fasta-stats/) | a whole command timed, its output file gated byte for byte | 1.271 s to 0.2048 s, three changes kept | 20 min |
+| [`examples/kmer-memory/`](examples/kmer-memory/) | peak memory as the objective, the time per call recorded beside it | 332.9 MB to 5.136 MB in one change, the size of the returned dict | 18 min |
+| [`examples/smooth-coverage/`](examples/smooth-coverage/) | a tolerance of 1e-9 as the gate, which a prefix-sum rewrite passes and a bitwise gate would refuse | 1.671 s to 0.002741 s, and the costs the observers caught | 24 min |
+
+The time runs from the start of setup to the end of the search, and does not
+include the interview or the minutes the main session waits on you. Each
+search spent about 4 million weighted tokens.
+
 ## Watching it
 
 The skill starts the dashboard with the first iteration and tells you where
@@ -412,13 +435,17 @@ route shows you a preview first and writes nothing until you agree.
 **A function or a script** (a search made from copied files). The skill
 writes the winner's version of each file back where it was copied from, and
 adds any file the change created beside it. A file you edited since the copy
-is refused, so your edit is never overwritten; the benchmark the search wrote
-for itself is left out.
+is refused, so your edit is never overwritten (once you merge the change into
+it by hand, `apply --by-hand` records it); the benchmark the search wrote for
+itself is left out.
 
 ```bash
 python3 $AO/ship.py apply <work>          # preview
 python3 $AO/ship.py apply <work> --yes    # write the files
 ```
+
+These are the commands the skill runs at step 5, after it records your
+choice (`after.ship`); `--yes` refuses until that choice is recorded.
 
 **A git repository, as a branch.** One commit per kept change, each with the
 commit message the change's subagent wrote, made as a new branch in your
@@ -500,11 +527,12 @@ later with `autoopt.py config <work> --set KEY=VALUE --reason "…"`:
 | how outputs are compared, timed and profiled | `checks.compare`, `checks.time`, `checks.first_call`, `checks.profile` |
 | your package's tests as a gate on every iteration | `tests` |
 | keep only changes worth at least 2%, or twice the noise | `keep.min_gain_pct=2`, `keep.band_k=2` |
+| how many iterations, batches of ideas or hours the search may spend | `after.budget_iterations`, `after.budget_stages`, `after.budget_hours` |
 | a keep rule in your own words | `promote=orchestrator`, and the rule in `spec.md` |
 | your cluster's GPU allocator | `gpu_command` (`srun --gres=gpu:1`) |
 | when another job counts as busy | `busy_percent` |
 | the model the iteration subagents use | `subagent_model` |
-| when to stop, the budget, how the winner ships | `after.*` |
+| when to stop, how the winner ships, the disk | `after.*` |
 
 `skills/auto-optimize-code/references/extending.md` lists every setting,
 environment variable and code hook, and where to edit the code when no
@@ -530,7 +558,7 @@ src/auto_optimize/       the installer (standard library only)
 tests/
   code/                  the skill's script suites; dashboard/ holds the browser tests
   package/               the installer and the shipped files (pytest)
-examples/one-hot/        the slow function the walkthrough optimizes
+examples/                one-hot/, the walkthrough's slow function, and three shorter examples
 docs/walkthrough/        the walkthrough's screenshots
 docs/banner/             the banner above, and make_banner.py, which draws it
 ```
