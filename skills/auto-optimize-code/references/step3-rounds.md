@@ -108,7 +108,7 @@ search until morning. Once the first iteration is in flight:
    promoting on the keep rule.
 2. Take the answer that does the least damage if it is wrong: the reversible,
    narrower, cheaper one, often not the one you would mark recommended. When
-   the question is whether to promote, delete, publish or change a gate, the
+   the question is whether to promote, delete, ship or change a gate, the
    answer is no until the user replies; hold that one decision and keep
    everything else moving.
 3. Write the question, the answer taken and why in `ideas.md` under
@@ -153,13 +153,15 @@ never picks one, since two launches seconds apart take the same free card.
 
 `spec.md`'s *Machine and environment* line says how many cores and how much
 memory the search may use: keep the runs at once, and each run's threads,
-inside it. Before every iteration, read `status`'s `machine:` line, the load against the
-cores with this search's runs included: an iteration that starts quiet can
+inside it. Before every iteration, read `status`'s `machine:` line (`256 cores,
+86% idle, ~219 free over 0.1 s`), a short sample of the CPUs' idle share with
+this search's runs included, never the load average, which counts threads a
+container's quota holds back: an iteration that starts quiet can
 finish contended. `gpus_per_agent` processes at about 100% are the iteration
 working; anything above that is somebody else (`autoopt.py busy $WORK` names
 them).
 
-**The exact test is a same-code control.** Load is a hint; the objective is
+**The exact test is a same-code control.** The idle share is a hint; the objective is
 the measurement. Brief the root unchanged and spawn a subagent with it, like
 any iteration; you measure nothing yourself:
 
@@ -174,9 +176,9 @@ the measurement the frontier rests on. The control stays in the table, never
 holds the frontier however it reads, and cannot be promoted.
 
 **The machine is busy** when, on a CPU benchmark, any process outside this
-search runs above about 100% CPU, or the control's median falls outside the
+search runs above `busy_percent` (110% of one core by default), or the control's median falls outside the
 noise band. **When it is busy before the first iteration**, put the choice to the
-user with `AskUserQuestion`, giving the load, what is running and, once there
+user with `AskUserQuestion`, giving the idle share, what is running and, once there
 is one, the control's median against the band. Do not narrow the runs
 quietly.
 

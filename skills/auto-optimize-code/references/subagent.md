@@ -214,7 +214,7 @@ past one block, where the startup is amortised.
 
 **When the runner's `keep:` line reads `promoted` or `passes`, in a repository
 search, add two more sections; `finish` refuses the README without them.** They
-are the text published with your change, so nobody has to read your diff again
+are the text shipped with your change, so nobody has to read your diff again
 to describe it. An iteration made with `--after-end` writes them before
 `promote`. `finish` and `promote` lint both (`references/promotion.md`, *The
 preflight*): name nothing of the search (no winner, baseline, round, label such

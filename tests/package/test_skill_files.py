@@ -1,9 +1,10 @@
 """What ships: each skill's frontmatter, that every reference file is routed
-to and every path the text names exists, no test code inside a skill, and
-one version number everywhere."""
+to and every path and section the text names exists, no test code inside a
+skill, and one version number everywhere."""
 
 import os
 import re
+import ast
 import json
 import glob
 
@@ -97,6 +98,81 @@ def test_every_named_reference_and_script_exists(folder):
 				text):
 			if not os.path.isfile(os.path.join(folder, path)):
 				missing.append('{}: {}'.format(name, path))
+
+	assert missing == []
+
+
+# A section citation: `references/x.md`, *Heading*, with the backticks or
+# without, and more headings of the same file after it (`; *B*`, `, *B*`,
+# `and *B*`). It may wrap across lines.
+CITATION = re.compile(r'`?references/([\w.-]+\.md)`?,\s+\*([^*]+)\*'
+	r'((?:\s*(?:;|,|\band\b)\s*\*[^*]+\*)*)')
+
+
+def plain_text(text):
+	"""Backticks dropped and whitespace collapsed, as a heading and a
+	citation of it are compared."""
+
+	return ' '.join(text.replace('`', '').split())
+
+
+def headings(path):
+	"""The headings of a Markdown file, outside fenced code, as plain text."""
+
+	found, fenced = set(), False
+
+	for line in read(path).splitlines():
+		if line.lstrip().startswith(('```', '~~~')):
+			fenced = not fenced
+			continue
+
+		match = None if fenced else re.match(r'^#{1,6}\s+(.*?)\s*#*\s*$', line)
+
+		if match:
+			found.add(plain_text(match.group(1)))
+
+	return found
+
+
+def citations(text):
+	"""`[(file, heading)]` of every section citation in `text`."""
+
+	return [(match.group(1), plain_text(section)) for match in
+		CITATION.finditer(text) for section in [match.group(2)] +
+		re.findall(r'\*([^*]+)\*', match.group(3) or '')]
+
+
+def script_strings(folder):
+	"""`[(where, text)]`: every string in the skill's Python scripts, each
+	implicit concatenation of literals as one string."""
+
+	out = []
+
+	for path in sorted(glob.glob(os.path.join(folder, 'scripts', '**', '*.py'),
+			recursive=True)):
+		for node in ast.walk(ast.parse(read(path))):
+			if isinstance(node, ast.Constant) and isinstance(node.value, str):
+				out.append(('{}:{}'.format(os.path.relpath(path, folder),
+					node.lineno), node.value))
+
+	return out
+
+
+@pytest.mark.parametrize('folder', FOLDERS, ids=IDS)
+def test_every_cited_section_is_a_heading_of_that_file(folder):
+	missing = []
+
+	for name, text in list(skill_texts(folder).items()) + script_strings(
+			folder):
+		for name_md, heading in citations(text):
+			target = os.path.join(folder, 'references', name_md)
+
+			if not os.path.isfile(target):
+				missing.append('{}: references/{} does not exist'.format(name,
+					name_md))
+			elif heading not in headings(target):
+				missing.append('{}: references/{} has no heading "{}"'.format(
+					name, name_md, heading))
 
 	assert missing == []
 

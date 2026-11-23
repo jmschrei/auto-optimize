@@ -41,6 +41,7 @@ python3 $AO/autoopt.py status $WORK --brief # round, root, counts, what is in fl
 | Which ideas are left, and which were tried | `$WORK/autooptimize/ideas.md` |
 | The objective, the gates, the keep rule, what is off limits | `$WORK/autooptimize/spec.md`; the numbers in `config.json` |
 | What a subagent was told | `$WORK/autooptimize/briefs/<id>.md` (bare number: `briefs/7.md`) |
+| Was it shipped, and where? | `python3 $AO/ship.py status $WORK`; the records are `$WORK/ship/applied.json` (files written), `ship/branch.json` (a local branch) and, once posted, `ship/issue-bugs/filed.json`, `ship/pr-tests/pr.json` and `ship/pr-optimization/pr.json` (each URL) |
 | The report to the user | `$WORK/finish/final-report.md`, written at step 6 |
 | What it cost in tokens | `autoopt.py tokens $WORK`, from Claude Code's transcripts |
 

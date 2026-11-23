@@ -53,7 +53,8 @@ python3 $AO/autoopt.py validate <work> [--round N] [--id A7] [--approve] [--dry-
 python3 $AO/autoopt.py watch <work> [--cap 10800] [--every 60]
 python3 $AO/autoopt.py bg <work> <log> '<command>'       # a long command of the main session, detached, with its log
 python3 $AO/autoopt.py wait LOG [--pid N] [--max 200]
-python3 $AO/autoopt.py tokens <work> [--since T] [--subagents-only] [--session ID …] [--exclude-session ID …] [--projects DIR] [--json]
+python3 $AO/autoopt.py tokens <work> [--since T] [--subagents-only] [--session ID …] [--exclude-session ID …] [--projects DIR] [--all-projects] [--json]
+# reads the transcripts of the search's own project folders (config.json `origin`, the work directory and its parents), written since shortly before A0; --all-projects reads every one
 python3 $AO/autoopt.py final <work> [--id best] [--json] [--background]
 python3 $AO/autoopt.py end <work> [--reason WORD|TEXT] [--id N] [--background | --reopen]
 python3 $AO/autoopt.py path <work> [--id N|best] [--markdown|--json]
@@ -79,8 +80,8 @@ python3 $AO/stages.py next $WORK [--run]  # the one command or question that is 
 
 Each stage is `not started`, `running` or `complete`, read from `state.json`,
 `ended.json`, `after.ship`, `ship/` and `finish/`. `next` prints the move and its kind (`run`,
-`agent`, `wait`, `stop`: `references/main-session.md`); `--run` starts a `run`
-move.
+`agent`, `wait`, `stop`: `references/main-session.md`), or `every stage is
+complete`; `--run` starts a `run` move.
 
 ## `ship.py` — step 5
 
@@ -88,15 +89,18 @@ move.
 python3 $AO/ship.py plan <work> [--json]                 # what this search can ship, and the question to ask
 python3 $AO/ship.py apply <work> [--id best] [--to DIR] [--yes]
 python3 $AO/ship.py branch <work> [--id best] [--name N] [--repo PATH] [--yes]
-python3 $AO/ship.py brief <work>                         # the writer agent's prompt
+python3 $AO/ship.py brief <work>                         # the document writer's prompt
 python3 $AO/ship.py status <work>
 python3 $AO/ship.py render <work> [--only bugs|tests|optimization]
-python3 $AO/ship.py rehearse <work>
-python3 $AO/ship.py post <work> all --approved --digest D [--other-owner]
+python3 $AO/ship.py rehearse <work> [--branch DOC=NAME …]
+python3 $AO/ship.py post <work> all --approved --digest D [--branch DOC=NAME …] [--other-owner]
 ```
 
 `apply` and `branch` preview until `--yes`. `post` refuses any digest but the
-last rehearsal's, and inputs changed since (`references/step5-ship.md`).
+last rehearsal's, inputs changed since, and `--branch` flags other than the
+rehearsal's (`references/step5-ship.md`). `--branch optimization=NAME` or
+`tests=NAME` names the branch a PR pushes, in place of the one its title or
+date gives.
 
 The documents' own scripts (`references/pr-optimization.md`,
 `references/pr-tests.md`, `references/issue-bugs.md`):
@@ -127,7 +131,7 @@ python3 $AO/run_iteration.py $WORK/autooptimize/iterations/3
 | `--dry-run` | print the runs that would happen, and stop |
 | `--background` | start the same call detached, writing `<iteration>/probe/runner.log` (ending `exit <code>`), and return: watch it with `autoopt.py wait` |
 
-It refuses while `spec.md` has a TODO line (`--dry-run` excepted), and never on a busy machine: before A0's runs on a CPU benchmark it names each process outside the search above about 100% CPU over two seconds in its report (`busy at start:`) and `result.json` (`busy_at_start`). Exit code 2
+It refuses while `spec.md` has a TODO line (`--dry-run` excepted), and never on a busy machine: before A0's runs on a CPU benchmark it names each process outside the search above `busy_percent` (110% of one core by default) over two seconds in its report (`busy at start:`) and `result.json` (`busy_at_start`). Exit code 2
 means `status == "error"`; 0 means the iteration produced a verdict, including
 `gate-failed`. Each run is in its own process group, so Ctrl-C or a timeout
 kills the whole benchmark, not only its shell. A seed already measured on the

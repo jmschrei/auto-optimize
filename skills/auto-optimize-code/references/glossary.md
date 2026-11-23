@@ -11,28 +11,30 @@ two words that look interchangeable are not.
 | **iteration** | one idea, measured by several runs and reduced to their median. One subagent, one worktree, one branch |
 | **round** | the iterations forked from one root, closed by `promote`. One summary each. Numbered from 1; A0 carries round 0 |
 | **width** | the concurrent runs one iteration can start, `gpus_per_agent` (without a GPU, the runs it starts at once): the concurrency step 2 measures. One iteration is in flight at a time |
-| **settled** | has a `result.json`, whatever its status, `partial` included. The opposite is **in flight** |
+| **settled** | has a `result.json`, whatever its status, `partial` included |
+| **in flight** | running, finishing, or briefed and not yet spawned: what `end` refuses while. A finishing iteration is settled and still in flight |
 | `running`, `finishing`, `STALLED` | `status`'s list of subagents still working, from which `brief --next` counts the free slot (one): `running` has no `result.json`; `finishing` is measured, has no `README.md`, and was written to within the hour; either is also `STALLED` after 15 minutes without a write, and still holds its slot until it is handed over |
 
 ## Who does what
 
 | Term | Meaning |
 |---|---|
-| **orchestrator** | the session running the search, and from the first iteration on the **orchestrator subagent** it starts in **phases** (`autoopt.py loop`; each hands back after `loop_handback` settled iterations, at *When to stop*, or with a question). The main session spawns the setup subagent and the first idea miner; the orchestrator subagent spawns iteration subagents and later miners, briefs from `ideas.md`, reads `status --brief` and short reports, relays questions to the user, shows the user round summaries. Measures, promotes (except with `promote: orchestrator`), and strikes nothing, checks no ledger, writes no summary prose, and reads no code, logs, READMEs or outputs |
+| **the user** | the person who asked for the search. Decides gates, tolerances, the keep rule, external validation and anything off limits; at step 5, how to ship, which documents, the branch names, and whether the reviewed batch is posted |
+| **main session** | the user's Claude Code session. Runs steps 0, 1, 4, 5 and 6, spawns the setup subagent and the first idea miner, opens each phase (`autoopt.py loop`), relays questions and shows round summaries; reads only `status --brief` and the reports it is handed (`references/main-session.md`) |
+| **orchestrator**, **orchestrator subagent** | the subagent `autoopt.py loop` starts for each phase, from step 3 on. It spawns iteration subagents and later idea miners, briefs from `ideas.md`, reads `status --brief` and short reports, and hands questions and round summaries back to the main session. Measures, promotes (except with `promote: orchestrator`), and strikes nothing, checks no ledger, writes no summary prose, and reads no code, logs, READMEs or outputs |
 | **phase** | one run of the orchestrator subagent, opened by `autoopt.py loop` and numbered from 1. It ends after `loop_handback` settled iterations, at *When to stop*, or with a question for the user. The noise band's reference spread is re-measured from the root when a phase opens and held for it |
 | **setup subagent** | the subagent that does step 2, by `references/step2-baseline.md`: the benchmark, the gate proof, the checks, the width, A0, the first ledger entries and A0's README. Started by `autoopt.py setup`; asks the user through `setup --ask`; closed by `setup --done` |
 | **idea miner** | a subagent that reviews the code, the ledger and the READMEs and appends ideas to `ideas.md`, by `references/idea-miner.md`. Started by `autoopt.py mine` once setup has closed (A0's profile exists) and whenever fewer than two untried ideas are left; one at a time |
-| **stage**, `S<n>` | one run of the idea miner: one batch of ideas. `new` stamps the last finished stage on each iteration (`mining_stage`); the dashboard's stage boundaries fall where it changes. The unit of a search's budget when the user gives one in stages (`after.budget_stages`). Not `result.json`'s `stage`, nor the six stages `stages.py` reports (interview, setup, search, final, ship, finish) |
-| **check** | the task's own checks, written once at step 2 into `checks/`: the cold first call and the compare against A0's cached outputs, run by the runner among its stages (`references/subagent.md`, *Checks beyond the runner*) or by hand with `autoopt.py check`. Its `check:` line is in the report block |
+| **stage**, `S<n>` | one run of the idea miner: one batch of ideas. `new` stamps the last finished stage on each iteration (`mining_stage`); the dashboard's stage boundaries fall where it changes. The unit of a search's budget when the user gives one in stages (`after.budget_stages`). Not `result.json`'s `stage`, nor the six stages `stages.py` reports (below), nor the runner's stages 0 to 4 (`references/subagent.md`, *Checks beyond the runner*) |
+| `interview`, `setup`, `search`, `final`, `ship`, `finish` | the six stages `stages.py` reports and the dashboard's strip shows, each `not started`, `running` or `complete`: steps 0, 2, 3, 4, 5 and 6 (step 1 has none). `final` is `end`'s step, not the command `autoopt.py final`; `finish` is step 6, not `autoopt.py finish` nor the `finishing` status |
+| **check** | the task's own checks, written once at step 2 into `checks/`: the cold first call and the compare against A0's cached outputs, run by the runner before and between its runs (`references/subagent.md`, *Checks beyond the runner*) or by hand with `autoopt.py check`. Its `check:` line is in the report block |
 | **subagent model** | `config.json`'s `subagent_model` (`opus`, `sonnet`, `haiku` or `fable`), the model every iteration subagent is spawned with; the miner and the orchestrator keep the session's |
 | **subagent** | runs one iteration by `references/subagent.md`, writes its README and stops |
 | **brief** | everything a subagent knows about its iteration, written by `autoopt.py brief` into `briefs/<id>.md`; the Agent call carries only a short prompt that has the subagent read it (`references/writing-briefs.md`) |
+| **document writer** | the one subagent step 5 spawns on the GitHub route, from the prompt `ship.py brief` prints: it writes each chosen document's tables, prose and commit messages, renders each, and ends when `ship.py rehearse` exits 0 (`references/step5-ship.md`). Not the dashboard's publisher |
 | **lease** | the GPUs one command holds while it runs, named by `CUDA_VISIBLE_DEVICES`: taken by the scripts themselves through `gpu_command`, the machine's allocator, or given as indices where there is none (`references/step2-baseline.md`, *GPU leases*) |
 | **`gpu_command`** | the machine's GPU allocator, as the words that go before a command and run it with `CUDA_VISIBLE_DEVICES` set (`srun --gres=gpu:1`); see **lease** |
 | **`workers`** | the worker, rank or thread count the task names; A0's runs must show that many threads running at once (`references/step2-baseline.md`, *The price of the base*) |
-| **floor** | a minimized objective's smallest value worth measuring (`config.json` `floor`, the user's at step 0): at it the search stops (`references/step3-rounds.md`, *When to stop*) |
-| **price of the base** | what each later step that runs the base costs, from A0's seconds a run (`autoopt.py price`; `references/step2-baseline.md`, *The price of the base*) |
-| **the user** | the person who asked for the search. Decides gates, tolerances, the keep rule, external validation and anything off limits |
 
 ## Places
 
@@ -44,19 +46,22 @@ two words that look interchangeable are not.
 | `$DIR` | one iteration's directory, `autooptimize/iterations/<id>/`, which `autoopt.py new` prints |
 | **worktree**, `$SRC` | the iteration's code checkout: `$DIR` in plain mode, `$DIR/src` in repository mode. The brief gives both paths |
 | **branch** | `autoopt/<id>` in `repo.git`: the parent's branch plus this iteration's commit |
-| **plain mode** / **repository mode** | the benchmark and code copied in with `init --copy`, or an existing git repository copied with `init --repo`, which is never written to (`references/repo-mode.md`) |
+| **plain mode** / **repository mode** | the benchmark and code copied in with `init --copy`, or an existing git repository copied with `init --repo` (`references/repo-mode.md`) |
+| **the original** | the user's code the search copied: the files `config.json` `copied` names (plain mode), or the repository and branch `repo` records (repository mode; with a step-1 suite, `tests/branch.json`). Never written to before step 5, and then only on the user's yes |
+| **step-1 suite** | the new unit tests step 1 writes on its own branch, one commit above the original's (`references/step1-unit-tests.md`). A0 includes it; the unit-test PR ships it; the optimization PR and a local branch leave it out. Not the unit-test gate, which runs whatever tests the search names |
 | **benchmark** | the script one run executes; its output is `metrics.json` |
 | **harness** | the benchmark in repository mode: `autooptimize/harness/`, outside every worktree, fixed for the whole search |
 | **reference** | the baseline's saved outputs in `autooptimize/reference/`, which an identity gate compares every run to. Written only by A0 |
 | **notes** | `$DIR/notes.md`, the subagent's prose; `autoopt.py finish` assembles it with the numbers into `README.md` |
-| **publisher**, **writer** | the background process that scans the search and publishes the dashboard's data (`references/dashboard.md`) |
+| **publisher** | the background process that scans the search and publishes the dashboard's data (`references/dashboard.md`). Its files call it the writer (`monitor_writer.py`, `writer.log`); it is never the document writer |
 | **probe** | a subagent's own script for a check the runner does not make (a fallback path, a sweep of variants), kept under `$DIR/probe/` |
 
 ## Names
 
 | Spelling | Names |
 |---|---|
-| `auto-optimize` | this skill; the unit-test branch `auto-optimize/<date>-unit-tests` |
+| `auto-optimize-code` | this skill |
+| `auto-optimize` | the repository, the plugin and the installer; the default search root `~/auto-optimize/`; the branch prefix `auto-optimize/` (step 1's branch, and step 5's when `after.branch_prefix` is `yes`); the author of the iteration commits |
 | `autooptimize/` | the search's record directory |
 | `autoopt` | the scripts (`autoopt.py`), iteration branches (`autoopt/<id>`), the environment variable `AUTOOPT_REF`, the dashboard's files (`autoopt_monitor.py`, `~/autoopt-monitor/`) |
 
@@ -75,6 +80,9 @@ two words that look interchangeable are not.
 | **control** | the unchanged parent, re-measured as its own iteration (briefed to a subagent with `brief --control`) or as a variant, to show what a measurement reads for no change. Never on the frontier and never promoted |
 | **cold** | the first call in a fresh process with an empty compiler cache, timed by the runner with `scripts/cold.py` before each iteration's runs (`checks.first_call`) |
 | **prediction** | the change an iteration is expected to make to its parent's median, in the objective's units: `--predict` |
+| **floor** | a minimized objective's smallest value worth measuring (`config.json` `floor`, the user's at step 0): at it the search stops (`references/step3-rounds.md`, *When to stop*) |
+| **price of the base** | what each later step that runs the base costs, from A0's seconds a run (`autoopt.py price`; `references/step2-baseline.md`, *The price of the base*) |
+| **transplant** | a change moved from one search into another; priced again there, never assumed |
 
 ## Measuring an iteration
 
@@ -90,11 +98,13 @@ two words that look interchangeable are not.
 |---|---|
 | **label** | the letter `A` and an iteration's number, `A107`, used wherever an id is written; a bare `107` names the same iteration. Directories and branches carry the bare number |
 | **baseline** | A0: the unmodified code, measured like any iteration by the setup subagent at step 2 |
+| **the base** | the original's code as the search copied it, which the winner is compared against and merged onto: a branch of a git repository (`init --repo`) or stand-alone code (`init --copy`). Not the baseline, which is A0, the iteration that measures the same code; with a step-1 suite, A0 is the base plus the suite. In `table`'s `vs_base` and `vs_base_pct`, and in gate names such as `n_mismatch_vs_base`, *base* means A0 |
 | **parent** | the iteration a new one forks from; the current root unless a brief names another |
 | **root** | the iteration new ones fork from: the last promoted iteration, or A0 before any |
 | **promote** | make an `ok` iteration the root (`autoopt.py promote`), closing the round |
+| **preflight** | `preflight.py`: the checks of a change's added lines that need no measurement, made at promotion (`references/promotion.md`, *The preflight*) |
 | **keep rule** | what earns a promotion, written in `spec.md` before the first iteration: by default, a median beyond the noise band of the parent's, plus any **tie rule**, what the user said decides a tie (a compile-time cut, say). The runner applies the default rule and records its verdict as `keep`; it promotes on it with `promote: auto` |
-| **frontier** | the best `ok` median so far, and the iteration holding it. Never a single run. The keep rule judges a child against its parent, the root, so briefs, `status` and reports name the root as the reference and show a better median outside the root's path as "best median, not in the root" (kept out by the noise band, or passed but not promoted) |
+| **frontier** | the best `ok` median so far, and the iteration holding it. Never a single run. The keep rule judges a child against its parent (the root unless a brief named another), so briefs, `status` and reports name the root as the reference and show a better median outside the root's path as "best median, not in the root" (kept out by the noise band, or passed but not promoted) |
 | **frontier path** | the iterations that each beat everything before them, in id order: a record of progress, not a lineage. "On the frontier" in `status` and the dashboard means on this path |
 | **path** to N | every iteration from A0 to N following parents, N included: `autoopt.py path --id N` |
 | `best_run` | the single best run inside one iteration: one sample, never a score |
@@ -102,27 +112,23 @@ two words that look interchangeable are not.
 | **topic** | the block of ideas a subagent owns when the user divided work by topic |
 | **toolchain-specific** | a change whose gain depends on a compiler's, version's, flag's or pass's decisions. The miner proposes none; a subagent that answers `yes` in `notes.md`'s `## Toolchain` closes it, and `promote` refuses it (`references/subagent.md`, *Portability*) |
 
-## Combining changes
-
-| Term | Meaning |
-|---|---|
-| **transplant** | a change moved from one search into another; priced again there, never assumed |
-
 ## After the search
 
 | Term | Meaning |
 |---|---|
-| **the base** | the original code the winner is compared against and merged onto: a branch of a git repository (`init --repo`) or stand-alone code (`init --copy`). Not the baseline, which is A0, the iteration that measures the same code |
-| **winner** | the chosen path: the best median among the root and the iterations descending from it that passed the keep rule (their code holds every kept change; a better median outside the root's line does not). Each iteration on it is a **winning iteration**. `best` is the literal value of `--id`, the default of `final`, `end`, `path` and `archive` |
-| **ended** | the state after `autoopt.py end`: `ended.json` records it (`references/step4-final.md`); `end --reopen` undoes it until step 5 applies, branches or posts the winner (`reopen-lock.json`) |
-| **ship**, **shipping** | step 5: the winner taken back where it came from, on the user's choice (`after.ship`): applied to the original files (`apply`), a branch in the original repository (`branch`), the GitHub documents they check (`github`), or not now (`none`) (`references/step5-ship.md`) |
+| **winner** | the iteration `--id best` names: the best median among the root and the iterations descending from it that passed the keep rule (its code holds every kept change; a better median outside the root's line does not); after `end`, `ended.json`'s. `best` is the literal value of `--id`, the default of `final`, `end`, `path`, `show`, `archive`, `autoopt.py pr`, `opt_pr_tables.py`, `preflight.py`, `ship.py apply` and `ship.py branch` |
+| **winning iteration** | an iteration on the path to the winner, A0 excluded, whose code differs from its parent's (`ended.json` `winning_iterations`) |
+| **kept change** | one winning iteration's change against its parent. `ship.py branch` and the optimization PR make one commit of each. Not an iteration `reset --keep` keeps |
+| **ended** | the state after `autoopt.py end`: `ended.json` records it (`references/step4-final.md`); `end --reopen` undoes it until step 5 applies the change, makes a branch or posts any document (a **hold**) |
+| **`--after-end`** | the flag of `new` and `brief` for an iteration made after `end`, the only kind made then; promoted, it becomes the winner (`references/step4-final.md`, *An iteration made after the end*) |
+| **ship**, **shipping** | step 5: the winner taken back to the original, on the user's choice (`after.ship`): applied to the original files (`apply`), a branch in the original repository (`branch`), the GitHub documents they check (`github`), or not now (`none`) (`references/step5-ship.md`). Shipping applies, makes a branch or posts; it never publishes, which is the dashboard publisher's word |
+| `after` | `config.json`'s answers about what follows the search: ten asked at step 0 and five at step 5 (`ship`, `ship_documents`, `branch_prefix`, `pr_remote`, `pr_head_owner`). `ask` means not yet answered (`references/layout.md`, *config.json*) |
 | **document** | one of what step 5 opens on GitHub: the optimization PR, the unit-test PR, the bug report; each in its folder under `$WORK/ship/`, rendered from tables and prose (`references/documents.md`) |
+| **target branch** | the original's branch a PR opens on and a local branch starts from. A document names it (`main`) where the search would say "the base" |
 | **stand-in** | `#<bug issue>` or `#<tests PR>` in a document drafted before that number exists; filled when the document it names is posted |
 | **rehearsal** | `ship.py rehearse`: every chosen document rendered and previewed together, and a digest of their inputs; `ship.py post` posts only the batch with that digest |
-| **winning iteration** | an iteration on the winner that changes the code |
-| **preflight** | `preflight.py`: the checks of a change's added lines that need no measurement, at promotion (`references/promotion.md`, *The preflight*) |
-| **`--after-end`** | the flag of `new` and `brief` for an iteration made after `end`, the only kind made then; promoted, it becomes the winner (`references/step4-final.md`, *An iteration made after the end*) |
-| **move** | one line of `stages.py next`, with its kind: `run` (a script; `--run` starts it), `wait` (`end` is finishing), `agent` (the session does it), `stop` (the user answers) |
+| **hold** | one entry of `autooptimize/reopen-lock.json`, `{"by", "reason", "at"}`, written by `ship.py apply --yes`, `ship.py branch --yes` and each posted document; while one exists, `end --reopen` refuses |
+| **move** | one line of `stages.py next`, with its kind: `run` (a script; `--run` starts it), `wait` (`end` is finishing), `agent` (the session does it), `stop` (the user answers). Once every stage is complete, `next` prints `every stage is complete` and nothing else |
 | **prune** | delete regenerable artifacts, keeping every record (`autoopt.py prune`) |
 | **reset** | delete every iteration but the kept ones, records included (`autoopt.py reset`) |
-| `<<FILL: …>>` | the placeholder a generated skeleton leaves where prose goes (`notes.md`, the final report). The command that consumes the file refuses while one is left |
+| `<<FILL: …>>` | the placeholder a generated skeleton leaves where prose goes (`notes.md`, the final report, each document's `prose.md`). The command that consumes the file refuses while one is left |

@@ -411,7 +411,8 @@ writes checks only for paths they cannot reach:
 
 The public functions are the second group because the benchmark calls one
 entry point: a change to a shared helper can keep its output identical and
-break every other caller (`references/subagent.md`, *Off-benchmark callers*).
+break every other caller (`references/subagent.md`, *Off-benchmark callers of the code you are
+changing*).
 
 Register them, absolute paths in double quotes, and `checks.threads`, the
 second thread count `final` pairs at, when `spec.md` names one. A check that
@@ -525,8 +526,12 @@ halve each one's `gpus_per_agent`.
 Size every thread and worker count inside what `spec.md`'s *Machine and
 environment* line allows. On a CPU benchmark, before A0 runs: `python3 $AO/autoopt.py busy $WORK`
 samples every process for two seconds and names each one outside this search
-above about 100% CPU, with its user, its share and its command (exit 1 when
-there is one). A busy machine is the user's decision (*Decisions that are the
+above about 110% of one core (`busy_percent` in `config.json`, or
+`AUTOOPT_BUSY_PERCENT`), with its user, its share and its command (exit 1
+when there is one). It reads `/proc`: on a machine without it, the check stops
+with `needs /proc (Linux)`, and `AUTOOPT_SKIP_QUIET_CHECK=1` skips it.
+The runner reports each run's CPU idle share (`idle 82%` in its report,
+`runs[].idle` in `result.json`), and `width` prints it per concurrency. A busy machine is the user's decision (*Decisions that are the
 user's*): ask with `setup --ask`, giving those processes and these options,
 and on their answer run A0 as usual. The runner names what was busy at A0's
 start in its report (`busy at start:`) and `result.json`, and never

@@ -65,8 +65,9 @@ subagent prices it at step 2 and brings back any that is large
 | 6, after the search | End the search on the stop criteria, or ask you? Reclaim the disk at the end? | `stop`: `ask` (Recommended) or `auto`; `disk`: `ask` (Recommended), `keep` or `prune`; `pair_cap_hours`: 4 (Recommended), the most the paired timing at `end` may take | `ask`, `ask`, 4 | `config.json` `after` (`init --after JSON`, `config --set after.X=V`) |
 | 6 (repository mode) | The oldest toolchain the repository supports? May the new unit tests edit the repository's test driver? The trailer line every commit message ends with? | `oldest_toolchain_command`: a command that builds and tests a tree, `{src}`, with the oldest compiler or library the repository supports, or null when there is none (`references/promotion.md`, *The preflight*); `tests_driver_edit` `yes`, `no` or `ask`; `commit_trailer` from the main session's instructions, verbatim | null; `ask`; no trailer | the same `after` block |
 
-The `after` answers are asked here only: every later stage reads `after`
-(`autoopt.py config`) and asks only a field still `ask`. `after.build_outputs`
+These `after` answers are asked here only, and step 5 asks its own five
+(`references/step5-ship.md`): every later step reads `after` (`autoopt.py
+config`) and asks only a field still `ask`. `after.build_outputs`
 (default `[]`) lists files the build writes into the repository that the
 runner committed, as paths relative to the repository's root or globs: an
 untracked or edited file there is no unmeasured edit. Set it when

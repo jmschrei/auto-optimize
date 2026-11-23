@@ -24,7 +24,7 @@ fills:
 | `--id` | the next free id |
 | `--idea-line`, `--category` | the line, and its tag |
 | `--title` | the line's function and the first clause of what it changes, cut to 70 characters |
-| `--tried` | every iteration whose diff changed any file the line's *where* names: its median against its parent's, and whether it is in the root, passed the keep rule but is not in the root, was not kept and why, or is in flight |
+| `--tried` | every iteration whose diff changed any file the line's *where* names: its median against its parent's, and whether it is in the root, passed the keep rule but is not in the root, was not kept and why, or is in flight. Past 15, it lists the root path, the latest 15 whose title names the line's function and the latest 15 overall, and counts the rest by fate in one line. The files each change touched are cached in `autooptimize/touched.json` |
 | `--sections` | `code:<the file's name>` when the ledger has that tag, and `harness`, `machine` and `closed` when it has them |
 
 A flag given beside `--next` replaces what it would fill (with `--count 1`,

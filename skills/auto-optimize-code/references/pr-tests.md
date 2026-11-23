@@ -1,6 +1,6 @@
 # The unit-test PR
 
-One of the documents step 5 can publish, when step 1 wrote a suite and the
+One of the documents step 5 can post, when step 1 wrote a suite and the
 user chose this PR (`after.ship_documents` holds `tests`). It is opened from
 step 1's branch, its commits as they are, and holds only test files: at most one dependency
 manifest that declares a test dependency, the repository's test driver when
@@ -16,7 +16,7 @@ the optimization is.
 | Body | `$WORK/ship/pr-tests/body.md`, rendered by `tests_pr_body.py` from the tables in `$WORK/ship/pr-tests/` and the prose in `$WORK/ship/pr-tests/prose.md` |
 
 `tests_pr_tables.py` writes the tables from the files step 1 left in
-`$WORK/tests/work/` and from the clone, the agent writes only what no table
+`$WORK/tests/work/` and from the clone, the document writer writes only what no table
 can say, and `tests_pr_body.py` renders the two: every count, total,
 percentage and ranking is computed from the tables. The body says what the
 suite is and what it checks. It does not name the tool that wrote it, and it
@@ -217,7 +217,8 @@ reviewed them all: `python3 $AO/ship.py rehearse $WORK`,
 then `python3 $AO/ship.py post $WORK all --approved --digest D`
 (`references/step5-ship.md`). No document is posted on its own. The post
 pushes step 1's branch, under the name the user's answer about branch
-names gives (`references/step5-ship.md`; `--remote-branch` for another),
+names gives (`references/step5-ship.md`; `ship.py rehearse` and `post` with
+`--branch tests=NAME` for another, which reaches this script as `--remote-branch`),
 opens the PR with `gh pr create`, and
 records it in `$T/pr.json` (repository, URL, number, branch, title, a digest
 of title and body, and the time); `ship.py post` then renders the other

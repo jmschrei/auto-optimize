@@ -13,7 +13,8 @@ python3 $AO/ship.py plan $WORK
 
 prints what this search can ship (plain or repository mode, the GitHub
 repository and whether `gh` can push there, whether step 1 wrote a unit-test
-suite, the bugs step 1 recorded) and the questions to ask. Ask them in one
+suite, the bugs step 1 recorded) and the questions to ask (`--json` prints
+the same for a program). Ask them in one
 AskUserQuestion call: how to ship, then, for a repository search, the
 documents and the branch names, whose answers apply only to the route that
 uses them:
@@ -47,7 +48,9 @@ python3 $AO/autoopt.py config $WORK --set after.branch_prefix=<no|yes> --reason 
 ```
 
 `ship.py branch` and `ship.py rehearse` refuse until `after.branch_prefix`
-is answered.
+is answered. An answer this search cannot ship (a route its mode does not
+have, a document with nothing behind it) counts as no answer: `stages.py next`
+asks again.
 
 *Not now* (`none`) goes straight to step 6; the user can ask later, and
 `ship.py plan` asks again. `stages.py next` names the move at every point of
@@ -66,10 +69,15 @@ came from (`init` records each `--copy` source in `config.json` as
 itself, such as the benchmark, are left out and named. It refuses, writing
 nothing, when a file changed since the search copied it (the change was
 measured on the copy), a file it would add exists, or one it would change is
-missing; a file that already holds the change is reported as applied. A
+missing. A file that already holds the change is reported as applied, and
+`--yes` records it so (applied by hand, say). After an iteration made with
+`--after-end` becomes the winner, `apply` runs again over the files the
+first apply wrote, and puts back the ones the new winner leaves alone. A
 search made before `init` kept the record needs `--to DIR`, the folder the
-copied files are in. `ship/applied.json` and `ship/applied.patch` record what
-was written.
+copied files are in. `ship/applied.json` records what was written and what
+held the change already, and `ship/applied.patch` is the whole change the
+original files now hold; applying the same winner again keeps that record. `apply` and `branch` ship the winner; `--id` names another
+iteration, which the user must have asked for.
 
 ## A branch in the local repository
 
@@ -98,39 +106,59 @@ when the search does not record it. `ship/branch.json` records it.
 What every document carries, and what none may say:
 `references/documents.md`.
 
-1. **The writer.** Spawn one subagent with the prompt `python3 $AO/ship.py
-   brief $WORK` prints. It writes the inputs of every chosen document (tables,
-   prose, commit messages; bugs.tsv and the verify runs for a bug report),
-   renders each with a title, and ends when `ship.py rehearse` exits 0.
-2. **Review, then post all.** All documents are reviewed together and posted
-   together; none is posted on its own.
+The route has two parts, in this order: the document writer drafts every
+chosen document, then the user reviews them all and they are posted
+together; none is posted on its own.
 
-   ```bash
-   python3 $AO/ship.py rehearse $WORK      # renders each, runs each one's preview, prints the digest
-   python3 $AO/ship.py status $WORK        # where each stands
-   ```
+### The document writer
 
-   Show the user every body (`ship/<folder>/body.md`) and preview
-   (`ship/rehearsal/<document>.txt`) together: titles, the repository and
-   branch each opens on, the commits. A change they ask for goes to the
-   writer (SendMessage while it lives); rehearse again and show the new
-   batch, saying what changed. Only once they ask for posting:
+Spawn one subagent, the document writer, with the prompt `python3
+$AO/ship.py brief $WORK` prints. It writes the inputs of every chosen
+document (tables, prose, commit messages; for a bug report, bugs.tsv and each
+reproduction rerun by `issue_body.py verify`), renders each with a title, and
+ends when `ship.py rehearse` exits 0. Its report gives each title and the
+rehearsal's digest. When it is gone before it reported (a closed session), spawn
+a new one from the same prompt: the prompt has it keep and complete the inputs
+already written in each document's folder.
 
-   ```bash
-   python3 $AO/ship.py post $WORK all --approved --digest <digest> [--other-owner]
-   ```
+### Review, then post all
 
-   It refuses a digest other than the last rehearsal's, a rehearsal with
-   problems, and inputs changed since. It posts in a fixed order, the bug
-   report, the unit-test PR, then the optimization PR, rendering each again
-   first so it holds the numbers of the ones before it. `--other-owner` is
-   given only once the user has confirmed a repository another account owns
-   (an upstream project; the bug report always opens there). When a post
-   stops, fix the cause and run the same command: what was posted is
-   skipped.
+```bash
+python3 $AO/ship.py rehearse $WORK      # renders each, runs each one's preview, prints the digest
+python3 $AO/ship.py status $WORK        # where each stands, and the last rehearsal's digest
+python3 $AO/ship.py render $WORK [--only DOCUMENT]   # render again without the previews
+```
 
-Each posted document holds the search's `end --reopen` (`reopen-lock.json`),
-and so do `apply --yes` and `branch --yes`.
+Show the user every body (`ship/<folder>/body.md`) and preview
+(`ship/rehearsal/<document>.txt`) together: titles, the repository and
+branch each opens on, the commits. A change they ask for goes to the
+document writer (SendMessage while it lives); rehearse again and show the new
+batch, saying what changed. Only once they ask for posting:
+
+```bash
+python3 $AO/ship.py post $WORK all --approved --digest <digest> [--branch DOC=NAME …] [--other-owner]
+```
+
+The digest covers the winner, every document's inputs and the answers that
+name what is pushed (`after.branch_prefix`, `after.pr_remote`, `after.pr_head_owner`, and
+`--branch optimization=NAME` or `tests=NAME`, a PR branch named by hand,
+given to `rehearse` and then to `post` the same). It
+refuses a digest other than the last rehearsal's, a rehearsal with problems,
+and inputs changed since. It posts in a fixed order, the bug report, the
+unit-test PR, then the optimization PR, rendering each again first so it
+holds the numbers of the ones before it. `--other-owner` is given only once
+the user has confirmed a repository another account owns (an upstream
+project; the bug report always opens there). When a post stops, fix the
+cause and run the same command: what was posted is skipped.
+
+### What holds the search closed
+
+Each posted document holds the search's `end --reopen` (a hold in
+`reopen-lock.json`), and so do `apply --yes` and `branch --yes`. A change to a
+shipped winner is an iteration made with `--after-end`
+(`references/step4-final.md`, *An iteration made after the end*); once it is
+the winner, the ship stage reads `running` again until it is applied or
+branched too.
 
 ### From a fork
 
@@ -169,9 +197,17 @@ benchmark on the result.
 |---|---|
 | `has not ended` | step 4 first |
 | `is gate-failed …`, `something was committed after the measurement`, `uncommitted changes that were never measured` | ship the winner (`--id best`); a change made after the measurement is measured as an iteration made with `--after-end` |
-| `changed since the search copied it` (apply) | ask the user: their edit stays, and the change is applied by hand (`ship/applied.patch` is written only after a write; `git -C $WORK/autooptimize/repo.git diff autoopt/0 autoopt/<id>` prints it) |
-| `is not on <owner/repo>/<branch> … push it first` | the user pushes their branch; the search never writes to it |
+| `changed since the search copied it` (apply) | ask the user: their edit stays, and the change is applied by hand (`git -C $WORK/autooptimize/repo.git diff autoopt/0 autoopt/<id>` prints it); then `apply --yes` records the files that hold it |
+| `exists already, and the change adds it`, `is missing; the search copied it from there` (apply) | show the user the file; the change is applied by hand as above |
+| `this is a repository search`, `this search was made with init --copy` | the route does not fit the mode: ask again with `ship.py plan` |
+| `the user has not said whether the branch names start with auto-optimize/` | ask the third question of `ship.py plan` and record `after.branch_prefix` |
+| `after.ship is …: the GitHub documents are for a user who chose them`, `after.ship_documents names no document`, `after.ship_documents names …, which this search does not offer` | ask with `ship.py plan` and record the answers |
+| `is not on <owner/repo>/<branch>, so the PR would carry commits nobody measured. Push … first` | the user pushes their branch; the search never writes to it |
 | `is not <login>'s own account` | show the user the repository, then `--other-owner` |
-| `branch … already exists` | `--branch` (PR) or `--name` (local branch) with another name |
-| `the inputs changed since the rehearsal` | rehearse again and show the user the new batch |
-| a document's own refusal | its reference, *When it refuses* or the renderer's list |
+| `already has a branch <name>: pass --name` (local branch) | `--name` with a name that is not taken |
+| `branch … already exists on <owner/repo>; nothing was pushed` (a PR) | another name: `rehearse --branch optimization=NAME` (or `tests=NAME`), show the user, then `post` with the same flag. A branch that already holds this PR's commits is opened, not refused, so a post that stopped after its push runs again cleanly |
+| `--branch takes optimization=NAME or tests=NAME`; `--branch … is not what the rehearsal the user reviewed pushed` | give `post` the `--branch` flags the rehearsal had, or rehearse again with the new ones |
+| `no rehearsal`, `is not the last rehearsal's`, `the last rehearsal had problems` | `ship.py rehearse`, then show the user the batch it rendered and use its digest |
+| `the documents' inputs changed since the rehearsal the user reviewed` (their files, or the branch and fork answers), `the chosen documents changed since the rehearsal` | rehearse again and show the user the new batch |
+| `was not posted; fix the cause and run the same command` | fix what the line above it names, then the same `post`: what was posted is skipped |
+| a document's own refusal | its reference: `references/pr-optimization.md`, *When it refuses*; for the others, the renderer's list of problems on stderr |

@@ -11,13 +11,13 @@ with `--after-end` and promoted replaces. It is the code on its branch. Copy
 the change and the code to `$WORK/finish/archive/` (or outside `$WORK`, when
 the user wants it there), because section 3 deletes most of what is in
 `autooptimize/`. This is the copy kept with the search, whether or not step 5
-applied or published the change:
+shipped the change:
 
 ```bash
 python3 $AO/autoopt.py archive $WORK        # --id <it> for another iteration; --dest DIR outside $WORK; --force to write over an archive
 ```
 
-It writes `idea.patch`, `code/`, the README and `result.json`, and the report's skeleton (section 2) with *What was optimized*, *Result* and *The path* filled in and `<<FILL: …>>` marks left.
+It writes `idea.patch`, `code/`, the README and `result.json`, and the report's skeleton (section 2) with *What was optimized*, *Result*, *The path* and *Where things are* filled in and `<<FILL: …>>` marks left. Run it after step 5, so *Where things are* lists what step 5 did; run before, it leaves a mark there.
 
 Quote the iteration's median, never the single run in `best_run`.
 
@@ -34,9 +34,11 @@ Quote the iteration's median, never the single run in `best_run`.
 | *What produced the gains* | the gain by category, and one line per iteration on the path; the category breakdown goes in `$WORK/finish/speedup-breakdown/` |
 | *What was tried and failed* | the closed ideas worth knowing, from `ideas.md` and the ledger's `[closed]` entries |
 | *Compute* | iterations, runs, wall clock, and GPU or CPU hours; the dashboard's sidebar has throughput and per-category numbers |
-| *Where things are* | the copied code and patch, the search directory, and what step 5 did: the files it wrote (`ship/applied.json`), the branch it made (`ship/branch.json`), or the URL of each document it posted |
+| *Where things are* | written by `archive`: the copied code and patch, the search directory, and what step 5 did, from its records: the files it wrote (`ship/applied.json`), the branch it made (`ship/branch.json`), the URL of each document it posted |
 
-`rounds/*.md` and the READMEs of the frontier path are the material.
+Fill every `<<FILL: …>>` mark: `stages.py` reads the finish stage as
+`running` while one is left. `rounds/*.md` and the READMEs of the winning iterations (`autoopt.py path
+$WORK --id best`) are the material.
 
 ## 3. Reclaim the disk
 

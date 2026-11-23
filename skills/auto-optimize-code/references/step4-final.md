@@ -96,12 +96,14 @@ python3 $AO/autoopt.py end $WORK --reopen
 Archives `ended.json` as `ended-<n>.json` (and `ended.md`), restarts the
 dashboard publisher and lets `loop`, `brief`, `new` and `mine` work again.
 Reopen when the user wants the search itself to go on, then end again. The
-clean-up stays done.
+clean-up stays done. `after.ship` goes back to `ask` (it answered for the
+winner set aside), so the next `end` leads to step 5's question again; the
+other `after` answers stay.
 
 It is refused while `autooptimize/reopen-lock.json` holds a hold
 (`{"holds": [{"by", "reason", "at"}]}`), printing each: step 5 writes one when it applies the change, makes a
 branch or posts a document (`autoopt.hold_reopen(root, by, reason)`; a
-`reason` of None withdraws it). A published winner changes only through an iteration made with
+`reason` of None withdraws it). A shipped winner changes only through an iteration made with
 `--after-end` (above).
 
 ## Paused, not finished

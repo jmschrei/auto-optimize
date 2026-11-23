@@ -18,6 +18,20 @@ does nothing.
 | `passes (…); not promoted: <reason>` | `promote` refused it (*The preflight*, the toolchain scan, a root that moved): the subagent fixes what the reason names and runs `finish`; the orchestrator then runs `promote --id <it>` |
 | `passes (…); not promoted (--no-promote)` | the runner was told not to: a re-measurement |
 
+**A wider margin or a minimum gain stays with the runner.** "Keep only a
+change worth 2%" or "twice the noise band" is a setting, and `promote: auto`
+keeps working:
+
+```bash
+python3 $AO/autoopt.py config $WORK --set keep.min_gain_pct=2 --reason "<their words>"   # at least 2% of the parent's median
+python3 $AO/autoopt.py config $WORK --set keep.band_k=2 --reason "<their words>"        # beat the parent by twice the noise band
+```
+
+Both must hold; the defaults (`band_k` 1, `min_gain_pct` 0) are the default
+rule, and the `keep:` line names a setting only when it is not the default.
+Set them before the first iteration and record them in `spec.md`'s keep rule:
+a change mid-search judges later iterations by a rule earlier ones were not.
+
 **A keep rule in the user's own words**, such as a tie rule or a second
 measure that must not regress, is beyond the runner. Set it at step 0 with
 `init --promote orchestrator` (later, `config --set promote=orchestrator`),

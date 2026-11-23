@@ -98,7 +98,7 @@ Panels, marks and interactions are specified in `scripts/dashboard/README.md`,
 | External validation | its own section (`references/external-validation.md`) |
 | GPUs idle or contended | the GPU cards and the process table |
 | Whether it ended, and how | the topbar's `ended <date> · A<id> <median> vs A0 <median> · <reason>` line; its tooltip has the paired timing from `final.json` |
-| Which stages are done | the strip under the category chips: `interview done · setup done · … · ship pending · finish pending` (`done`, `running`, `pending`), from `stages.py` |
+| Which stages are done | the strip under the category chips: `interview complete · setup complete · … · ship not started · finish not started`, in `stages.py`'s own words (`complete`, `running`, `not started`) |
 | An iteration's toolchain answer | `toolchain` in its open log entry (`no` or `specific`); `specific` carries the tooltip *not promotable* |
 
 The ended line and the stage strip read `ended.json`, `final.json` and

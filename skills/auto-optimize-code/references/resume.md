@@ -16,7 +16,8 @@ and writes `final/dashboard.html`; step 6 stops it), and go on with step 5
 been asked how to ship and what is left, then step 6
 (`references/step6-finish.md`).
 `end --reopen` is only for a user who wants the search itself to go on, and
-is refused once the winner is published. Otherwise:
+is refused once step 5 has shipped the winner (applied it, made a branch or
+posted a document). Otherwise:
 
 ## Then put the dashboard publisher back up
 

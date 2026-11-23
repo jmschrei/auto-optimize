@@ -103,7 +103,7 @@ and the commit messages; makes the commits in the search's `repo.git` (left
 at `refs/pr/<id>`); and prints the commits, the diffstat, the push target,
 the title, every message and the body. The branch it pushes is named from the
 title, after `auto-optimize/` when the user chose that prefix
-(`after.branch_prefix`; `--branch` for another name). Read the diffstat: a file no change should
+(`after.branch_prefix`; `ship.py rehearse` and `post` with `--branch optimization=NAME` for another name). Read the diffstat: a file no change should
 have touched means scratch work was committed; stop and tell the user. With a
 unit-test suite the commits sit on the original's commit
 (`references/step5-ship.md`, *Separate from the unit tests*).
