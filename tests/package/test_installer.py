@@ -246,6 +246,51 @@ def test_installations_ignores_other_skills_and_stale_links(home):
 	assert cli.installations() == []
 
 
+def test_installations_skips_another_authors_skill_with_the_prefix(home):
+	skills = home / 'config' / 'skills'
+	make_skill(str(skills / 'auto-optimize-other'), name='auto-optimize-other')
+
+	assert cli.installations() == []
+
+
+def test_an_earlier_copy_named_auto_optimize_is_flagged(home, capsys):
+	skills = home / 'config' / 'skills'
+	make_skill(str(skills / 'auto-optimize'), name='auto-optimize')
+
+	found = cli.installations()
+	assert [(item['name'], item.get('legacy')) for item in found] == [
+		('auto-optimize', True)]
+
+	assert cli.main(['list']) == 0
+	assert 'before 0.1.0' in capsys.readouterr().out
+
+	cli.main(['doctor'])
+	out = capsys.readouterr().out
+	assert 'installed skills: none' in out and 'before 0.1.0' in out
+
+
+def test_doctor_passes_over_the_installers_own_environment(tmp_path,
+		monkeypatch):
+	tool = tmp_path / 'tool'
+	user = tmp_path / 'user'
+	for folder in (tool / 'bin', user):
+		folder.mkdir(parents=True)
+	for folder in (tool / 'bin', user):
+		script = folder / 'python3'
+		script.write_text('#!/bin/sh\n')
+		script.chmod(0o755)
+
+	monkeypatch.setattr(sys, 'prefix', str(tool))
+	monkeypatch.setattr(sys, 'base_prefix', str(tmp_path / 'base'))
+	monkeypatch.delenv('VIRTUAL_ENV', raising=False)
+	monkeypatch.setenv('PATH', os.pathsep.join([str(tool / 'bin'),
+		str(user)]))
+	assert cli.skill_python3() == str(user / 'python3')
+
+	monkeypatch.setenv('VIRTUAL_ENV', str(tool))
+	assert cli.skill_python3() == str(tool / 'bin' / 'python3')
+
+
 def test_main_install_list_path_uninstall(home, capsys):
 	assert cli.main(['install']) == 0
 	installed = home / 'config' / 'skills' / 'auto-optimize-code'
