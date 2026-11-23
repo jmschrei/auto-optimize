@@ -307,6 +307,16 @@ def path_steps(root, config, identifier):
 		'rev-parse', start + '^{tree}').strip()))
 
 
+def prefix_problem(config):
+	"""Refuse a branch named before the user said whether branch names start
+	with `auto-optimize/`, the third question of `ship.py plan`."""
+
+	if after_of(config).get('branch_prefix') not in ('yes', 'no'):
+		fail('the user has not said whether the branch names start with {} '
+			'(after.branch_prefix): ask it with the other questions of `ship.py '
+			'plan`'.format(autoopt.BRANCH_PREFIX))
+
+
 def branch(args):
 	work, root, config = search(args.work)
 	autoopt.require_ended(root, 'make a branch from it')
@@ -329,10 +339,12 @@ def branch(args):
 		fail('the original repository\'s folder is not recorded: pass --repo '
 			'PATH')
 
+	prefix_problem(config)
 	messages = local_messages(root, path_steps(root, config, identifier))
 	made = autoopt.pr_commits(root, config, identifier, messages)
 	bare = os.path.join(root, 'repo.git')
-	name = args.name or 'optimized-{}'.format(autoopt.now()[:10])
+	name = args.name or autoopt.ship_branch(config, 'optimized-{}'.format(
+		autoopt.now()[:10]))
 	listing = autoopt.git('-C', bare, 'log', '--reverse', '--format=%h %s',
 		'{}..{}'.format(made['base'], made['tip'])).rstrip()
 	stat = autoopt.git('-C', bare, 'diff', '--stat', made['base'],
@@ -403,7 +415,8 @@ def offer(work, root, config):
 		facts.append('plain mode; copied from: {}'.format(', '.join(entry[
 			'source'] for entry in copied) if copied else 'not recorded (apply '
 			'needs --to DIR)'))
-		return {'mode': 'plain', 'facts': facts, 'documents': [], 'routes': [
+		return {'mode': 'plain', 'facts': facts, 'documents': [], 'branches':
+			[], 'routes': [
 			('apply', 'Apply the change to the original file(s)', 'writes the '
 			'measured files over the originals after a preview; refuses a file '
 			'that changed since the search copied it'),
@@ -457,8 +470,27 @@ def offer(work, root, config):
 	routes.append(('none', 'Not now', 'nothing is published or written; the '
 		'change stays in the search'))
 
+	# The names step 5 would give, both ways: the optimization PR's comes
+	# from its title, written later, so it is shown by its form.
+	date = autoopt.now()[:10]
+	tests_branch = (suite or {}).get('tests_branch') or \
+		'{}{}-unit-tests'.format(autoopt.BRANCH_PREFIX, date)
+	branches = []
+
+	for answer, label in (('no', 'No'), ('yes', 'Yes')):
+		named = dict(config, after=dict(after_of(config), branch_prefix=answer))
+		names = ['`{}`'.format(autoopt.ship_branch(named, '<from-the-pr-title>'))]
+
+		if suite:
+			names.append('`{}`'.format(autoopt.tests_branch_remote(named,
+				tests_branch)))
+
+		names.append('`{}`'.format(autoopt.ship_branch(named,
+			'optimized-{}'.format(date))))
+		branches.append((label, ', '.join(names)))
+
 	return {'mode': 'repository', 'facts': facts, 'routes': routes,
-		'documents': documents}
+		'documents': documents, 'branches': branches}
 
 
 def plan(args):
@@ -486,6 +518,13 @@ def plan(args):
 		for document, text, description in offered['documents']:
 			print('  - {}: {}'.format(text, description))
 
+	if offered['branches']:
+		print('\nFor a branch or a PR, "Start the branch names with {}?":'
+			.format(autoopt.BRANCH_PREFIX))
+
+		for choice, names in offered['branches']:
+			print('  - {}: {}'.format(choice, names))
+
 	print('\nRecord the answers in the user\'s words:\n  python3 {0} config '
 		'{1} --set after.ship=<{2}> --reason "<their words>"'.format(
 		os.path.join(HERE, 'autoopt.py'), work, '|'.join(choice for choice, _,
@@ -495,6 +534,11 @@ def plan(args):
 		print('  python3 {} config {} --set after.ship_documents={} --reason '
 			'"<their words>"'.format(os.path.join(HERE, 'autoopt.py'), work,
 			','.join(document for document, _, _ in offered['documents'])))
+
+	if offered['branches']:
+		print('  python3 {} config {} --set after.branch_prefix=<no|yes> '
+			'--reason "<their words>"'.format(os.path.join(HERE, 'autoopt.py'),
+			work))
 
 	if after.get('ship') not in (None, 'ask'):
 		print('\nalready answered: after.ship = {}{}'.format(after['ship'],
@@ -687,7 +731,8 @@ def brief(args):
 	lines += ['', 'Rules: every number comes from a table, so prose writes a '
 		'token where it needs one; no document names the tool, the lab, or the '
 		'search\'s own words (winner, baseline, iteration labels, local '
-		'paths); the diffs decide what a change does. Then run `python3 '
+		'paths), or says how it was written (no "Generated with" line); the '
+		'diffs decide what a change does. Then run `python3 '
 		'$AO/ship.py rehearse $WORK` and fix every problem it lists until it '
 		'exits 0. Report each title, the rehearsal\'s digest, and anything you '
 		'could not settle.']
@@ -766,6 +811,7 @@ def rehearse(args):
 	work, root, config = search(args.work)
 	autoopt.require_ended(root, 'ship')
 	after, documents, slug = github(work, config)
+	prefix_problem(config)
 	scratch = autoopt.work_path(work, 'ship', 'rehearsal')
 	os.makedirs(scratch, exist_ok=True)
 	problems, lines = [], []

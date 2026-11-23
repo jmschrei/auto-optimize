@@ -30,20 +30,19 @@ turns those into the first two files here:
 severity, the category sections in the fixed category order, every heading,
 the collapsed blocks and the fences; prose fills them. The body is the first
 paragraph (the `opening` sentence, then attribution.py's fixed sentences:
-many bugs are edge cases, what the severity levels mean, and that Claude
-wrote the report), the severity table, which shows all three levels and says
-`none` for one without a bug, the introduction, the shared setup, the bugs,
-and attribution.py's closing line. The title goes to `<out stem>.title`. The
+many bugs are edge cases, and what the severity levels mean), the severity
+table, which shows all three levels and says `none` for one without a bug,
+the introduction, the shared setup and the bugs. The title goes to `<out stem>.title`. The
 same inputs give the same body, byte for byte. A body over --limit characters
 (62,000) has its longest reproductions moved to `<out stem>.comment-1.md`,
 then `-2.md` and on when one comment is not enough (packed in bug order, none
-split), each ending with the closing line, posted as the issue's comments in
+split), posted as the issue's comments in
 that order, and stderr says so. Exit 1, every problem listed and nothing
 written, on a missing or unknown field, an unknown category, a bug numbered
 out of the category order, an unknown severity, blunt wording in the prose, a
 bug without a passing or manual verify row for the text and binary shown,
 verify rows from different binaries, a <<FILL placeholder, a heading, a fixed
-sentence or the closing line in prose, a title attribution.py refuses, words
+sentence in prose, a title attribution.py refuses, words
 lint_text.py refuses, or a body that does not fit even after the move.
 
 `renumber` numbers the bugs 1 to N in category order and moves each bug's prose
@@ -95,7 +94,6 @@ import attribution
 import publish
 
 
-CLOSING = attribution.CLOSING
 LIMIT = 62000
 
 # The categories in the order the report shows its sections: the key
@@ -135,9 +133,9 @@ FIELDS = {
 	'opening': (True, 'line', 'one complete sentence of your own, on one line, '
 		'that begins the report: what was being done when the bugs turned up, '
 		'e.g. "These bugs turned up while we wrote a test suite for <tool> '
-		'(#209)." The renderer follows it with three fixed sentences in the same '
-		'paragraph: many of the bugs are likely edge cases, what the severity '
-		'levels mean, and that Claude wrote the report'),
+		'(#209)." The renderer follows it with two fixed sentences in the same '
+		'paragraph: many of the bugs are likely edge cases, and what the '
+		'severity levels mean'),
 	'intro': (True, 'prose', 'the version, the commit, the build and the '
 		'platform the bugs were reproduced on; which bugs need a special build '
 		'or harness; which bugs came from which part of the work'),
@@ -533,10 +531,6 @@ def check_field(name, kind, text, problems):
 
 	if '<<FILL' in text:
 		problems.add('{} still holds a <<FILL placeholder'.format(where))
-	if CLOSING in text:
-		problems.add('{} holds the closing line, which the renderer '
-			'adds'.format(where))
-
 	joined = ' '.join(text.split())
 
 	for note in attribution.ISSUE_NOTES:
@@ -869,7 +863,7 @@ def pack(numbers, sections, titles, limit):
 def comment_text(numbers, sections, titles):
 	return '\n\n'.join([COMMENT_HEAD.format(bugs_named(numbers))]
 		+ ['### {}. {}\n\n{}'.format(number, titles[number], sections[number])
-		for number in numbers] + [CLOSING]) + '\n'
+		for number in numbers]) + '\n'
 
 
 def render(bugs, fields, rows, limit):
@@ -904,7 +898,6 @@ def render(bugs, fields, rows, limit):
 			parts.append(MOVED_NOTE.format(comment_name(where[bug['number']]))
 				if bug['number'] in where else sections[bug['number']])
 
-		parts.append(CLOSING)
 		return '\n\n'.join(parts) + '\n'
 
 	moved, groups = [], []
@@ -1373,8 +1366,8 @@ def read_filed(directory, problems):
 
 def filing_problems(args, body_path, title, body, comments):
 	"""Everything that should stop the issue being filed: the files are
-	missing or not what the inputs render to, the first paragraph, the
-	closing line or the title is wrong, a stand-in is left, or the text is
+	missing or not what the inputs render to, the first paragraph or the
+	title is wrong, a stand-in is left, or the text is
 	over GitHub's limit."""
 
 	problems = Problems()
@@ -1383,8 +1376,7 @@ def filing_problems(args, body_path, title, body, comments):
 		problems.add(problem)
 
 	for number, text in comments:
-		for problem in (attribution.closing_problems(text)
-				+ attribution.placeholder_problems(text)):
+		for problem in attribution.placeholder_problems(text):
 			problems.add('comment {}: {}'.format(number, problem))
 
 	for text, name in [(body, 'the body')] + [(text, 'comment {}'.format(number))

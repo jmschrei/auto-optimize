@@ -77,5 +77,3 @@ The files that gain the most:
 - **The largest gaps in files that are reached** are in `pkg/core.py` (15 lines not run, 85.0% covered), `pkg/io.py` (5, 90.0% covered), `pkg/cli/main.py` (4, 90.0% covered) and `pkg/cli/args.py` (1, 95.0% covered).
 
 **Platforms:** Linux only; macOS, which CI also runs, was not tried.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)

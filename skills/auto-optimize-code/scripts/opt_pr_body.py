@@ -754,7 +754,7 @@ def render(ctx):
 	parts = [opening(ctx), paragraph(ctx.field('portability') or ''),
 		scope(ctx), '\n'.join(performance(ctx)), '\n'.join(changes(ctx)),
 		'\n'.join(behaviour(ctx)), '\n'.join(tests(ctx)), '\n'.join(checked(
-		ctx)), attribution.CLOSING]
+		ctx))]
 	typed_numbers(ctx)
 	text = '\n\n'.join(part for part in parts if part) + '\n'
 	problems = Problems()

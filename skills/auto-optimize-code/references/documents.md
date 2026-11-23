@@ -28,9 +28,8 @@ own except to repair one post.
   to the tables or the prose and is rendered again. Prose writes a
   `{{token}}` where it needs a number a table gives; a renderer refuses the
   number typed.
-- **The closing line** `🤖 Generated with [Claude Code](https://claude.com/claude-code)`,
-  added by the renderer. The bug report's first paragraph also says that
-  Claude wrote it.
+- **Nothing about how it was written.** No renderer adds a line naming the
+  tool, the model or the lab; the writer adds none either.
 
 ## What no document says
 

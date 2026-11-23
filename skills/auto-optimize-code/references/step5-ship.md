@@ -13,9 +13,10 @@ python3 $AO/ship.py plan $WORK
 
 prints what this search can ship (plain or repository mode, the GitHub
 repository and whether `gh` can push there, whether step 1 wrote a unit-test
-suite, the bugs step 1 recorded) and the options to offer. Ask in one
-AskUserQuestion call; on GitHub, add the checklist as a second question of
-the same call:
+suite, the bugs step 1 recorded) and the questions to ask. Ask them in one
+AskUserQuestion call: how to ship, then, for a repository search, the
+documents and the branch names, whose answers apply only to the route that
+uses them:
 
 | Mode | "How do you want to ship?" |
 |---|---|
@@ -27,12 +28,26 @@ the same call:
 optimization PR*; *The unit-test PR*, only when step 1 wrote a suite; *The
 bug report*, only when step 1 recorded bugs.
 
+"Start the branch names with `auto-optimize/`?", for a branch or a PR: *No*
+or *Yes*, each option showing the names it gives (`ship.py plan` prints
+them). It names every branch shipping makes or pushes:
+
+| Branch | No | Yes |
+|---|---|---|
+| the optimization PR's | from its title (`vectorize-column-scoring`) | `auto-optimize/vectorize-column-scoring` |
+| the unit-test PR's | `unit-tests-<date>` | step 1's own name, `auto-optimize/<date>-unit-tests` |
+| a local branch | `optimized-<date>` | `auto-optimize/optimized-<date>` |
+
 Record the answers in the user's words, then follow the matching section:
 
 ```bash
 python3 $AO/autoopt.py config $WORK --set after.ship=<apply|branch|github|none> --reason "<their words>"
 python3 $AO/autoopt.py config $WORK --set after.ship_documents=optimization,tests,bugs --reason "<their words>"   # GitHub only, what they checked
+python3 $AO/autoopt.py config $WORK --set after.branch_prefix=<no|yes> --reason "<their words>"   # a branch or GitHub
 ```
+
+`ship.py branch` and `ship.py rehearse` refuse until `after.branch_prefix`
+is answered.
 
 *Not now* (`none`) goes straight to step 6; the user can ask later, and
 `ship.py plan` asks again. `stages.py next` names the move at every point of
@@ -65,7 +80,8 @@ python3 $AO/ship.py branch $WORK [--name N] --yes    # on the user's yes
 
 One commit per kept change, each with the `## Commit message` its notes
 hold (its title when it has none), made in the search's `repo.git` and
-fetched into the original as a new branch (`optimized-<date>` by default). It
+fetched into the original as a new branch (`optimized-<date>` by default,
+`auto-optimize/optimized-<date>` with the prefix). It
 refuses a name that exists and never checks the branch out. With a suite from
 step 1, the commits sit on the original's commit and leave the suite out
 (*Separate from the unit tests*, below). `--repo PATH` names the original

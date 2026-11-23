@@ -158,7 +158,8 @@ def ship(work, root, state):
 	after = after_of(work)
 	choice = after.get('ship')
 
-	if choice in (None, 'ask'):
+	if choice in (None, 'ask') or (choice in ('github', 'branch') and
+			after.get('branch_prefix') not in ('yes', 'no')):
 		return NOT_STARTED, 'ask the user how to ship', {}
 
 	if choice == 'none':
@@ -421,7 +422,8 @@ def next_action(work, rows):
 		if status == COMPLETE:
 			continue
 
-		if name == 'ship' and after.get('ship') in SHIP_NEXT:
+		if name == 'ship' and status != NOT_STARTED and after.get('ship') in \
+				SHIP_NEXT:
 			return name, 'agent', SHIP_NEXT[after['ship']].format(ao=HERE,
 				w=work)
 

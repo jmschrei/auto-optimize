@@ -14,8 +14,8 @@ field the tables call for.
 Every number, total, percentage and ranking in the body is computed here from
 the tables; prose refers to a computed number only through a `{{token}}`. The
 same tables and prose give the same body, byte for byte. The body opens with
-the `opening` field followed by the sentences computed from the tables, and
-ends with attribution.py's closing line. `--out` needs `--title`, which must
+the `opening` field followed by the sentences computed from the tables.
+`--out` needs `--title`, which must
 pass attribution.py's title rule and is written to `<out stem>.title`.
 
 `#<bug issue>` is replaced by the number in `DIR/../issue-bugs/filed.json`
@@ -1142,8 +1142,6 @@ def render(tables, prose, problems):
 			continue
 
 		blocks.append(build(ctx))
-
-	blocks.append([attribution.CLOSING])
 
 	if not ctx.bugs:
 		for key, value in prose.items():

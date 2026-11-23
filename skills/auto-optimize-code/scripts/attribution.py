@@ -1,5 +1,6 @@
 """The fixed parts of the documents step 5 publishes: the title rule, the
-closing line, the stand-in numbers, and the bug report's fixed sentences.
+stand-in numbers, and the bug report's fixed sentences. Nothing is added
+that names the tool or says how a document was written.
 
 The optimization PR, the unit-test PR and the bug report are rendered by
 `opt_pr_body.py`, `tests_pr_body.py` and `issue_body.py`, and opened by
@@ -11,9 +12,6 @@ breaks a rule is refused before it leaves the machine.
 """
 
 TITLE_LIMIT = 72
-
-# The last line of every document: a reader knows a model wrote it.
-CLOSING = '\U0001f916 Generated with [Claude Code](https://claude.com/claude-code)'
 
 KINDS = ('optimization', 'tests', 'issue')
 
@@ -32,14 +30,12 @@ SEVERITY_KEY = ('Severity is our estimate of how likely a user is to meet the '
 	meaning) for key, meaning in SEVERITIES)))
 
 # Fixed sentences that end a bug report's first paragraph: many of the bugs
-# are edge cases, what the severity levels mean, and that Claude wrote it.
+# are edge cases, and what the severity levels mean.
 ISSUE_NOTES = (
 	'Many of the bugs below are likely edge cases that a user may never '
 	'experience in practice, and the table after this paragraph divides them '
 	'by severity.',
-	SEVERITY_KEY,
-	'This bug report was written by Claude, so its wording may be more direct '
-	'than necessary.')
+	SEVERITY_KEY)
 
 # Stand-ins a draft carries for a number that does not exist yet: the bug
 # report's and the unit-test PR's. `ship.py post` fills each once that
@@ -123,21 +119,11 @@ def opening_problems(kind, text):
 	return problems
 
 
-def closing_problems(text):
-	"""The body must end with the CLOSING line."""
-
-	lines = [line for line in text.rstrip().splitlines() if line.strip()]
-
-	return [] if lines and lines[-1].strip() == CLOSING else ['the body must '
-		'end with the line "{}"'.format(CLOSING)]
-
-
 def problems(kind, title, text):
 	"""Every problem with a `kind` document's title and body."""
 
 	return (['title: ' + p for p in title_problems(title)] + ['body: ' + p
-		for p in opening_problems(kind, text) + closing_problems(text) +
-		placeholder_problems(text)])
+		for p in opening_problems(kind, text) + placeholder_problems(text)])
 
 
 def main(argv=None):

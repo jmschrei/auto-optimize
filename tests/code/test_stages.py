@@ -186,6 +186,13 @@ def main():
 	config['after'] = {'ship': 'github', 'ship_documents': ['bugs',
 		'optimization']}
 	put(os.path.join(root, 'config.json'), config)
+	suite.equal('GitHub chosen, and the branch names not asked yet, is still '
+		'the question', status(work)['ship'], 'not started')
+	name, kind, text = stages.next_action(work, stages.collect(work))
+	suite.check('so the next move is still to ask', 'ship.py plan' in text,
+		text)
+	config['after']['branch_prefix'] = 'no'
+	put(os.path.join(root, 'config.json'), config)
 	put(os.path.join(work, 'ship', 'issue-bugs', 'filed.json'), {'url':
 		'https://github.com/o/r/issues/4', 'comments_left': 1})
 	suite.equal('an issue with a comment still to post is not posted',

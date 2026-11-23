@@ -7,9 +7,9 @@
 
 DIR is `$WORK/ship/pr-tests`, holding `body.md` and `body.title`
 (`tests_pr_body.py --out`), and `files.tsv` and `branch.json`
-(`tests_pr_tables.py files`). The branch is pushed as it is, from the clone
-step 1 wrote it in; nothing here commits. Each default below gives way to its
-flag:
+(`tests_pr_tables.py files`). The branch's commits are pushed as they are,
+from the clone step 1 wrote them in; nothing here commits. Each default below
+gives way to its flag:
 
 - the clone, the branch and the commit it was made from (`--suite`,
 	`--branch`, `--base`): `DIR/branch.json`;
@@ -18,8 +18,11 @@ flag:
 	original's branch as the search's config.json records it;
 - the remote pushed to (`--remote`): `after.pr_remote` of the search, else
 	origin;
+- the name the branch gets there (`--remote-branch`): its own,
+	`auto-optimize/<date>-unit-tests`, when the user chose that prefix at step 5
+	(`after.branch_prefix` yes), else `unit-tests-<date>`;
 - the PR's head (`--head OWNER:BRANCH`): `after.pr_head_owner:BRANCH` when the
-	remote came from `after.pr_remote`, else the branch.
+	remote came from `after.pr_remote`, else that name.
 
 The preview prints the repository, the target branch, the head, the title,
 the commit's files and what `--post` needs; its one `gh` call reads the
@@ -191,6 +194,10 @@ def main(argv=None):
 		'DIR/branch.json)')
 	parser.add_argument('--base', help='the commit the tests branch was made '
 		'from (default: DIR/branch.json)')
+	parser.add_argument('--remote-branch', help='the name the branch gets '
+		'on the remote (default: its own, auto-optimize/<date>-unit-tests, '
+		'when the search\'s after.branch_prefix is yes, else '
+		'unit-tests-<date>)')
 	parser.add_argument('--target-branch', help='the branch of the original '
 		'the PR targets (default: `branch` in $WORK/tests/branch.json, else the '
 		'original\'s branch in the search\'s config.json)')
@@ -245,11 +252,14 @@ def main(argv=None):
 				'tests-branch` writes it) nor the search\'s config.json names the '
 				'original\'s branch'.format(autoopt.work_path(work, 'tests-branch')))
 
+	if args.branch and not args.remote_branch:
+		args.remote_branch = autoopt.tests_branch_remote(config, args.branch)
+
 	if not args.head and remote_from == 'after.pr_remote' \
 			and after.get('pr_head_owner') and args.branch:
-		args.head = '{}:{}'.format(after['pr_head_owner'], args.branch)
+		args.head = '{}:{}'.format(after['pr_head_owner'], args.remote_branch)
 
-	head = args.head or args.branch
+	head = args.head or args.remote_branch
 	body_path = os.path.join(args.dir, 'body.md')
 	title_path = os.path.join(args.dir, 'body.title')
 
@@ -324,8 +334,9 @@ def main(argv=None):
 
 	print('repository: {} (target branch {}, from {})'.format(args.repo,
 		args.target_branch, target_from))
-	print('branch:     {} -> remote {} ({}, from {}), head {}'.format(
-		args.branch, args.remote, url or 'no such remote', remote_from, head))
+	print('branch:     {} -> {} on remote {} ({}, from {}), head {}'.format(
+		args.branch, args.remote_branch, args.remote, url or 'no such remote',
+		remote_from, head))
 	print('title:      {}'.format(title))
 	print('body:       {} ({:,} characters)'.format(body_path, len(body)))
 	print('commits:    {} over {}, changing:\n    {}'.format(commits, args.base,
@@ -340,7 +351,7 @@ def main(argv=None):
 
 	print('\n'.join(publish.post_needs(args.repo, 'remote {} ({}) -> branch {}; '
 		'the PR opens on {} with head {}'.format(args.remote, url or
-		'no such remote', args.branch, args.repo, head))))
+		'no such remote', args.remote_branch, args.repo, head))))
 
 	if not args.post and not args.edit:
 		print('\npreview only: nothing was pushed or opened. Run again with '
@@ -369,14 +380,15 @@ def main(argv=None):
 		return refuse([problem])
 
 	code, out, err = run(['git', '-C', args.suite, 'push', args.remote,
-		args.branch])
+		'{}:refs/heads/{}'.format(args.branch, args.remote_branch)])
 
 	if code != 0:
 		sys.stderr.write('tests_pr_push: git push failed ({}); no PR '
 			'opened:\n{}\n{}\n'.format(code, out, err))
 		return 1
 
-	print('pushed {} to {}'.format(args.branch, args.remote))
+	print('pushed {} to {} as {}'.format(args.branch, args.remote,
+		args.remote_branch))
 	code, out, err = publish.run_gh(['pr', 'create', '--repo', args.repo,
 		'--base', args.target_branch, '--head', head, '--title', title,
 		'--body-file', body_path])
@@ -388,8 +400,8 @@ def main(argv=None):
 			out, err))
 		return 1
 
-	record = publish.new_record(args.repo, found.group(0), args.branch, title,
-		body)
+	record = publish.new_record(args.repo, found.group(0), args.remote_branch,
+		title, body)
 	publish.write_record(os.path.join(args.dir, RECORD), record)
 	print('opened {}'.format(record['url']))
 

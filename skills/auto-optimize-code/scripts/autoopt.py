@@ -159,10 +159,11 @@ AFTER_DEFAULTS = {'stop': 'ask', 'budget_hours': None, 'budget_stages': None,
 	'disk': 'ask', 'oldest_toolchain_command': None, 'tests_driver_edit': 'ask',
 	'commit_trailer': None, 'pair_cap_hours': 4, 'setup_questions': 'ask',
 	'build_outputs': [], 'ship': 'ask', 'ship_documents': [],
-	'pr_remote': None, 'pr_head_owner': None}
+	'pr_remote': None, 'pr_head_owner': None, 'branch_prefix': 'ask'}
 AFTER_CHOICES = {'stop': ('ask', 'auto'), 'disk': ('ask', 'keep', 'prune'),
 	'tests_driver_edit': ('ask', 'yes', 'no'), 'setup_questions': ('ask',
-	'recommended'), 'ship': ('ask', 'github', 'branch', 'apply', 'none')}
+	'recommended'), 'ship': ('ask', 'github', 'branch', 'apply', 'none'),
+	'branch_prefix': ('ask', 'yes', 'no')}
 # What step 5 can open on GitHub, in the order they are posted, each with
 # its folder under `<work>/ship/` and the record posting it writes there.
 SHIP_DOCUMENTS = ('bugs', 'tests', 'optimization')
@@ -202,7 +203,7 @@ AFTER_KINDS = {'stop': str, 'disk': str, 'budget_hours': float,
 	'tests_driver_edit': str,
 	'commit_trailer': str, 'pair_cap_hours': float, 'setup_questions': str,
 	'build_outputs': path_list, 'ship': str, 'ship_documents': path_list,
-	'pr_remote': str, 'pr_head_owner': str}
+	'pr_remote': str, 'pr_head_owner': str, 'branch_prefix': str}
 
 
 def register_after(defaults, kinds, choices=None, whole=(), nonneg=(),
@@ -9704,6 +9705,42 @@ def pr_messages(root, directory, steps):
 	return messages
 
 
+# What a branch step 5 makes or pushes starts with, when the user chose it
+# (`after.branch_prefix` yes).
+BRANCH_PREFIX = 'auto-optimize/'
+
+
+def ship_branch(config, base):
+	"""`base`, the name of a branch step 5 makes or pushes, with
+	BRANCH_PREFIX in front when the user chose it at step 5; without it
+	otherwise, an unanswered question included."""
+
+	after = dict(AFTER_DEFAULTS, **(config.get('after') or {}))
+
+	return BRANCH_PREFIX + base if after.get('branch_prefix') == 'yes' else \
+		base
+
+
+def tests_branch_remote(config, local):
+	"""The name step 1's tests branch (`local`) is pushed under: its own
+	name, `auto-optimize/<date>-unit-tests`, with the prefix;
+	`unit-tests-<date>` without it."""
+
+	after = dict(AFTER_DEFAULTS, **(config.get('after') or {}))
+
+	if after.get('branch_prefix') == 'yes':
+		return local
+
+	match = re.match(r'^{}(\d{{4}}-\d\d-\d\d)-unit-tests$'.format(re.escape(
+		BRANCH_PREFIX)), local)
+
+	if match:
+		return 'unit-tests-' + match.group(1)
+
+	return local[len(BRANCH_PREFIX):] if local.startswith(BRANCH_PREFIX) else \
+		local
+
+
 def pr_branch_name(title):
 	"""A branch name from the PR's title: lower case, words joined by
 	hyphens, at most 50 characters."""
@@ -9875,7 +9912,7 @@ def pr(args):
 	after = dict(AFTER_DEFAULTS, **(config.get('after') or {}))
 	fork = args.remote or after.get('pr_remote')
 	head_owner = None
-	branch_name = args.branch or pr_branch_name(title)
+	branch_name = args.branch or ship_branch(config, pr_branch_name(title))
 
 	if args.head and not fork:
 		fail('--head OWNER:BRANCH needs --remote (or after.pr_remote): the '
@@ -11948,7 +11985,8 @@ def build_parser():
 	opener.add_argument('--dir', help='the rendered PR: body.md, body.title '
 		'and messages/<id>.txt (default <work>/ship/pr-optimization)')
 	opener.add_argument('--branch', help='the branch to push (default: from '
-		'the title); refused when it is the target or exists already')
+		'the title, after `auto-optimize/` when after.branch_prefix is yes); '
+		'refused when it is the target or exists already')
 	opener.add_argument('--post', action='store_true', help='push and open the '
 		'PR; records pr.json in --dir')
 	opener.add_argument('--edit', action='store_true', help='replace the open '

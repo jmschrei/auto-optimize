@@ -160,6 +160,10 @@ def plain(base, suite):
 	suite.check('apply refuses before the search has ended', 'has not ended'
 		in out, out)
 	run_end(search)
+	code, out = run([SHIP, 'plan', work])
+	suite.check('plan offers a plain search apply or not now, and asks nothing '
+		'about branch names', 'Apply the change to the original file(s)' in
+		out and 'Not now' in out and 'Start the branch names' not in out, out)
 
 	code, out = run([SHIP, 'apply', work])
 	suite.check('the preview names the copied file and the file the change '
@@ -294,6 +298,16 @@ def branches(suite, base):
 	suite.check('apply refuses a repository search, naming branch',
 		'ship.py branch' in out, out)
 
+	code, out = run([SHIP, 'plan', work])
+	suite.check('plan asks a repository search whether the branch names start '
+		'with auto-optimize/, showing both forms', 'Start the branch names '
+		'with auto-optimize/?' in out and '- No: `<from-the-pr-title>`' in out
+		and '- Yes: `auto-optimize/<from-the-pr-title>`' in out and
+		'after.branch_prefix=<no|yes>' in out, out)
+	code, out = run([SHIP, 'branch', work, '--name', 'faster'], expect=(1,))
+	suite.check('branch refuses until the user has answered it',
+		'after.branch_prefix' in out, out)
+	set_after(search, branch_prefix='no')
 	code, out = run([SHIP, 'branch', work, '--name', 'faster'])
 	suite.check('the branch preview lists one commit per kept change, by '
 		'their commit messages', 'Raise the quality\n' in out and
@@ -319,6 +333,27 @@ def branches(suite, base):
 		expect=(1,))
 	suite.check('a branch that exists is refused', 'already has a branch' in
 		out, out)
+	set_after(search, branch_prefix='yes')
+	run([SHIP, 'branch', work, '--yes'])
+	named = 'auto-optimize/optimized-{}'.format(autoopt.now()[:10])
+	suite.check('with the prefix chosen, the default branch starts with it',
+		subprocess.run(['git', '-C', original, 'rev-parse', '--verify', '-q',
+		'refs/heads/' + named], capture_output=True).returncode == 0, tr.git(
+		'-C', original, 'branch', '--list'))
+	set_after(search, branch_prefix='no')
+
+	config = {'after': {'branch_prefix': 'yes'}}
+	plain_config = {'after': {'branch_prefix': 'no'}}
+	suite.equal('the PR and local branch names, with and without the prefix',
+		(autoopt.ship_branch(config, 'faster'), autoopt.ship_branch(
+		plain_config, 'faster'), autoopt.ship_branch({}, 'faster')),
+		('auto-optimize/faster', 'faster', 'faster'))
+	suite.equal('step 1\'s branch is pushed under its own name with the prefix, '
+		'and as unit-tests-<date> without it', (autoopt.tests_branch_remote(
+		config, 'auto-optimize/2026-01-02-unit-tests'),
+		autoopt.tests_branch_remote(plain_config,
+		'auto-optimize/2026-01-02-unit-tests')), (
+		'auto-optimize/2026-01-02-unit-tests', 'unit-tests-2026-01-02'))
 
 	return work, search
 
@@ -346,9 +381,18 @@ def pull_request(suite, base, work, search):
 		'programmable genomics', 'baseline', 'winner', 'iteration')), body)
 	suite.check('the chosen bug report is named by its stand-in until it is '
 		'filed', '#<bug issue>' in body and '#<tests PR>' not in body, body)
-	suite.check('and closes with the Claude Code line', body.rstrip()
-		.endswith('Generated with [Claude Code](https://claude.com/claude-'
-		'code)'), body[-200:])
+	suite.check('and says nothing about how it was written', 'Claude' not in
+		body and 'Generated with' not in body, body[-200:])
+	prose = os.path.join(directory, 'prose.md')
+	kept = read(prose)
+	write(prose, kept.replace('=== behaviour\n', '=== behaviour\nGenerated with '
+		'[Claude Code](https://claude.com/claude-code). ', 1))
+	code, out = run([BODY, directory, '--out', os.path.join(directory,
+		'body.md')], expect=(1,))
+	suite.check('a notice of how it was written, put in the prose, is refused',
+		'notice' in out and read(os.path.join(directory, 'body.md')) == body,
+		out)
+	write(prose, kept)
 
 	code, out = run([AUTOOPT, 'pr', work])
 	suite.check('the PR preview pushes nothing and names the push target',

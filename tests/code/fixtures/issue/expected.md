@@ -1,4 +1,4 @@
-These bugs turned up while we wrote a test suite for chromap (#209). Many of the bugs below are likely edge cases that a user may never experience in practice, and the table after this paragraph divides them by severity. Severity is our estimate of how likely a user is to meet the bug and what it costs them: **high**, likely to be met in ordinary use, with wrong output or a crash; **medium**, needs unusual input, options or an environment, or costs time rather than correctness; **low**, an edge case, malformed input, a rarely used option, or a documentation mismatch. This bug report was written by Claude, so its wording may be more direct than necessary.
+These bugs turned up while we wrote a test suite for chromap (#209). Many of the bugs below are likely edge cases that a user may never experience in practice, and the table after this paragraph divides them by severity. Severity is our estimate of how likely a user is to meet the bug and what it costs them: **high**, likely to be met in ordinary use, with wrong output or a crash; **medium**, needs unusual input, options or an environment, or costs time rather than correctness; **low**, an edge case, malformed input, a rarely used option, or a documentation mismatch.
 
 | Severity | # | Bug | Category | Effect |
 |---|---:|---|---|---|
@@ -387,5 +387,3 @@ stdout: [] stderr: [0.3.3-r521]
 ```
 
 </details>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)

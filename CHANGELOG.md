@@ -76,8 +76,8 @@ it.
   - The documents are ported from an earlier, private version of this skill
     and rewritten to hold only what the search recorded. They carry no
     opening that names the tool or the lab and no title prefix, and
-    `lint_text.py` now refuses both in published text. Each ends with the
-    Claude Code line.
+    `lint_text.py` now refuses both in published text. Nor do they say how
+    they were written: no line names the tool, the model or the lab.
   - The optimization PR (`opt_pr_tables.py`, `opt_pr_body.py`, `autoopt.py
     pr`) reports the medians and ranges of the objective and every
     observer, the paired timing, the first call, each output check's worst
@@ -92,6 +92,11 @@ it.
     change to a suite file is refused, and the commits must equal the
     measured change outside the suite's files.
   - Forks: `after.pr_remote` and `after.pr_head_owner`.
+  - The same questions ask whether the branches shipping makes or pushes
+    start with `auto-optimize/` (`after.branch_prefix`): the optimization
+    PR's, the unit-test PR's (pushed as `unit-tests-<date>` without it) and a
+    local branch. `ship.py branch` and `rehearse` refuse until it is
+    answered.
   - `tests-branch` records the original's path, branch, commit and remote in
     `tests/branch.json`; with a suite, `config.json` describes the clone.
   - Remote URLs are recorded as configured, before `insteadOf` rewrites.

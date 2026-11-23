@@ -44,7 +44,6 @@ FIXTURE = os.path.join(HERE, 'fixtures', 'issue')
 DATA = os.path.join(FIXTURE, 'data')
 EXPECTED = os.path.join(FIXTURE, 'expected.md')
 TITLE = 'Bugs found while testing chromap 949043c'
-CLOSING = attribution.CLOSING
 OPENING = 'These bugs turned up while we wrote a test suite for chromap (#209).'
 # Words that would advertise the tool or its makers in a published document.
 ADVERT = re.compile(r'auto-?optimi[sz]|programmable genomics|umass|'
@@ -131,18 +130,17 @@ def rendering(suite, base):
 	lines = expected.split('\n')
 	suite.equal('the first paragraph is the opening sentence, then the fixed '
 		'sentences', lines[0], OPENING + ' ' + ' '.join(attribution.ISSUE_NOTES))
-	suite.check('the first paragraph says many bugs are edge cases, and that '
-		'Claude wrote the report', 'edge cases that a user may never '
-		'experience' in lines[0] and 'written by Claude' in lines[0]
-		and 'more direct than necessary' in lines[0] and lines[1] == '',
+	suite.check('the first paragraph says many bugs are edge cases, and '
+		'nothing about how the report was written', 'edge cases that a user '
+		'may never experience' in lines[0] and 'Claude' not in '\n'.join(lines)
+		and 'Generated with' not in '\n'.join(lines) and lines[1] == '',
 		lines[0][-300:])
 	suite.check('nothing in the body names the tool, its makers or checks it '
 		'does not have', not ADVERT.search(expected) and not ADVERT.search(
 		read(os.path.join(base, 'body.title'))), ADVERT.findall(expected))
-	suite.check('the severity key sits in the first paragraph, before the '
-		'sentence that Claude wrote the issue, and not under the table',
-		lines[0].index(attribution.SEVERITY_KEY) < lines[0].index(
-		attribution.ISSUE_NOTES[2]) and lines[0].count('**high**') == 1
+	suite.check('the severity key ends the first paragraph, and is not under '
+		'the table', lines[0].endswith(attribution.SEVERITY_KEY) and
+		lines[0].count('**high**') == 1
 		and 'Severity is our estimate' not in '\n'.join(lines[1:]), lines[0][-500:])
 	toy = [{'number': 1, 'short': 'a', 'category': 'crash', 'effect': 'crash',
 		'severity': 'low'}]
@@ -201,8 +199,8 @@ def rendering(suite, base):
 		manual == ['3', '5'] and 'unlike the other reproductions: it needs a '
 		'clang++' not in expected and 'unlike the other reproductions: it needs '
 		'the chromap source tree' in expected, manual)
-	suite.check('the body ends with the closing line',
-		expected.endswith('</details>\n\n' + CLOSING + '\n'))
+	suite.check('the body ends with the last bug\'s reproduction, with no '
+		'line after it', expected.endswith('</details>\n'))
 
 	code, err = check_file(TITLE, out)
 	suite.check('attribution.py check passes the body', code == 0, err)
@@ -285,10 +283,8 @@ REFUSALS = [
 		'=== 3.context\n# Bugs\n\n', 'holds a heading (\'# Bugs\')'),
 	('a section heading in an output', 'prose.md', 'Expected: 19 lines',
 		'## Output\n\nExpected: 19 lines', 'holds a heading (\'## Output\')'),
-	('the closing line in prose', 'prose.md', '=== 8.reproduction\n',
-		'=== 8.reproduction\n' + CLOSING + '\n', 'holds the closing line'),
 	('a fixed sentence in prose', 'prose.md', '=== intro\n', '=== intro\n'
-		+ attribution.ISSUE_NOTES[2] + '\n\n', 'holds the fixed sentence'),
+		+ attribution.ISSUE_NOTES[0] + '\n\n', 'holds the fixed sentence'),
 	('a code fence in the commands', 'prose.md', '=== 1.reproduction\n',
 		'=== 1.reproduction\n```bash\n', 'holds a code fence'),
 	('an output without its actual block', 'prose.md', 'Actual: the chr1 reads',
@@ -371,10 +367,10 @@ def splitting(suite, base):
 		body.count(note) == len(moved) and all(re.search(
 		r'(?m)^### {}\. [^\n]+\n\n[^\n]+\n\n{}'.format(n, re.escape(note)), body)
 		for n in moved), moved)
-	suite.check('the comment holds the moved sections whole, then the closing '
-		'line', extra.startswith('Reproductions of bug') and extra.count(
+	suite.check('the comment holds the moved sections whole, and nothing '
+		'after them', extra.startswith('Reproductions of bug') and extra.count(
 		'<summary>Reproduction</summary>') == len(moved) and extra.endswith(
-		'</details>\n\n' + CLOSING + '\n') and len(extra) <= limit, extra[:200])
+		'</details>\n') and len(extra) <= limit, extra[:200])
 	suite.check('one comment is enough here, so there is no second',
 		not os.path.exists(os.path.join(data, 'issue.comment-2.md')))
 
@@ -414,10 +410,10 @@ def splitting(suite, base):
 		'issue.comment-{}.md'.format(i) for i in range(1, len(texts) + 1)]
 		and all(len(text) <= limit for text in texts) and len(body) <= limit,
 		(code, err, files, groups))
-	suite.check('every comment is a whole set of sections with its own head '
-		'and the closing line', all(text.startswith('Reproductions of ' + (
-		issue_body.bugs_named(group))) and text.endswith('</details>\n\n'
-		+ CLOSING + '\n') for text, group in zip(texts, groups)), groups)
+	suite.check('every comment is a whole set of sections with its own head',
+		all(text.startswith('Reproductions of ' + (issue_body.bugs_named(
+		group))) and text.endswith('</details>\n') for text, group in zip(
+		texts, groups)), groups)
 	suite.check('each bug in the body points to the comment that holds it',
 		all(re.search(r'(?m)^### {}\. [^\n]+\n\n[^\n]+\n\n{}$'.format(n,
 		re.escape(issue_body.MOVED_NOTE.format(issue_body.comment_name(

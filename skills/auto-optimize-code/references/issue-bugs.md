@@ -18,7 +18,7 @@ The agent writes one row per bug and the sentences, commands and outputs;
 [haowenz/chromap#210](https://github.com/haowenz/chromap/issues/210) (the
 first paragraph, severity table, introduction, setup block, a section per
 category, a paragraph and a collapsed reproduction per bug), every heading,
-the numbering and the closing line. It refuses to render a bug whose
+and the numbering. It refuses to render a bug whose
 reproduction was not rerun on the base binary as shown, and any wording
 `lint_text.py` refuses in a published document. The same inputs give the
 same body byte for byte, and a refusal lists every problem on stderr.
@@ -78,12 +78,11 @@ effect related` (`short` may be left out):
 `prose.md`: fields that each start with a line `=== <field>`; no other line
 may start with `=== `. `issue_body.py template $I > $I/prose.md` writes one
 `<<FILL: …>>` per field. Paragraphs may wrap; prose holds no headings,
-placeholders, code fences in commands, the fixed sentences or the closing
-line.
+placeholders, code fences in commands, or the fixed sentences.
 
 | Field | Required | Holds |
 |---|---|---|
-| `opening` | yes | one complete sentence of the writer's own, on one line, starting with a capital letter and ending with a period: "These bugs turned up while we wrote a test suite for chromap (#209)." It says what was being done when the bugs turned up, and names no tool or group behind the report. The renderer follows it, in the same paragraph, with the three fixed sentences of `attribution.ISSUE_NOTES`: many of the bugs are likely edge cases, what the severity levels mean, and that Claude wrote the report |
+| `opening` | yes | one complete sentence of the writer's own, on one line, starting with a capital letter and ending with a period: "These bugs turned up while we wrote a test suite for chromap (#209)." It says what was being done when the bugs turned up, and names no tool or group behind the report. The renderer follows it, in the same paragraph, with the two fixed sentences of `attribution.ISSUE_NOTES`: many of the bugs are likely edge cases, and what the severity levels mean |
 | `intro` | yes | the version, the commit (the one `verify --commit` records), the build (compiler, flags) and the platform the bugs were reproduced on; which bugs need a special build or harness; which came from which part of the work |
 | `reading` | no | how to read the report; without it, a default sentence |
 | `setup.context`, `setup` | no | what the shared setup needs and makes; the shell commands every reproduction starts from |
@@ -144,8 +143,7 @@ build") are reported on stderr, not rewritten: edit those by hand.
 **Length.** GitHub refuses a body or comment over 65,536 characters. Past
 62,000 (`--limit`), `render` moves the longest reproductions into
 `body.comment-1.md`, `-2.md` and on, in bug order, each bug keeping its
-paragraph and a pointer to its comment, and each comment ending with the
-closing line. They are posted in order right after the issue. It refuses
+paragraph and a pointer to its comment. They are posted in order right after the issue. It refuses
 when the prose alone, or one reproduction alone, is over the limit: cut the
 output to the lines that show the bug, or file fewer bugs.
 

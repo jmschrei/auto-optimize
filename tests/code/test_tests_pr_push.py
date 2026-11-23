@@ -32,6 +32,9 @@ BODY = os.path.join(SCRIPTS, 'tests_pr_body.py')
 TABLES = os.path.join(SCRIPTS, 'tests_pr_tables.py')
 DATA = os.path.join(HERE, 'fixtures', 'tests_pr', 'data')
 BRANCH = 'auto-optimize/2026-11-01-unit-tests'
+# The name it is pushed under when the user did not choose the auto-optimize/
+# prefix at step 5 (`after.branch_prefix`).
+PLAIN = 'unit-tests-2026-11-01'
 TITLE = 'Add unit tests for pkg'
 
 GH = '''#!/bin/sh
@@ -190,9 +193,10 @@ def checks(suite, root):
 		'come from branch.json and the target branch from step 1\'s record',
 		code == 0 and 'preview only' in out and 'target branch main, from {}'
 		.format(os.path.join(work, 'tests', 'branch.json')) in out, err + out)
-	suite.check('it pushes to origin with the branch as the head', 'branch:     '
-		'{} -> remote origin (https://github.com/example/pkg.git, from the '
-		'default), head {}'.format(BRANCH, BRANCH) in out, out)
+	suite.check('it pushes to origin, the branch named without the prefix '
+		'the user did not choose, as the head', 'branch:     {} -> {} on '
+		'remote origin (https://github.com/example/pkg.git, from the default), '
+		'head {}'.format(BRANCH, PLAIN, PLAIN) in out, out)
 	suite.check('and names the title, the sections and the commit\'s files',
 		'title:      ' + TITLE in out and 'section:    Running it' in out
 		and 'commits:    1 over {}'.format(base) in out
@@ -285,16 +289,17 @@ def checks(suite, root):
 
 	print('\nposting through a fork')
 	git(suite_dir, 'remote', 'add', 'fork', 'https://github.com/me/pkg.git')
-	write_json(config, {'after': {'pr_remote': 'fork', 'pr_head_owner': 'me'}})
+	write_json(config, {'after': {'pr_remote': 'fork', 'pr_head_owner': 'me',
+		'branch_prefix': 'yes'}})
 	code, out, err = push()
 	suite.check('with after.pr_remote and after.pr_head_owner the preview uses '
-		'the fork with no flags', code == 0 and '-> remote fork '
+		'the fork with no flags', code == 0 and '-> {} on remote fork '
 		'(https://github.com/me/pkg.git, from after.pr_remote), head me:{}'
-		.format(BRANCH) in out, err + out)
+		.format(BRANCH, BRANCH) in out, err + out)
 	code, out, err = push('--head', 'other:' + BRANCH, '--remote', 'origin')
 	suite.check('and --remote and --head override them', code == 0
-		and '-> remote origin (https://github.com/example/pkg.git, from '
-		'--remote), head other:{}'.format(BRANCH) in out, err + out)
+		and '-> {} on remote origin (https://github.com/example/pkg.git, from '
+		'--remote), head other:{}'.format(BRANCH, BRANCH) in out, err + out)
 	code, out, err = push('--post')
 	suite.check('--post pushes the branch to the fork and opens the PR with '
 		'the fork\'s head', code == 0 and 'opened https://github.com/example/'
@@ -307,19 +312,20 @@ def checks(suite, root):
 	os.remove(config)
 	os.remove(os.path.join(ship, 'pr.json'))
 	code, out, err = push('--post', GH_NUMBER='13')
-	suite.check('--post pushes the branch, as it is, and opens the PR',
-		code == 0 and 'opened https://github.com/example/pkg/pull/13' in out
-		and git(upstream, 'rev-parse', BRANCH) == git(suite_dir, 'rev-parse',
-		BRANCH), err + out)
+	suite.check('--post pushes the branch\'s commit under the name without '
+		'the prefix, and opens the PR', code == 0 and 'opened https://github.com/'
+		'example/pkg/pull/13' in out and git(upstream, 'rev-parse', PLAIN) ==
+		git(suite_dir, 'rev-parse', BRANCH) and BRANCH not in branches(
+		upstream), err + out)
 	record = json.loads(read(os.path.join(ship, 'pr.json')))
 	suite.equal('pr.json records the repository, URL, number, branch, title, '
 		'digest and date', sorted(record), ['branch', 'date', 'digest', 'number',
 		'repo', 'title', 'url'])
 	suite.equal('with the values of this PR', (record['repo'], record['number'],
-		record['branch'], record['title']), ('example/pkg', 13, BRANCH, TITLE))
+		record['branch'], record['title']), ('example/pkg', 13, PLAIN, TITLE))
 	suite.check('gh pr create got the repository, target branch, head, title '
 		'and body file', 'pr create --repo example/pkg --base main --head {} '
-		'--title {} --body-file {}'.format(BRANCH, TITLE, body)
+		'--title {} --body-file {}'.format(PLAIN, TITLE, body)
 		in calls().splitlines(), calls())
 
 	before = calls()
@@ -337,7 +343,7 @@ def checks(suite, root):
 	code, out, err = push()
 	suite.check('a changed title is reported by the preview', code == 0
 		and 'the title or body has changed since' in out, out + err)
-	pushed = git(upstream, 'rev-parse', BRANCH)
+	pushed = git(upstream, 'rev-parse', PLAIN)
 	code, out, err = push('--edit')
 	record = json.loads(read(os.path.join(ship, 'pr.json')))
 	suite.check('--edit replaces the open PR\'s title and body, and records '
@@ -345,7 +351,7 @@ def checks(suite, root):
 		in out and 'pr edit 13 --repo example/pkg --title {} and tool '
 		'--body-file {}'.format(TITLE, body) in calls() and record['title'] ==
 		TITLE + ' and tool', err + out + calls())
-	suite.equal('and pushes nothing', git(upstream, 'rev-parse', BRANCH),
+	suite.equal('and pushes nothing', git(upstream, 'rev-parse', PLAIN),
 		pushed)
 
 	record['repo'] = 'other/pkg'

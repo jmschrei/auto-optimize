@@ -394,7 +394,8 @@ them together (`ship.py rehearse` renders them and previews every push), and
 `ship.py post` posts them only after you approve that exact batch: the bug
 report first, then the unit-test PR, then the optimization PR, each holding
 the numbers of the ones before it. A repository you cannot push to is reached
-from your fork.
+from your fork. With the same questions you choose whether the branches it
+pushes start with `auto-optimize/`; the documents themselves name no tool.
 
 **Or not now.** The change stays in the search; ask later, or take it by hand
 from `<work>/finish/archive/` (`idea.patch` and the winner's files) after

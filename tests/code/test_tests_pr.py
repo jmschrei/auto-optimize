@@ -146,8 +146,8 @@ def rendering(suite, base):
 		['## Tests and line coverage by part', '## Running it',
 		'## How expected values are derived', '## What it covers',
 		'## Line coverage', '## What the suite does not cover'])
-	suite.check('the body ends with the closing line', expected.rstrip(
-		'\n').endswith(attribution.CLOSING))
+	suite.check('the body says nothing about how it was written', 'Claude'
+		not in expected and 'Generated with' not in expected, expected[-300:])
 	running = expected.split('## Running it\n', 1)[1].split('\n## ', 1)[0]
 	suite.check('checked is the last paragraph of *Running it*, unwrapped',
 		running.strip().split('\n\n')[-1] == 'The suite passed in each '

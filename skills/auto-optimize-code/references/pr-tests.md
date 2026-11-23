@@ -2,7 +2,7 @@
 
 One of the documents step 5 can publish, when step 1 wrote a suite and the
 user chose this PR (`after.ship_documents` holds `tests`). It is opened from
-step 1's branch as it is, and holds only test files: at most one dependency
+step 1's branch, its commits as they are, and holds only test files: at most one dependency
 manifest that declares a test dependency, the repository's test driver when
 the user allowed it, and files the user approved by name may join them. It
 changes no source, build or workflow file, so it can be merged whether or not
@@ -43,7 +43,6 @@ holds:
 | *What it covers* | `collection.tsv` | `module <path>`, one per module |
 | *Line coverage* | `coverage.tsv` | `coverage.method` |
 | *What the suite does not cover* | `names.tsv`, `coverage.tsv` | `contradictions`, `contradictions.marked`, `platforms` |
-| (closing line) | fixed | none |
 
 The opening paragraph starts with the `opening` field, such as "This PR adds
 a pytest suite for `pkg` and its command-line programs.", and the renderer
@@ -217,7 +216,9 @@ Posting is done for every chosen document together, after the user has
 reviewed them all: `python3 $AO/ship.py rehearse $WORK`,
 then `python3 $AO/ship.py post $WORK all --approved --digest D`
 (`references/step5-ship.md`). No document is posted on its own. The post
-pushes step 1's branch as it is, opens the PR with `gh pr create`, and
+pushes step 1's branch, under the name the user's answer about branch
+names gives (`references/step5-ship.md`; `--remote-branch` for another),
+opens the PR with `gh pr create`, and
 records it in `$T/pr.json` (repository, URL, number, branch, title, a digest
 of title and body, and the time); `ship.py post` then renders the other
 documents again so that they hold its number. A second `--post` is refused.
