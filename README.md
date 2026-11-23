@@ -371,7 +371,9 @@ it is: `<work>/dashboard.ipynb`, a live page in JupyterLab with the objective
 by iteration, the frontier, the search tree, every run, the GPUs, the running
 processes, and each iteration's code change against its parent. At the end it
 writes a self-contained snapshot, `<work>/autooptimize/final/dashboard.html`,
-which opens in any browser.
+which opens in any browser. The snapshot leaves out the hostname, GPU serial
+numbers and GPU lease holders, and writes your home directory as `~`, so it
+can be shared.
 
 ## Where things are
 

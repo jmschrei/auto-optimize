@@ -732,32 +732,38 @@ def hold_lease(config, argv=None):
 			.format(config['gpu_command']))
 
 	argv = [sys.executable] + list(sys.argv if argv is None else argv)
-	mark = os.path.join(tempfile.gettempdir(), 'lease-{}-{}'.format(
-		os.getpid(), int(time.time())))
+	# In a directory only this user can enter: at a predictable name in the
+	# shared temporary directory, another user could plant the mark, or a
+	# symlink the child's open() would follow.
+	folder = tempfile.mkdtemp(prefix='autoopt-lease-')
+	mark = os.path.join(folder, 'started')
 	end = time.time() + LEASE_WAIT_HOURS * 3600
 
-	while True:
-		sys.stderr.write('no GPU lease held: starting under `{}`\n'.format(
-			config['gpu_command']))
-		sys.stderr.flush()
-		code = subprocess.run(command + argv, env=dict(os.environ,
-			AUTOOPT_LEASE_MARK=mark)).returncode
+	try:
+		while True:
+			sys.stderr.write('no GPU lease held: starting under `{}`\n'.format(
+				config['gpu_command']))
+			sys.stderr.flush()
+			code = subprocess.run(command + argv, env=dict(os.environ,
+				AUTOOPT_LEASE_MARK=mark)).returncode
 
-		if os.path.exists(mark):
-			os.remove(mark)
-			sys.exit(code)
+			if os.path.exists(mark):
+				sys.exit(code)
 
-		if time.time() >= end:
-			fail('`{}` started nothing for {} h (its last exit code was {}): '
-				'no GPU came free'.format(config['gpu_command'],
-				LEASE_WAIT_HOURS, code))
+			if time.time() >= end:
+				fail('`{}` started nothing for {} h (its last exit code was '
+					'{}): no GPU came free'.format(config['gpu_command'],
+					LEASE_WAIT_HOURS, code))
 
-		# The allocator ended without starting this script: nothing claimed.
-		sys.stderr.write('`{}` exited {} without starting this: no GPU free; '
-			'again in {} s\n'.format(config['gpu_command'], code,
-			LEASE_RETRY_SECONDS))
-		sys.stderr.flush()
-		time.sleep(LEASE_RETRY_SECONDS)
+			# The allocator ended without starting this script: nothing
+			# claimed.
+			sys.stderr.write('`{}` exited {} without starting this: no GPU '
+				'free; again in {} s\n'.format(config['gpu_command'], code,
+				LEASE_RETRY_SECONDS))
+			sys.stderr.flush()
+			time.sleep(LEASE_RETRY_SECONDS)
+	finally:
+		shutil.rmtree(folder, ignore_errors=True)
 
 
 def lease_words(config):

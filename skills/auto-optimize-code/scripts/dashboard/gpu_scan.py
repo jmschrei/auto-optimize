@@ -16,6 +16,7 @@ the command line does not show, such as a shell-redirected stdout
 
 import os
 import json
+import stat
 import time
 import ctypes
 import shutil
@@ -425,13 +426,34 @@ SHARED_WAIT = 1.5
 
 def shared_dir():
 	"""This user's directory for what every publisher on the host shares:
-	/dev/shm where there is one, since locks on a network filesystem stall."""
+	/dev/shm where there is one, since locks on a network filesystem stall.
+
+	The name is predictable, so another user of the host can make it first
+	and plant symlinks that redirect these writes. A directory of that name
+	this user does not own, or that others may write to, is passed over for
+	one under ~/.cache."""
 
 	base = '/dev/shm' if os.access('/dev/shm', os.W_OK) else tempfile.gettempdir()
-	path = os.path.join(base, 'dashboard-monitor-{}'.format(os.getuid()))
-	os.makedirs(path, mode=0o700, exist_ok=True)
+	name = 'dashboard-monitor-{}'.format(os.getuid())
 
-	return path
+	return own_dir([os.path.join(base, name),
+		os.path.join(os.path.expanduser('~'), '.cache', name)])
+
+
+def own_dir(paths):
+	"""The first of `paths`, made if missing, that is a directory (not a
+	symlink to one) this user owns and no one else may write to."""
+
+	for path in paths:
+		os.makedirs(path, mode=0o700, exist_ok=True)
+		info = os.lstat(path)
+
+		if (stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+				and not info.st_mode & 0o022):
+			return path
+
+	raise OSError('none of {} is a directory this user alone can write '
+		'to'.format(', '.join(paths)))
 
 
 def _read_sample(path):

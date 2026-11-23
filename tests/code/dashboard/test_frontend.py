@@ -1538,6 +1538,73 @@ def check_dead_code(root=None, work=None):
 	equal('dashboard.css styles no class nothing uses', unused, [])
 
 
+def check_own_dir(work):
+	"""The publishers' shared directory has a predictable name, so one made
+	by someone else, or a symlink in its place, is passed over."""
+
+	print('\nshared directory')
+	base = os.path.join(work, 'own-dir')
+	os.makedirs(os.path.join(base, 'elsewhere'))
+	fallback = os.path.join(base, 'fallback')
+
+	planted = os.path.join(base, 'planted')
+	os.symlink(os.path.join(base, 'elsewhere'), planted)
+	equal('a symlink at the name is passed over', gpu_scan.own_dir([planted,
+		fallback]), fallback)
+
+	open_to_all = os.path.join(base, 'open')
+	os.makedirs(open_to_all)
+	os.chmod(open_to_all, 0o777)
+	equal('so is a directory others may write to', gpu_scan.own_dir(
+		[open_to_all, fallback]), fallback)
+
+	fresh = os.path.join(base, 'fresh')
+	equal('a new one is made and used', gpu_scan.own_dir([fresh, fallback]),
+		fresh)
+	check('readable by this user alone', os.stat(fresh).st_mode & 0o077 == 0,
+		oct(os.stat(fresh).st_mode))
+
+
+def check_export_private(root, work):
+	"""The export is a file people pass around: it names neither the host,
+	nor the GPUs' serials, nor who holds a lease, and writes the home
+	directory as ~."""
+
+	print('\nexport leaves out the machine')
+	sample = {'hostname': 'node7.example.internal', 'gpus': [
+		{'index': 0, 'uuid': 'GPU-1234', 'lease': {'user': 'someone',
+			'note': 'their private project'}}, {'index': 1, 'uuid': 'GPU-5678',
+			'lease': None}]}
+	shared = autoopt_monitor.shareable(sample)
+	check('the hostname, serials and lease holder are dropped',
+		shared['hostname'] is None and [g['uuid'] for g in shared['gpus']]
+		== [None, None] and 'someone' not in json.dumps(shared)
+		and 'private' not in json.dumps(shared) and shared['gpus'][1]['lease']
+		is None, shared)
+	check('and the sample handed in is left as it was',
+		sample['hostname'] == 'node7.example.internal'
+		and sample['gpus'][0]['lease']['user'] == 'someone', sample)
+
+	# The fixture's own directory stands in for the home directory.
+	home = os.path.dirname(os.path.dirname(os.path.abspath(root)))
+	saved = os.environ.get('HOME')
+	os.environ['HOME'] = home
+	try:
+		path, _ = autoopt_monitor.export(root, os.path.join(work,
+			'export-private.html'))
+	finally:
+		if saved is None:
+			os.environ.pop('HOME')
+		else:
+			os.environ['HOME'] = saved
+
+	text = open(path).read()
+	check('the exported file holds no home path, and ~ in its place',
+		home + '/' not in text and '"~/' in text, home)
+	check('nor the hostname', '"{}"'.format(socket.gethostname()) not in text,
+		socket.gethostname())
+
+
 def check_export_markup(root, work, args=None):
 	"""A README holding `<!--` then `<script` puts the HTML parser in its
 	double-escaped state, where `</script>` no longer closes the embedded
@@ -3542,6 +3609,8 @@ def main(argv=None):
 			try:
 				check_readme_handover(root, work, args)
 				check_export_markup(root, work, args)
+				check_export_private(root, work)
+				check_own_dir(work)
 				check_pulse(root, work, args)
 				check_gpu_strip(root, work, args)
 				check_live_button(root, work, args)

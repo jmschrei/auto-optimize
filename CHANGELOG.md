@@ -53,6 +53,20 @@ it.
 
 ### Claude Code skill
 
+- **Security and privacy.**
+  - The static dashboard (`final/dashboard.html`, `--export`) leaves out the
+    hostname, the GPUs' serial numbers and GPU lease holders' names and
+    notes, and writes the home directory as `~`. It included all of them, so
+    sharing the file shared the machine's name and what other users of it
+    were running.
+  - The publishers' shared directory (`/dev/shm/dashboard-monitor-<uid>`)
+    has a predictable name. One made first by another user, or a symlink in
+    its place, was used as it was, so that user could redirect a publisher's
+    writes onto any file the searching user can write. Such a directory is
+    now passed over for one under `~/.cache`.
+  - The mark that says a GPU allocator started the script is made in a
+    private temporary directory, not at a predictable name in `/tmp`.
+  - CI runs with read-only repository permissions.
 - **Step 5, shipping**, between ending the search (step 4) and finishing it
   (step 6, which was step 5). `end` now says the search is over and sends the
   main session to ask the user how to ship; nothing is applied, made or

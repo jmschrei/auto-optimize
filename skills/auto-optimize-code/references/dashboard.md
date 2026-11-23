@@ -132,6 +132,9 @@ leaves the publisher running, so the ended line and the stage strip stay
 current; `end --reopen` finds it still running. Stop it with `--stop` once the
 search is finished (step 6), or by hand for a search that is over some other
 way.
+The export is meant to be passed around, so it leaves out the hostname, the
+GPUs' serial numbers and who holds a GPU lease, and writes the home directory
+as `~`. The live page shows all of them.
 One writer publishes into a directory, and a search has one writer: a second
 writer into a directory refuses, and `--start` or `show()` stops any writer
 into it that the pidfile does not name and any writer of the search into

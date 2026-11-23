@@ -683,6 +683,19 @@ _BOOTSTRAP = r"""
 """
 
 
+def shareable(resources):
+	"""The host sample without what names the machine or its other users:
+	the hostname, the GPUs' serial numbers, and who holds a lease and why.
+	The export is a file people pass around; the live page is not."""
+
+	resources = dict(resources, hostname=None)
+	resources['gpus'] = [dict(gpu, uuid=None, lease={'user': 'leased',
+		'note': 'holder left out of the export'} if gpu.get('lease') else None)
+		for gpu in resources.get('gpus') or []]
+
+	return resources
+
+
 def export(root, path):
 	"""Write one self-contained, read-only HTML file of the search as it is.
 
@@ -697,7 +710,7 @@ def export(root, path):
 
 	snapshot = scanner.snapshot()
 	files = {'state.json': snapshot,
-		'resources.json': scanner.hardware.resources()}
+		'resources.json': shareable(scanner.hardware.resources())}
 	for identifier, (mtime, text) in scanner.readmes().items():
 		files['readmes/%d.json' % identifier] = {'id': identifier, 'text': text}
 	for identifier, (payload, pair) in scanner.diffs(snapshot['iterations'],
@@ -727,6 +740,12 @@ def export(root, path):
 	data = json.dumps({'generated': time.time(),
 		'files': monitor_writer._round(files)}, separators=(',', ':'),
 		default=lambda value: None).replace('<', '\\u003c')
+
+	# The home directory, as JSON spells it, written as ~ wherever a path
+	# starts with it.
+	home = os.path.expanduser('~').rstrip('/')
+	if home:
+		data = re.sub(re.escape(json.dumps(home)[1:-1]) + r'(?=/|")', '~', data)
 
 	page = read('index.html').replace(' data-standalone', '')
 	page = page.replace('<link rel="stylesheet" href="dashboard.css">',
