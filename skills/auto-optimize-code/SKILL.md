@@ -96,7 +96,7 @@ advance.
 | 2 | The setup subagent's: write the benchmark, check its seeding, prove its gates and checks, measure the width, run the baseline A0, seed the ledger, write A0's README, close with `setup --done`. The orchestrator relays its questions to the user | the setup subagent: `references/step2-baseline.md`; the orchestrator: `references/step0-interview.md`, *Handing off step 2* |
 | 3 | Once setup and the miner's S1 are done, `autoopt.py loop` starts the orchestrator subagent, which runs the rounds and hands back with the round tables to show the user; start the next phase | `references/step3-rounds.md`, *The orchestrator subagent* |
 | 4 | End the search on the record: `autoopt.py end` refuses while anything is in flight, pairs the winner with A0, writes the last round's summary, `ended.json` and `ended.md`, deletes the regenerable files and snapshots the dashboard. | `references/step4-final.md` |
-| 5 | Finish: copy the winner out, write the final report, reclaim the disk once the user agrees | `references/step5-finish.md` |
+| 5 | Finish: copy the winner out, write the final report, reclaim the disk once the user agrees, and give the user the commands that bring the change into their code | `references/step5-finish.md` |
 
 | Not a step | Read |
 |---|---|

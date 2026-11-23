@@ -1,5 +1,8 @@
 # auto-optimize
 
+[![CI](https://github.com/jmschrei/auto-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/jmschrei/auto-optimize/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Historically, the task of improving software has been performed by humans who knew
 too much about how computers worked. As punishment for learning too much about how 
 computers worked, they punished us by becoming better than us at this task.
@@ -102,10 +105,24 @@ of one skill compete for the same requests. `auto-optimize list` shows them.
 
 ## A first search
 
-Ask in Claude Code, in plain words:
+The quickest test is the example in this repository, a correct and slow
+one-hot encoder:
 
-> Optimize `count_kmers` in `kmers.py` for speed. The output must stay
-> identical.
+```bash
+git clone https://github.com/jmschrei/auto-optimize
+cd auto-optimize/examples/one-hot
+python3 -m pip install numpy      # the example's dependency; add numba if the search may use it
+python3 onehot.py                 # prints a small encoding: the code runs
+claude
+```
+
+Then ask:
+
+> Use auto-optimize-code to make one_hot_encode in onehot.py faster on a 10
+> Mbp DNA sequence. Its output must stay bitwise identical.
+
+On your own code, ask in plain words: "Optimize `count_kmers` in `kmers.py`
+for speed. The output must stay identical."
 
 The skill starts with an interview: what number to improve and in which
 direction, what must not change and how strictly (bitwise, a tolerance, a
@@ -124,17 +141,41 @@ code per iteration. Then, without you:
    README; a change that passes the keep rule becomes the next root;
 4. the search ends on your word or at the budget you set: the winner is timed
    against A0 in paired runs and summarized in `ended.md`;
-5. the winner is copied out with a final report, and the disk is reclaimed
-   once you agree.
+5. the winner is copied out with a final report, you are given the commands
+   that bring the change into your code (*Getting the result back*, below),
+   and the disk is reclaimed once you agree.
 
-`examples/one-hot/` is a slow, correct one-hot encoder to try this on;
-the walkthrough below is a search on it.
+The walkthrough below is a search on `examples/one-hot/`.
 
 **What it costs.** Every iteration is a subagent session, and so is each
 setup, mining and orchestration phase, so a search of a few dozen iterations
 runs that many agent sessions. `autoopt.py tokens <work>` adds up what a
 search's agents spent, from Claude Code's transcripts; the walkthrough's
-numbers are at its end.
+numbers are at its end. Its 15 iterations took about two hours, so for a
+first try give the interview a smaller budget, such as 5 iterations, and a
+smaller model for the iteration subagents.
+
+### Before you leave it running
+
+A search is meant to go on without you once the interview is over. Three
+things decide whether it can:
+
+- **Tool permissions.** The subagents run `python3` and `git` commands and
+  write files in the search directory, which sits outside your project. Each
+  call your permission settings do not allow waits for your approval, and the
+  search waits with it. Approve them for the session as they come up, or allow
+  them ahead of time with `/permissions`, and add the search directory with
+  `/add-dir`.
+- **Unanswered questions.** The skill asks questions during setup and when a
+  result looks wrong. Claude Code's `askUserQuestionTimeout` setting
+  (`/config`, or `settings.json`: `60s`, `5m`, `10m` or `never`) lets an
+  unanswered question continue; the skill then takes the answer that does the
+  least damage if it is wrong and records it in `ideas.md`. The skill offers
+  this before a long search and does not change your settings itself.
+- **What runs on your machine.** The subagents write code and run it, and the
+  benchmark, as your user. The original code is never written to (a
+  repository is copied first), but run a search only on code and inputs you
+  trust, on a machine where long CPU or GPU jobs are acceptable.
 
 ## Walkthrough: a one-hot encoder, 1,070 times faster
 
@@ -306,6 +347,83 @@ python3 $AO/autoopt.py path <work> --markdown                # the kept changes 
 `<work>/finish/final-report.md` is the final report. `table --json` and
 `show --json` print raw values for a program; the record files are described
 in `skills/auto-optimize-code/references/layout.md`.
+
+## Getting the result back
+
+The search never writes to your code, so the change reaches it only when you
+apply it. At the end (step 5) the skill copies the winner to
+`<work>/finish/archive/` and gives you the commands below with this search's
+paths filled in:
+
+| In `finish/archive/` | Holds |
+|---|---|
+| `idea.patch` | the whole change from A0 to the winner, as one diff |
+| `code/` | the winner's files; in repository mode, the whole tree |
+| `README.md`, `result.json` | the winner's write-up and numbers |
+
+If step 5 has not run, `python3 $AO/autoopt.py archive <work>` writes the
+archive (`--id A7` for an iteration other than the winner, `--dest DIR` for
+another folder).
+
+**A function or a script.** Apply the patch in the folder that held the files
+the search copied. `git apply` works outside a git repository too:
+
+```bash
+cd /path/to/your/code
+git apply --check <work>/finish/archive/idea.patch   # applies cleanly? changes nothing
+git apply <work>/finish/archive/idea.patch
+```
+
+Or copy the changed files from `code/`.
+
+**A git repository.** Every iteration is a branch, `autoopt/<id>`, in the
+search's bare clone: your history up to the commit the search started from,
+followed by the kept changes. Fetch the winner's into your repository and make
+a branch of your own from it:
+
+```bash
+cd /path/to/your/repository
+git fetch <work>/autooptimize/repo.git autoopt/7:autoopt-winner   # 7: the winner, named in ended.md
+git log --oneline main..autoopt-winner                            # main: the branch the search started from
+git switch -c faster main
+git merge --squash autoopt-winner
+git commit
+git push -u origin faster                                         # then open a pull request
+```
+
+The branch's commit messages name the search's iterations (`A7: …`), which
+mean nothing outside it, so write your own on the squash, or rebase a copy of
+the branch to keep one commit per change. Each kept iteration's
+`<work>/autooptimize/iterations/<id>/notes.md` has a `## Commit message`
+section written for this, and `autoopt.py path <work> --markdown` lists the
+kept changes in order.
+
+**Before you merge**, read the final report and the kept iterations'
+READMEs (`autoopt.py show <work> A7`). Their notes say what a change costs
+outside the benchmark: in the walkthrough, numba's compile on the first call
+and a slower 1 bp input. A change that adds a dependency, such as numba there,
+needs it added to your project's requirements. Run your own tests and CI on
+the result as well: the gates covered the inputs and the machine the search
+measured on.
+
+**Then the disk.** Step 5 reports what `prune` would delete and deletes it
+only on your yes. Keep the search directory while you may still reopen the
+search or check out an iteration again (`autoopt.py restore <work> --id
+A7`). When you are done with it, stop its dashboard publisher
+(`python3 $AO/dashboard/autoopt_monitor.py <work>/autooptimize --stop`) and
+remove `<work>`.
+
+## Resuming, stopping and common problems
+
+| Situation | Do |
+|---|---|
+| Claude Code closed during a search | open it again and ask it to resume the search in `<work>`; everything the next session needs is on disk |
+| You want the search to stop | say so; it lets the iteration in flight settle, then ends the search and times the winner against A0 |
+| You want an ended search to go on | ask to reopen it (`autoopt.py end <work> --reopen`) |
+| No JupyterLab | `python3 $AO/autoopt.py status <work>` in a terminal, or `python3 $AO/dashboard/autoopt_monitor.py <work>/autooptimize --export dashboard.html` for a static page |
+| macOS or Windows | not supported: the scripts use Linux's `flock`, `/proc` and `/sys` |
+| An error or a refusal | ask Claude: `references/symptoms.md` maps the skill's messages to their fixes |
+| A bug | open an issue with the output of `auto-optimize doctor` and `autoopt.py status <work> --brief`, and the message |
 
 ## How it works
 
