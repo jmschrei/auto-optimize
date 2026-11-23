@@ -879,9 +879,17 @@ class Hardware:
 			return {}
 
 		memory = psutil.virtual_memory()
+		# The busy share since the last sample, from /proc/stat's idle
+		# ticks: what says how much of the machine is free. The load
+		# average counts threads another job's CPU quota holds back, and
+		# reads in the hundreds on an idle shared machine; it stays in the
+		# payload only for pages that still print it.
+		busy, count = psutil.cpu_percent(), psutil.cpu_count() or 1
 
-		return {'cpu_percent': psutil.cpu_percent(),
-			'cpu_count': psutil.cpu_count(), 'load': list(os.getloadavg()),
+		return {'cpu_percent': busy, 'cpu_count': count,
+			'idle_percent': round(100.0 - busy, 1),
+			'cores_free': int(count * (100.0 - busy) / 100.0),
+			'load': list(os.getloadavg()),
 			'memory_used': memory.used, 'memory_total': memory.total,
 			'memory_percent': memory.percent}
 

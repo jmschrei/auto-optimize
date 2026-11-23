@@ -11,6 +11,7 @@ GPU, no network.
 """
 
 import os
+import re
 import sys
 import json
 import shutil
@@ -69,6 +70,144 @@ def build(root):
 			+ 'It helped. ' * 200 + '\n')
 
 	return search
+
+
+def records(suite, search):
+	"""`load_result` and `load_meta` parse a file once per process and hand
+	out copies, and a write is read back at once."""
+
+	path = os.path.join(autoopt.iteration_dir(search, 1), 'result.json')
+	first = autoopt.load_result(search, 1)
+	first['status'] = 'edited by the caller'
+	second = autoopt.load_result(search, 1)
+	suite.check('a loaded record is parsed once and handed out as a copy, so '
+		'an edit to it reaches no later caller', second['status'] == 'ok'
+		and path in autoopt._RECORDS and second is not autoopt._RECORDS[
+			path][1], second['status'])
+
+	autoopt.write_json(path, dict(second, note='written'))
+	suite.equal('write_json is read back at once', autoopt.load_result(
+		search, 1).get('note'), 'written')
+
+	with open(path, 'w') as handle:
+		json.dump(dict(second, note='rewritten in place, longer'), handle)
+	suite.equal('and so is a file rewritten in place by anything else',
+		autoopt.load_result(search, 1).get('note'),
+		'rewritten in place, longer')
+
+	autoopt.write_json(path, second)
+	meta = autoopt.load_meta(search, 2)
+	suite.check('meta.json the same way, and a missing record is None',
+		meta['id'] == 2 and autoopt.load_meta(search, 99) is None
+		and autoopt.load_result(search, 4) is None, meta)
+
+
+def touched(suite, search):
+	"""What each iteration changed is asked of git once per pair of
+	commits, in one call, and kept in touched.json; the one in flight is
+	diffed each time."""
+
+	config = autoopt.load_config(search)
+	ids = [1, 2, 3, 4]
+	want = {identifier: autoopt.touched_files(search, config, identifier)
+		for identifier in ids}
+	calls = {'pairs': [], 'diffed': []}
+	diff_names, touched_files = autoopt.diff_names, autoopt.touched_files
+
+	def counting_names(bare, pairs):
+		calls['pairs'].append(len(pairs))
+		return diff_names(bare, pairs)
+
+	def counting_files(root, config, identifier):
+		calls['diffed'].append(identifier)
+		return touched_files(root, config, identifier)
+
+	autoopt.diff_names, autoopt.touched_files = counting_names, counting_files
+	try:
+		first = autoopt.touched_many(search, config, ids)
+		second = autoopt.touched_many(search, config, ids)
+	finally:
+		autoopt.diff_names, autoopt.touched_files = diff_names, touched_files
+
+	suite.check('touched_many names the files git diff names, for settled '
+		'iterations and the one in flight', first == want and second == want
+		and want[1] == {'bench.py'}, (first, want))
+	suite.equal('settled pairs go to git in one call, once; only the '
+		'iteration in flight is diffed on its own, each time',
+		calls, {'pairs': [3, 0], 'diffed': [4, 4]})
+	record = json.load(open(os.path.join(search, autoopt.TOUCHED)))
+	suite.check('touched.json keys each list by <parent commit>..<commit>',
+		len(record) == 3 and all(re.fullmatch(r'[0-9a-f]{40}\.\.[0-9a-f]{40}',
+			key) for key in record), record)
+	suite.equal('a pair git cannot read gives nothing, so the caller diffs '
+		'each iteration on its own', autoopt.diff_names(os.path.join(search,
+			'repo.git'), [('0' * 40, '1' * 40)]), {})
+
+
+def renames(suite, base):
+	"""diff_names names a renamed file by its new path, as `git diff
+	--name-only` does: two commits on one `diff-tree --stdin` line read as a
+	commit and its parent, which diffs them the wrong way round."""
+
+	repo = os.path.join(base, 'renames')
+	os.makedirs(repo)
+	git = lambda *args: subprocess.run(['git', '-C', repo, '-c',
+		'user.name=t', '-c', 'user.email=t@example.org'] + list(args),
+		capture_output=True, text=True, check=True).stdout.strip()
+	git('init', '-q')
+
+	with open(os.path.join(repo, 'old.py'), 'w') as handle:
+		handle.write(''.join('line {}\n'.format(i) for i in range(50)))
+	with open(os.path.join(repo, 'kept.py'), 'w') as handle:
+		handle.write('x = 1\n')
+
+	git('add', '.')
+	git('commit', '-qm', 'first')
+	git('mv', 'old.py', 'new.py')
+
+	with open(os.path.join(repo, 'kept.py'), 'a') as handle:
+		handle.write('y = 2\n')
+
+	git('commit', '-qam', 'second')
+	first, second = git('rev-parse', 'HEAD~1'), git('rev-parse', 'HEAD')
+	want = sorted(git('diff', '--name-only', first, second).split())
+
+	suite.equal('a rename is named by its new path, as git diff names it',
+		{key: sorted(value) for key, value in autoopt.diff_names(repo,
+			[(first, second)]).items()}, {(first, second): want})
+	suite.check('and git diff itself names new.py, not old.py',
+		'new.py' in want and 'old.py' not in want, want)
+
+
+def tried(suite, search):
+	"""*Already tried*: every iteration on the idea's files while they are
+	few; past TRIED_RECENT, those on the root's path, the latest on the
+	idea's function and the latest overall, and the rest counted."""
+
+	config = autoopt.load_config(search)
+	state = autoopt.load_state(search)
+	whole = autoopt.tried_on(search, config, state, ['bench.py'])
+	suite.check('a few iterations are all listed, in id order, as before',
+		re.match(r'A1 \(iteration 1\): .*\. A2 \(iteration 2\): .*\. '
+			r'A3 \(iteration 3\): ', whole) and 'more on this code' not in whole,
+		whole)
+
+	saved = autoopt.TRIED_RECENT
+	autoopt.TRIED_RECENT = 1
+	try:
+		capped = autoopt.tried_on(search, config, state, ['bench.py'])
+		named = autoopt.tried_on(search, config, state, ['bench.py'], '2')
+	finally:
+		autoopt.TRIED_RECENT = saved
+
+	suite.check('past the cap: the root\'s path and the latest, the rest '
+		'counted by what became of them', capped.startswith('A1 (iteration 1)')
+		and 'A3 (iteration 3)' in capped and 'A2 (' not in capped
+		and capped.endswith('And 1 more on this code, not listed: 1 not kept '
+			'(`autoopt.py show <work> <label>` gives one).'), capped)
+	suite.check('and an iteration whose title names the idea\'s function is '
+		'listed too', 'A2 (iteration 2)' in named and 'more on this code'
+		not in named, named)
 
 
 def main():
@@ -171,6 +310,11 @@ def main():
 	changed = sorted(path for path in set(before) | set(after)
 		if before.get(path) != after.get(path))
 	suite.equal('none of them changed a file in the search', changed, [])
+
+	records(suite, search)
+	touched(suite, search)
+	renames(suite, base)
+	tried(suite, search)
 
 	shutil.rmtree(base, ignore_errors=True)
 	print('\n{} passed, {} failed'.format(len(suite.passed), len(suite.failed)))

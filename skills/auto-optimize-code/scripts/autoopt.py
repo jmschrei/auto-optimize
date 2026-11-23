@@ -290,10 +290,17 @@ def clean_env(env=None):
 	return cleaned
 
 
+# What to do on a machine without /proc when the task names a worker count.
+WORKERS_ESCAPE = ('without /proc the count cannot be checked: remove "workers" '
+	'from config.json to run without the check')
+
+
 def busy_threads(pid):
 	"""`(threads running, processes)` in the process tree under `pid` now:
 	a thread counts when the kernel shows it running or runnable (`R`)."""
 
+	need_proc('counting the threads a run has running (config.json '
+		'"workers")', WORKERS_ESCAPE)
 	busy, seen, todo = 0, set(), [pid]
 
 	while todo:
@@ -305,12 +312,12 @@ def busy_threads(pid):
 		seen.add(one)
 
 		try:
-			tasks = os.listdir('/proc/{}/task'.format(one))
+			tasks = os.listdir(os.path.join(PROC, str(one), 'task'))
 		except OSError:
 			continue
 
 		for task in tasks:
-			base = '/proc/{}/task/{}/'.format(one, task)
+			base = os.path.join(PROC, str(one), 'task', task) + os.sep
 
 			try:
 				with open(base + 'stat') as handle:
@@ -344,6 +351,12 @@ def run_shell(line, cwd, stdout=None, env=None, timeout=None, sample=None):
 	started. Killing only the pid would kill `sh` and leave the benchmark,
 	its DataLoader workers and whatever holds the GPU running.
 	"""
+
+	if sample is not None:
+		# Here, before the command starts: the sampling thread could only
+		# stop itself.
+		need_proc('counting the threads a run has running (config.json '
+			'"workers")', WORKERS_ESCAPE)
 
 	process = subprocess.Popen(line, shell=True, cwd=cwd, stdout=stdout,
 		stderr=subprocess.STDOUT if stdout is not None else None,
@@ -464,6 +477,7 @@ def write_json(path, data, **kwargs):
 		with open(tmp, 'w') as out:
 			json.dump(data, out, **kwargs)
 		os.replace(tmp, path)
+		_RECORDS.pop(path, None)
 	except BaseException:
 		try:
 			os.unlink(tmp)
@@ -837,6 +851,15 @@ def check_config(config):
 	config.setdefault('timeout_seconds', 0)
 
 	check_validation(config.get('external_validation'))
+	check_keep(config.get('keep'))
+
+	busy = config.get('busy_percent')
+
+	if busy is not None and (isinstance(busy, bool) or not isinstance(busy,
+			(int, float)) or busy <= 0):
+		fail('config.json "busy_percent" is {!r}; a number of percent of one '
+			'core above 0, or null for the default {:g}'.format(busy,
+				BUSY_PERCENT))
 
 	tests = config.get('tests')
 
@@ -853,6 +876,47 @@ def check_config(config):
 				config['confirm_runs'], config['runs_per_iteration']))
 
 	return config
+
+
+# The keep rule's settings (`config.json` `keep`) and their defaults, which
+# are the rule as it has always been: a median beyond one noise band of the
+# parent's, with no minimum gain.
+KEEP_DEFAULTS = {'band_k': 1.0, 'min_gain_pct': 0.0}
+
+
+def check_keep(block):
+	"""`keep` is optional: `band_k`, a number above 0, the noise bands a
+	median must beat its parent's by; `min_gain_pct`, 0 or more, the least
+	gain, in percent of the parent's median, that keeps it. Null is the
+	default."""
+
+	if block is None:
+		return
+
+	if not isinstance(block, dict):
+		fail('config.json "keep" is {!r}; an object with {}'.format(block,
+			' and '.join(sorted(KEEP_DEFAULTS))))
+
+	for key, value in block.items():
+		if key not in KEEP_DEFAULTS:
+			fail('config.json "keep" has {!r}; it takes {}'.format(key,
+				' and '.join(sorted(KEEP_DEFAULTS))))
+		if value is None:
+			continue
+		if isinstance(value, bool) or not isinstance(value, (int, float)) \
+				or value < 0 or (key == 'band_k' and value == 0):
+			fail('config.json "keep.{}" is {!r}; {}'.format(key, value,
+				'a number above 0' if key == 'band_k' else 'a number, 0 or '
+				'more'))
+
+
+def keep_settings(config):
+	"""`(band_k, min_gain_pct)` of a search's keep rule."""
+
+	block = config.get('keep') or {}
+
+	return tuple(float(KEEP_DEFAULTS[key] if block.get(key) is None
+		else block[key]) for key in ('band_k', 'min_gain_pct'))
 
 
 def check_validation(block):
@@ -1019,26 +1083,67 @@ def checkout_dir(root, identifier, config=None):
 	return os.path.join(directory, 'src') if config.get('repo') else directory
 
 
+# Parsed records, `{path: ((inode, mtime_ns, size), value)}`. One `status` or
+# `brief --next` reads every result.json several times over; a record is
+# parsed once per process and copied out after that. `write_json` replaces a
+# file by renaming a new one over it, so every write gives a new inode and
+# misses this cache, and it drops the path besides.
+_RECORDS = {}
+
+
+def _plain_copy(value):
+	"""A copy of parsed JSON, so a caller that edits what it loaded never
+	edits the cache."""
+
+	if isinstance(value, dict):
+		return {key: _plain_copy(item) for key, item in value.items()}
+	if isinstance(value, list):
+		return [_plain_copy(item) for item in value]
+
+	return value
+
+
+def cached_record(path):
+	"""The JSON file at `path`, parsed once per process while it is
+	unchanged (same inode, modification time and size); None when it is
+	missing or not JSON."""
+
+	try:
+		info = os.stat(path)
+	except OSError:
+		_RECORDS.pop(path, None)
+		return None
+
+	signature = (info.st_ino, info.st_mtime_ns, info.st_size)
+	held = _RECORDS.get(path)
+
+	if held is not None and held[0] == signature:
+		return _plain_copy(held[1])
+
+	try:
+		with open(path) as infile:
+			value = json.load(infile)
+	except (OSError, ValueError):
+		_RECORDS.pop(path, None)
+		return None
+
+	_RECORDS[path] = (signature, value)
+
+	return _plain_copy(value)
+
+
 def load_result(root, identifier):
 	"""`result.json` for one iteration, or None if it has not finished."""
 
-	try:
-		with open(os.path.join(iteration_dir(root, identifier),
-			'result.json')) as infile:
-			return json.load(infile)
-	except (OSError, ValueError):
-		return None
+	return cached_record(os.path.join(iteration_dir(root, identifier),
+		'result.json'))
 
 
 def load_meta(root, identifier):
 	"""`meta.json` -- what the iteration is trying, written before it runs."""
 
-	try:
-		with open(os.path.join(iteration_dir(root, identifier),
-			'meta.json')) as infile:
-			return json.load(infile)
-	except (OSError, ValueError):
-		return None
+	return cached_record(os.path.join(iteration_dir(root, identifier),
+		'meta.json'))
 
 
 def all_results(root):
@@ -1506,6 +1611,10 @@ def init(args):
 		# set when `init` ran, or those given with --build-env.
 		'build_env': build_env_from(args.build_env),
 		'after': after_from(args.after),
+		# Where `init` ran and the Claude Code session that ran it, so
+		# `tokens` reads only that session's project folder of transcripts.
+		'origin': {'cwd': os.getcwd(), 'session': os.environ.get(
+			'CLAUDE_CODE_SESSION_ID')},
 	}
 
 	if args.validation_command:
@@ -3454,11 +3563,11 @@ def prove_gates(root, config, args):
 
 def width_verdict(table, minimize):
 	"""`(the slowest run made alone, the tolerance, the largest supported
-	count)` from `{N: [(median, slowest, load), ...]}`. The tolerance is the
-	spread (range) of the runs made alone: the slowest of several runs is
-	slower than one by chance, so only a median or a slowest run past the
-	slowest run alone by more than that counts. Counts are taken in order
-	until one does."""
+	count)` from `{N: [(median, slowest, CPU idle %), ...]}`. The
+	tolerance is the spread (range) of the runs made alone: the slowest of
+	several runs is slower than one by chance, so only a median or a
+	slowest run past the slowest run alone by more than that counts. Counts
+	are taken in order until one does."""
 
 	counts = sorted(table)
 	solo = [slowest for _, slowest, _ in table[counts[0]]]
@@ -3519,7 +3628,9 @@ def width_measure(root, args):
 
 	for rep in range(args.reps):
 		for n in counts:
-			load = os.getloadavg()[0]
+			# How idle the CPUs were just before these runs started.
+			machine = cpu_idle(0.2)
+			idle = machine['idle_pct'] if machine else None
 			outs = [os.path.join(folder, 'r{}-n{}-{}'.format(rep, n, i))
 				for i in range(n)]
 			# A0's code writes the gate's reference; each run gets its own,
@@ -3535,30 +3646,37 @@ def width_measure(root, args):
 					fail('a run at {} at once failed: {}'.format(n, error))
 				values.append(metrics['objective'])
 			table.setdefault(n, []).append((statistics.median(values),
-				worst(values), load))
-			print('  repetition {}, {} at once: median {}, slowest {}, load '
-				'{:.1f}'.format(rep + 1, n, fmt(statistics.median(values)),
-					fmt(worst(values)), load), flush=True)
+				worst(values), idle))
+			print('  repetition {}, {} at once: median {}, slowest {}, {}'
+				.format(rep + 1, n, fmt(statistics.median(values)),
+					fmt(worst(values)), '{} before they started'.format(
+						machine_words(machine)) if machine else 'idle share '
+						'unknown (no /proc)'), flush=True)
 
 	alone, tolerance, supported = width_verdict(table, minimize)
 
 	def span(values):
+		if not values or None in values:
+			return '-'
 		low, high = min(values), max(values)
 		return fmt(low) if low == high else '{}-{}'.format(fmt(low), fmt(high))
 
-	print('\n| concurrent runs | median | slowest run | load |')
+	def idle_span(rows):
+		return span([None if row[2] is None else round(row[2]) for row in rows])
+
+	print('\n| concurrent runs | median | slowest run | CPU idle % |')
 	print('|---|---|---|---|')
 	for n in counts:
 		print('| {} | {} | {} | {} |'.format(n, span([row[0] for row in table[n]]),
-			span([row[1] for row in table[n]]), span([round(row[2], 1)
-				for row in table[n]])))
+			span([row[1] for row in table[n]]), idle_span(table[n])))
 
 	line = ('{} concurrent run(s) at most (the plan runs {} at once): above '
 		'that the median or the slowest run passes the slowest run made alone, '
 		'{}, by more than the runs made alone spread, {}. {} repetitions per '
-		'count, measured {}, load {}'.format(supported, plan, fmt(alone),
-			fmt(tolerance), args.reps, time.strftime('%Y-%m-%d'),
-			span([round(row[2], 1) for rows in table.values() for row in rows])))
+		'count, measured {}, CPUs {}% idle before the runs'.format(supported,
+			plan, fmt(alone), fmt(tolerance), args.reps, time.strftime(
+				'%Y-%m-%d'), idle_span([row for rows in table.values()
+					for row in rows])))
 	if busy_at_start:
 		line += ('; measured under load from {} process(es) outside the '
 			'search, so measure it again once the machine is quiet'.format(
@@ -4803,6 +4921,127 @@ def touched_files(root, config, identifier):
 	return set(listed.stdout.split()) if listed.returncode == 0 else set()
 
 
+def touched_many(root, config, identifiers):
+	"""`{id: set of paths}`: the files each iteration changed against its
+	parent, as `touched_files` gives them. A settled iteration's pair of
+	commits never changes, so its list is asked of git once, for every pair
+	not yet known in one call, and kept in `autooptimize/touched.json`,
+	keyed `<parent commit>..<commit>`. An iteration in flight, or one whose
+	records lack a commit, is diffed as before."""
+
+	path = os.path.join(root, TOUCHED)
+	known = cached_record(path) or {}
+	out, wanted, fallback = {}, {}, []
+
+	for identifier in identifiers:
+		meta = load_meta(root, identifier) or {}
+		parent = meta.get('parent')
+
+		if parent is None:
+			out[identifier] = set()
+			continue
+
+		result = load_result(root, identifier)
+		head = (result or {}).get('commit') or meta.get('commit')
+		base = ((load_result(root, parent) or load_meta(root, parent) or {})
+			.get('commit'))
+
+		if result is None or not head or not base:
+			fallback.append(identifier)
+			continue
+
+		key = '{}..{}'.format(base, head)
+
+		if isinstance(known.get(key), list):
+			out[identifier] = set(known[key])
+		else:
+			wanted.setdefault((base, head), []).append(identifier)
+
+	found = diff_names(os.path.join(root, 'repo.git'), list(wanted))
+	fresh = {}
+
+	for pair, owners in wanted.items():
+		if pair not in found:
+			fallback += owners
+			continue
+		fresh['{}..{}'.format(*pair)] = sorted(found[pair])
+		for identifier in owners:
+			out[identifier] = set(found[pair])
+
+	if fresh:
+		merged = cached_record(path) or {}
+		merged.update(fresh)
+		try:
+			write_json(path, merged, indent=None, sort_keys=True)
+		except OSError:
+			pass
+
+	for identifier in fallback:
+		out[identifier] = touched_files(root, config, identifier)
+
+	return out
+
+
+# What each settled iteration changed against its parent, by commit pair
+# (`touched_many`).
+TOUCHED = 'touched.json'
+
+
+def diff_names(bare, pairs):
+	"""`{(base, head): [paths]}`, the files `git diff --name-only base head`
+	names, for every pair in one `git diff-tree --stdin`; {} when git
+	fails or its output does not line up with the pairs."""
+
+	if not pairs:
+		return {}
+
+	# A line of two commits reads as a commit and its parent, which diffs
+	# head to base; -R turns it around, so a rename is named as git diff
+	# names it, by its new path. The line still starts with the base.
+	done = subprocess.run(['git', '-C', bare, 'diff-tree', '--stdin', '-r',
+		'-M', '-R', '--name-only', '--always', '-z'], input=''.join(
+			'{} {}\n'.format(base, head) for base, head in pairs),
+		capture_output=True, text=True)
+
+	if done.returncode != 0:
+		return {}
+
+	# Each input line gives its first commit, then the paths, NUL-separated.
+	out, index = {}, -1
+
+	for token in done.stdout.split('\0'):
+		if not token:
+			continue
+		if index + 1 < len(pairs) and token == pairs[index + 1][0]:
+			index += 1
+			out[pairs[index]] = []
+		elif index >= 0:
+			out[pairs[index]].append(token)
+		else:
+			return {}
+
+	return out if len(out) == len(pairs) else {}
+
+
+def fate_of(root, identifier, chain):
+	"""What became of an iteration, as one of the words the *Already tried*
+	summary counts: `in flight`, `in the root`, `passed, not in the root`,
+	`not kept`, or its status (`gate-failed`, `error`, `partial`)."""
+
+	result = load_result(root, identifier)
+
+	if result is None:
+		return 'in flight'
+	if result.get('status') != 'ok':
+		return result.get('status') or 'unknown'
+	if identifier in chain:
+		return 'in the root'
+	if (result.get('keep') or {}).get('verdict') == 'pass':
+		return 'passed, not in the root'
+
+	return 'not kept'
+
+
 def outcome(root, identifier, chain):
 	"""What became of an iteration, in words, from its records: its median
 	against its parent's, then in the root (`chain`, from `in_root`), passed
@@ -4844,31 +5083,66 @@ def names_file(touched, path):
 	return touched == path or touched.endswith('/' + path)
 
 
-def tried_on(root, config, state, paths):
-	"""What `brief --next` writes under *Already tried on this code*: every
-	iteration that changed one of `paths`, the files an idea line names, once
-	each, with what became of it."""
+# *Already tried* lists at most this many of the latest iterations on the
+# idea's files, and as many of the latest on its function, beside every one
+# on the root's path; the rest are counted.
+TRIED_RECENT = 15
+
+
+def tried_on(root, config, state, paths, function=None):
+	"""What `brief --next` writes under *Already tried on this code*: the
+	iterations that changed one of `paths`, the files an idea line names,
+	once each, with what became of it. Up to TRIED_RECENT of them are listed
+	whole; past that, those on the root's path, the latest TRIED_RECENT whose
+	title names `function`, and the latest TRIED_RECENT overall, in id
+	order, and the rest counted by what became of them."""
 
 	if not paths:
 		return 'none recorded: the idea line names no file'
 
 	chain = in_root(root, state['root'])
-	lines = []
+	candidates = []
 
 	for identifier in iteration_ids(root):
 		meta = load_meta(root, identifier) or {}
 		if identifier == 0 or meta.get('control'):
 			continue
-		if not any(names_file(touched, path) for touched in
-				touched_files(root, config, identifier) for path in paths):
-			continue
+		candidates.append((identifier, meta))
 
-		lines.append('{} ({}): {}.'.format(label(root, identifier),
-			meta.get('title'), outcome(root, identifier, chain)))
+	touched = touched_many(root, config, [identifier for identifier, _
+		in candidates])
+	matched = [(identifier, meta) for identifier, meta in candidates
+		if any(names_file(name, path) for name in touched.get(identifier, ())
+			for path in paths)]
 
-	if not lines:
+	if not matched:
 		return 'none: no iteration has changed {}.'.format(' or '.join(
 			'`{}`'.format(path) for path in paths))
+
+	shown = {identifier for identifier, _ in matched}
+
+	if len(matched) > TRIED_RECENT:
+		named = [identifier for identifier, meta in matched if function
+			and re.search(r'\b{}\b'.format(re.escape(function)),
+				meta.get('title') or '')]
+		shown = ({identifier for identifier, _ in matched
+			if identifier in chain} | set(named[-TRIED_RECENT:])
+			| {identifier for identifier, _ in matched[-TRIED_RECENT:]})
+
+	lines = ['{} ({}): {}.'.format(label(root, identifier), meta.get('title'),
+		outcome(root, identifier, chain)) for identifier, meta in matched
+		if identifier in shown]
+	rest = [fate_of(root, identifier, chain) for identifier, _ in matched
+		if identifier not in shown]
+
+	if rest:
+		counts = {}
+		for fate in rest:
+			counts[fate] = counts.get(fate, 0) + 1
+		lines.append('And {} more on this code, not listed: {} (`autoopt.py '
+			'show <work> <label>` gives one).'.format(len(rest), ', '.join(
+				'{} {}'.format(count, fate) for fate, count in sorted(
+					counts.items(), key=lambda item: (-item[1], item[0])))))
 
 	return ' '.join(lines)
 
@@ -5096,7 +5370,7 @@ def brief_next(args):
 		one.title = args.title or idea_title(fields)
 		one.category = args.category or fields['category']
 		one.tried = args.tried or tried_on(root, config, state,
-			fields['files'])
+			fields['files'], fields['function'])
 		stem = os.path.splitext(os.path.basename(fields['file']))[0] \
 			if fields['file'] else None
 		tags = (['code:' + stem] if stem and '[code:{}]'.format(stem)
@@ -5979,7 +6253,8 @@ def promote(args):
 SETTABLE = {
 	'task': str, 'gpus_per_agent': int, 'runs_per_iteration': int, 'confirm_runs': int,
 	'staged': bool, 'timeout_seconds': float, 'gpu': bool, 'gpu_command': str,
-	'floor': float, 'workers': int,
+	'floor': float, 'workers': int, 'busy_percent': float,
+	'keep.band_k': float, 'keep.min_gain_pct': float,
 	'tests.command': str, 'tests.timeout_seconds': float, 'tests.path': str,
 	'external_validation.note': str, 'subagent_model': str, 'promote': str,
 	'loop_handback': int, 'allow_build_changes': bool,
@@ -6066,8 +6341,9 @@ def config_change(args):
 				if '.' in key:
 					block, field = key.split('.', 1)
 					# `after` is absent from a search begun before the block
-					# existed; check_config fills the defaults.
-					if block in ('checks', 'after'):
+					# existed, and `keep` until its first setting;
+					# check_config fills the defaults.
+					if block in ('checks', 'after', 'keep'):
 						raw.setdefault(block, {})
 					if not isinstance(raw.get(block), dict):
 						fail('{} is not configured, so {} cannot be set; '
@@ -6738,6 +7014,10 @@ def table(root, config, results, on_frontier=None, compact=False):
 	return '\n'.join(lines)
 
 
+# Seconds `status` samples /proc/stat for its `machine:` line.
+STATUS_SAMPLE = 0.1
+
+
 def status(args):
 	root = resolve(args.root)
 	config = load_config(root)
@@ -6806,7 +7086,11 @@ def status(args):
 				('the idea miner\'s S1', bool((state.get('mining') or {}).get(
 					'done')))) if not ready)))
 
-	if hasattr(os, 'getloadavg'):
+	machine = cpu_idle(STATUS_SAMPLE)
+	if machine:
+		print('machine: {} over {:g} s, this search\'s runs included'.format(
+			machine_words(machine), STATUS_SAMPLE))
+	elif hasattr(os, 'getloadavg'):
 		load, cores = os.getloadavg()[0], os.cpu_count() or 1
 		print('machine: load {:.1f} on {} cores, {:.0f}% busy, this search\'s '
 			'runs included'.format(load, cores, 100 * load / cores))
@@ -7368,6 +7652,8 @@ WAIT_LIMIT = 240
 WAIT_DEFAULT = 200
 WAIT_SHOWN = 60
 WAIT_EXIT = re.compile(r'^exit (-?\d+)$')
+# Bytes of a log's end `wait` reads to find its last line.
+WAIT_TAIL = 65536
 
 
 ###
@@ -9239,10 +9525,12 @@ def in_root(root, head):
 
 
 def keep_verdict(config, result, parent_result):
-	"""The default keep rule on a settled iteration against its parent, as
+	"""The keep rule on a settled iteration against its parent, as
 	`(passes, why)`: a median, over the full count of runs, that beats the
-	parent's by more than the noise band. Paired timing runs once, at the
-	end (`final`)."""
+	parent's by more than `keep.band_k` noise bands (1 by default) and by at
+	least `keep.min_gain_pct` percent of the parent's median (0 by default).
+	`why` names a multiplier or a minimum only when it is not the default.
+	Paired timing runs once, at the end (`final`)."""
 
 	if result.get('status') != 'ok':
 		return False, 'it is {}'.format(result.get('status'))
@@ -9260,17 +9548,33 @@ def keep_verdict(config, result, parent_result):
 		return False, 'no median for it or its parent'
 
 	gain = base - median if direction == 'min' else median - base
+	band_k, minimum = keep_settings(config)
+	needed = None if band is None else band_k * band
+	bands = 'the noise band {}'.format(fmt(band)) if band_k == KEEP_DEFAULTS[
+		'band_k'] else '{:g} x the noise band {} = {}'.format(band_k, fmt(band),
+			fmt(needed))
+	percent = 100.0 * gain / abs(base) if base else None
+	short = minimum > KEEP_DEFAULTS['min_gain_pct'] and (percent is None
+		or percent < minimum)
 
-	if band is not None and gain > band:
-		return True, 'its median beats its parent\'s by {} > the noise band {}'.format(
-			fmt(gain), fmt(band))
+	if needed is not None and gain > needed and not short:
+		return True, 'its median beats its parent\'s by {} > {}{}'.format(
+			fmt(gain), bands, '' if minimum == KEEP_DEFAULTS['min_gain_pct']
+			else ', and by {:.3g}% >= the minimum gain {:g}%'.format(percent,
+				minimum))
+
+	if needed is not None and gain > needed:
+		return False, ('its median beats its parent\'s by {} > {}, but by {} '
+			'of its parent\'s median, under the minimum gain {:g}%'.format(
+				fmt(gain), bands, 'an unknown share' if percent is None
+				else '{:.3g}%'.format(percent), minimum))
 
 	if gain < 0:
 		return False, 'its median is worse than its parent\'s by {}'.format(
 			fmt(-gain))
 
-	return False, 'its median is within the noise band {} of its parent\'s ({:+.3g})'.format(
-		fmt(band), gain)
+	return False, 'its median is within {} of its parent\'s ({:+.3g})'.format(
+		bands, gain)
 
 
 def algorithm_search(root):
@@ -10797,6 +11101,86 @@ def transcript_cost(path, since=None):
 	return out
 
 
+def agent_rows(paths, since):
+	"""`(role, description, cost)` for each subagent transcript in `paths`
+	that has a turn."""
+
+	rows = []
+
+	for path in paths:
+		try:
+			with open(path[:-len('.jsonl')] + '.meta.json') as handle:
+				description = json.load(handle).get('description') or ''
+		except (OSError, ValueError):
+			description = os.path.basename(path)
+		cost = transcript_cost(path, since)
+		if cost['turns']:
+			rows.append((agent_role(description), description, cost))
+
+	return rows
+
+
+def project_folder(path):
+	"""The folder name Claude Code keeps a session's transcripts under: the
+	session's directory with every character other than a letter, a digit
+	or `-` written `-`."""
+
+	return re.sub(r'[^A-Za-z0-9-]', '-', path)
+
+
+def transcript_folders(root, config, projects):
+	"""The project folders under `projects` that `tokens` reads, or None for
+	all of them. A search records where `init` ran and the session that ran
+	it (`origin`); the folders are that session's, and those of the
+	directories holding `init`'s directory or the search, the ones a session
+	that drives the search can have been started in. A search without the
+	record, or whose folders are none of those present, reads every one."""
+
+	origin = config.get('origin')
+
+	if not isinstance(origin, dict) or not (origin.get('cwd')
+			or origin.get('session')):
+		return None
+
+	names = set()
+
+	for start in (origin.get('cwd'), os.path.dirname(root)):
+		path = os.path.abspath(start) if start else None
+		while path:
+			names.add(project_folder(path))
+			parent = os.path.dirname(path)
+			path = None if parent == path else parent
+
+	if origin.get('session'):
+		names.update(os.path.basename(os.path.dirname(found)) for found in
+			glob.glob(os.path.join(projects, '*', glob.escape(str(origin[
+				'session'])) + '.jsonl')))
+
+	present = {name for name in names if os.path.isdir(os.path.join(projects,
+		name))}
+
+	return present or None
+
+
+# Transcripts last written this many seconds before `init` are still read:
+# clocks and file times differ by a little.
+TRANSCRIPT_SLACK = 600
+
+
+def transcripts_from(root):
+	"""The epoch time before which a transcript cannot name the search: when
+	`init` made A0 (`meta.json` `created`), less TRANSCRIPT_SLACK; None when
+	that is not recorded."""
+
+	created = (load_meta(root, 0) or {}).get('created')
+
+	try:
+		return time.mktime(time.strptime(created, '%Y-%m-%dT%H:%M:%S')) \
+			- TRANSCRIPT_SLACK
+	except (TypeError, ValueError):
+		return None
+
+
 def tokens(args):
 	"""What a search's agents spent, from the transcripts that name its
 	directory in their own words (a prompt, a message, a tool call; not a
@@ -10809,13 +11193,31 @@ def tokens(args):
 	needle = work.encode()
 	projects = os.path.expanduser(args.projects)
 	rows = []
+	folders = None if args.all_projects else transcript_folders(root,
+		load_config(root), projects)
+	cutoff = None if args.all_projects else transcripts_from(root)
+
+	def recent(path):
+		"""Whether a transcript was written to since the search began: one
+		last written before `init` cannot name it."""
+		try:
+			return cutoff is None or os.path.getmtime(path) >= cutoff
+		except OSError:
+			return False
 
 	for session in sorted(glob.glob(os.path.join(projects, '*', '*.jsonl'))):
+		if folders is not None and os.path.basename(os.path.dirname(
+				session)) not in folders:
+			continue
 		folder = os.path.join(session[:-len('.jsonl')], 'subagents')
 		ident = os.path.basename(session)[:-len('.jsonl')]
 		agents = [path for path in sorted(glob.glob(os.path.join(folder,
-			'*.jsonl'))) if names_path(path, needle)
+			'*.jsonl'))) if recent(path) and names_path(path, needle)
 			and own_mention(path, work) is not None]
+		if not recent(session) and ident not in args.session:
+			if agents:
+				rows += agent_rows(agents, args.since)
+			continue
 		main = (not args.subagents_only and ident not in args.exclude_session
 			and (ident in args.session or (not args.session and names_path(
 				session, needle) and own_mention(session, work, spawns=True)
@@ -10825,15 +11227,7 @@ def tokens(args):
 		if start is not None:
 			rows.append(('main session', 'session ' + ident[:8],
 				transcript_cost(session, max(start, args.since or ''))))
-		for path in agents:
-			try:
-				with open(path[:-len('.jsonl')] + '.meta.json') as handle:
-					description = json.load(handle).get('description') or ''
-			except (OSError, ValueError):
-				description = os.path.basename(path)
-			cost = transcript_cost(path, args.since)
-			if cost['turns']:
-				rows.append((agent_role(description), description, cost))
+		rows += agent_rows(agents, args.since)
 
 	if not rows:
 		fail('no transcript under {} names {}'.format(projects, work))
@@ -11037,29 +11431,138 @@ class StepLog:
 		return False
 
 
+# The kernel's process and CPU tables. Linux only; a test points it at a
+# directory that is not there.
+PROC = '/proc'
+
+
+def has_proc():
+	return os.path.isdir(os.path.join(PROC, 'self'))
+
+
+def need_proc(what, escape=None):
+	"""Stop with a clear reason where there is no /proc, rather than let a
+	check that reads it report a quiet machine or no threads."""
+
+	if not has_proc():
+		fail('{} needs /proc (Linux), and this machine has none{}'.format(
+			what, '; {}'.format(escape) if escape else ''))
+
+
+def cpu_times():
+	"""`(idle, total)` clock ticks over every CPU since boot, from the
+	`cpu` line of /proc/stat (idle counts iowait); None without it."""
+
+	try:
+		with open(os.path.join(PROC, 'stat')) as handle:
+			fields = handle.readline().split()
+		values = [int(value) for value in fields[1:9]]
+	except (OSError, ValueError):
+		return None
+
+	if not fields or fields[0] != 'cpu' or len(values) < 4:
+		return None
+
+	return values[3] + (values[4] if len(values) > 4 else 0), sum(values)
+
+
+class CpuSampler:
+	"""How idle the CPUs were since the last sample, from /proc/stat. The
+	load average counts threads held back by another job's CPU quota and
+	can read in the hundreds on an idle machine, so the share of idle ticks
+	is what says how much of the machine is free."""
+
+	def __init__(self):
+		self.lock = threading.Lock()
+		self.last, self.at = cpu_times(), time.monotonic()
+		self.recent = None
+
+	def sample(self, least=0.2):
+		"""`{cores, idle_pct, free}` over the time since the last sample, at
+		least `least` seconds: the first sample sleeps the rest, and a later
+		one asked for sooner than that (runs started side by side) gets the
+		last sample again. None without /proc."""
+
+		with self.lock:
+			if self.last is None:
+				return None
+			wait = least - (time.monotonic() - self.at)
+			if wait > 0 and self.recent is not None:
+				return dict(self.recent)
+			if wait > 0:
+				time.sleep(wait)
+			now = cpu_times()
+			if now is None:
+				return None
+			idle, total = now[0] - self.last[0], now[1] - self.last[1]
+			self.last, self.at = now, time.monotonic()
+			cores = os.cpu_count() or 1
+			share = min(1.0, max(0.0, idle / total)) if total > 0 else 1.0
+			self.recent = {'cores': cores, 'idle_pct': round(100 * share, 1),
+				'free': int(cores * share)}
+
+			return dict(self.recent)
+
+
+def cpu_idle(seconds=0.2):
+	"""One sample over `seconds`: `{cores, idle_pct, free}`, or None
+	without /proc."""
+
+	return CpuSampler().sample(seconds)
+
+
+def machine_words(sample):
+	"""`256 cores, 82% idle, ~209 free` for a CpuSampler sample."""
+
+	return '{} cores, {:.0f}% idle, ~{} free'.format(sample['cores'],
+		sample['idle_pct'], sample['free'])
+
+
+# Percent of one core above which `busy` names a process outside the
+# search: step 2's "above about 100% CPU". `config.json` `busy_percent`
+# changes it for one search, and AUTOOPT_BUSY_PERCENT overrides both.
+BUSY_PERCENT = 110.0
+
+
+def busy_threshold(root=None):
+	"""The `busy` threshold: AUTOOPT_BUSY_PERCENT, else the search's
+	`busy_percent`, else BUSY_PERCENT."""
+
+	if os.environ.get('AUTOOPT_BUSY_PERCENT'):
+		return float(os.environ['AUTOOPT_BUSY_PERCENT'])
+
+	if root is not None:
+		value = (cached_record(os.path.join(root, 'config.json')) or {}).get(
+			'busy_percent')
+		if isinstance(value, (int, float)) and not isinstance(value, bool):
+			return float(value)
+
+	return BUSY_PERCENT
+
+
 def busy_processes(root, seconds=2.0, threshold=None):
 	"""`[(pid, user, percent of one core, command)]`, busiest first: the
 	processes outside this search above `threshold` percent over `seconds`
-	(default 110, step 2's "above about 100% CPU"), from /proc. Empty where
-	/proc is missing."""
+	(default `busy_threshold`), from /proc. Stops with the reason where
+	/proc is missing, rather than call the machine quiet."""
 
-	if not os.path.isdir('/proc/self'):
-		return []
+	need_proc('the busy-machine check', 'set AUTOOPT_SKIP_QUIET_CHECK=1 to '
+		'go on without it')
 
 	import pwd
 
-	threshold = threshold or float(os.environ.get('AUTOOPT_BUSY_PERCENT', 110))
+	threshold = threshold or busy_threshold(root)
 	tick = os.sysconf('SC_CLK_TCK')
 	work = os.path.realpath(os.path.dirname(root))
 	mine = {os.getpid(), os.getppid()}
 
 	def sample():
 		out = {}
-		for name in os.listdir('/proc'):
+		for name in os.listdir(PROC):
 			if not name.isdigit():
 				continue
 			try:
-				with open('/proc/{}/stat'.format(name)) as handle:
+				with open(os.path.join(PROC, name, 'stat')) as handle:
 					fields = handle.read().rsplit(')', 1)[1].split()
 				out[int(name)] = int(fields[11]) + int(fields[12])
 			except (OSError, IndexError, ValueError):
@@ -11076,14 +11579,16 @@ def busy_processes(root, seconds=2.0, threshold=None):
 		if percent <= threshold or pid in mine:
 			continue
 		try:
-			cwd = os.path.realpath(os.readlink('/proc/{}/cwd'.format(pid)))
+			cwd = os.path.realpath(os.readlink(os.path.join(PROC, str(pid),
+				'cwd')))
 		except OSError:
 			cwd = ''
 		try:
-			with open('/proc/{}/cmdline'.format(pid), 'rb') as handle:
+			with open(os.path.join(PROC, str(pid), 'cmdline'), 'rb') as handle:
 				command = handle.read().replace(b'\0', b' ').decode(
 					errors='replace').strip()
-			user = pwd.getpwuid(os.stat('/proc/{}'.format(pid)).st_uid).pw_name
+			user = pwd.getpwuid(os.stat(os.path.join(PROC, str(pid)))
+				.st_uid).pw_name
 		except (OSError, KeyError):
 			continue
 		if cwd.startswith(work) or work in command:
@@ -11108,15 +11613,24 @@ def busy(args):
 	100% CPU over two seconds. Exit 1 when there is one."""
 
 	root = resolve(args.root)
-	found = busy_processes(root, seconds=args.seconds)
+	threshold = busy_threshold(root)
+	sampler = CpuSampler()
+	found = busy_processes(root, seconds=args.seconds, threshold=threshold)
+	machine = sampler.sample(0)
+	above = 'above about 100% CPU' if threshold == BUSY_PERCENT else \
+		'above {:g}% CPU'.format(threshold)
+
+	if machine:
+		print('machine: {} over {:g} s'.format(machine_words(machine),
+			args.seconds))
 
 	if not found:
-		print('busy: no process outside this search is above about 100% CPU: '
-			'the machine is quiet')
+		print('busy: no process outside this search is {}: the machine is '
+			'quiet'.format(above))
 		return 0
 
-	print('busy: {} process(es) outside this search above about 100% CPU '
-		'over {:g} s:'.format(len(found), args.seconds))
+	print('busy: {} process(es) outside this search {} over {:g} s:'.format(
+		len(found), above, args.seconds))
 	for pid, user, percent, command in found:
 		print('  pid {:<8} {:<10} {:>5.0f}%  {}'.format(pid, user, percent,
 			command))
@@ -11276,8 +11790,14 @@ def wait(args):
 	deadline = time.monotonic() + args.max
 
 	def tail():
+		"""The `exit <code>` match on the log's last non-empty line, read
+		from its last WAIT_TAIL bytes only: a log can run to megabytes, and
+		this runs every few seconds."""
 		try:
 			with open(log, 'rb') as infile:
+				infile.seek(0, os.SEEK_END)
+				size = infile.tell()
+				infile.seek(max(0, size - WAIT_TAIL))
 				lines = infile.read().decode('utf-8', 'replace').splitlines()
 		except OSError:
 			return None
@@ -11721,6 +12241,11 @@ def build_parser():
 			'search')
 	tokener.add_argument('--projects', default='~/.claude/projects',
 		help='where Claude Code keeps transcripts (default %(default)s)')
+	tokener.add_argument('--all-projects', action='store_true',
+		help='read every transcript under --projects, whatever its folder '
+			'and age; by default only the project folders of the session that '
+			'ran `init` and of the directories holding the search, and only '
+			'transcripts written since `init`')
 	tokener.add_argument('--json', action='store_true')
 	tokener.set_defaults(func=tokens)
 
