@@ -1328,14 +1328,14 @@ def check_after_payload(root, work):
 		sorted(after), ['ended', 'stages'])
 	equal('the ending', (after['ended']['winner'], after['ended']['zero_median'],
 		after['ended']['reason']), ('A3', 12.5, 'stalled-reason-3a'))
-	equal('the five stages', [name for name, _, _ in after['stages']],
-		['interview', 'setup', 'search', 'final', 'finish'])
+	equal('the six stages', [name for name, _, _ in after['stages']],
+		['interview', 'setup', 'search', 'final', 'ship', 'finish'])
 	by_id = {row['id']: row for row in snapshot['iterations']}
 	equal('the toolchain answers', (by_id[3]['toolchain'], by_id[2]['toolchain']),
 		('specific', 'no'))
 	plain = scan.RunScanner(root).snapshot()['after']
 	check('a search that has not ended has no ending', plain['ended'] is None
-		and len(plain['stages']) == 5, plain)
+		and len(plain['stages']) == 6, plain)
 
 	# An ending the scan cannot read blanks the parts that read it, names
 	# them, and the snapshot is still built.
@@ -1384,8 +1384,8 @@ def check_after_page(root, work, args=None):
 				'paired-9of9' in (page.get_attribute('#ended-line', 'title') or ''))
 			strip = page.inner_text('#stage-strip')
 			words = [part.rsplit(' ', 1) for part in strip.split(' · ')]
-			equal('five stages, in order', [name for name, _ in words],
-				['interview', 'setup', 'search', 'final', 'finish'])
+			equal('six stages, in order', [name for name, _ in words],
+				['interview', 'setup', 'search', 'final', 'ship', 'finish'])
 			check('each with one status word', all(word in ('done', 'running',
 				'pending') for _, word in words) and 'finish pending' in strip,
 				strip)

@@ -1,7 +1,8 @@
-# Step 5 — finishing a search
+# Step 6 — finishing a search
 
-Step 5 follows `end` (`references/step4-final.md`). Section 3 waits while
-another tool still works in the search directory.
+Step 6 follows shipping (`references/step5-ship.md`), whatever the user chose
+there, "not now" included. Section 3 waits while another tool still works in
+the search directory.
 
 ## 1. Copy the winner out
 
@@ -9,7 +10,8 @@ The winner is what `--id best` names: `ended.json`'s, which an iteration made
 with `--after-end` and promoted replaces. It is the code on its branch. Copy
 the change and the code to `$WORK/finish/archive/` (or outside `$WORK`, when
 the user wants it there), because section 3 deletes most of what is in
-`autooptimize/`:
+`autooptimize/`. This is the copy kept with the search, whether or not step 5
+applied or published the change:
 
 ```bash
 python3 $AO/autoopt.py archive $WORK        # --id <it> for another iteration; --dest DIR outside $WORK; --force to write over an archive
@@ -32,7 +34,7 @@ Quote the iteration's median, never the single run in `best_run`.
 | *What produced the gains* | the gain by category, and one line per iteration on the path; the category breakdown goes in `$WORK/finish/speedup-breakdown/` |
 | *What was tried and failed* | the closed ideas worth knowing, from `ideas.md` and the ledger's `[closed]` entries |
 | *Compute* | iterations, runs, wall clock, and GPU or CPU hours; the dashboard's sidebar has throughput and per-category numbers |
-| *Where things are* | the copied code and patch, the search directory, and anything published from it |
+| *Where things are* | the copied code and patch, the search directory, and what step 5 did: the files it wrote (`ship/applied.json`), the branch it made (`ship/branch.json`), or the URL of each document it posted |
 
 `rounds/*.md` and the READMEs of the frontier path are the material.
 
@@ -61,23 +63,3 @@ Without `--all`, the frontier path, every root, anything running and the 20 most
 Stop the dashboard publisher last, naming the search: `python3 $AO/dashboard/autoopt_monitor.py $WORK/autooptimize --stop`. `$WORK/scratch/` holds anything disposable: remove it, with the user's yes, once the winner is copied out.
 
 `repo.git/` plus the records reproduce any iteration (`restore --id N`, then `run_iteration.py`); the saved outputs and checkouts that are gone regenerate from them.
-
-## 4. Tell the user how to bring the change back
-
-The search never writes to the user's code, so the change reaches it only
-when they apply it. Close step 5 with the commands for this search, with its
-paths and the winner's id written in. `prune` leaves both routes working: the
-archive is outside `autooptimize/`, and `repo.git/` keeps every branch.
-
-| Mode | Give the user |
-|---|---|
-| plain | `git apply --check <archive>/idea.patch`, then `git apply <archive>/idea.patch`, run in the folder that held the files the search copied; or the files in `<archive>/code/` |
-| repository | in the original: `git fetch $WORK/autooptimize/repo.git autoopt/<id>:autoopt-winner`, then a branch of their own from the branch the search started from (`config.json["repo"]`) with `git merge --squash autoopt-winner`, or a rebased copy for one commit per change |
-
-The branch's commits are named for the search's labels (`A7: …`). The
-messages to publish are the `## Commit message` sections of the kept
-iterations' `notes.md`, in the order `path --markdown` lists them. Name any
-dependency the winner added and what its observers and notes say it costs
-outside the benchmark. Applying the change, pushing a branch or opening a
-pull request is the user's to ask for: the original is not written to
-without it.

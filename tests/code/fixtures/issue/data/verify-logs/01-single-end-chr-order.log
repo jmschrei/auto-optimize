@@ -1,0 +1,9 @@
+# bug 1 (single-end-chr-order), chromap=/opt/chromap-949043c/bin/chromap, in /opt/verify/verify-01-single-end-chr-order-jy2lrpz0
+== setup: exit 0, 0.06 s
+
+== reproduction: exit 0, 0.82 s
+19 and 15 lines
+chr2	1000	1050	N	60	+	1
+chr1	2000	2050	N	60	+	1
+
+== matched 3 of 3 lines of the actual output

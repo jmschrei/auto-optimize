@@ -15,8 +15,8 @@ the user together. The main session then runs `init` on the clone.
 Everything step 1 writes is in `$WORK/tests/`: `suite/` (the clone below),
 `analysis/` (the reading of the existing tests: what they cover, what they
 pin) and `work/` (scripts, coverage inputs and outputs, and `bugs/`). Nothing
-there is pruned: whatever publishes the suite or reports the bugs is built
-from these folders.
+there is pruned: step 5 builds the unit-test PR and the bug report from
+these folders (`references/pr-tests.md`, `references/issue-bugs.md`).
 
 The suite is written in a clone, which `init --repo` copies: `autoopt/0` is
 then the original plus the suite, and every iteration's branch is built on it.

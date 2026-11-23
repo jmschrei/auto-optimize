@@ -1,0 +1,7 @@
+file	part	excluded	lines	existing	suite	both	existing:`pytest tests/old`	existing:`make doctest`
+pkg/cli/args.py	pkg/cli/	no	20	8	18	19	8	0
+pkg/cli/main.py	pkg/cli/	no	40	10	35	36	8	4
+pkg/core.py	pkg/	no	100	60	70	85	55	20
+pkg/io.py	pkg/	no	50	0	45	45	0	0
+pkg/unused.py	pkg/	no	12	0	0	0	0	0
+vendor/fast.c	vendor/	yes	30	5	9	10	5	0

@@ -1,0 +1,25 @@
+src-949043c t16 run1 exit 0 92d1aa7e05d8 Number of candidates: 25202281.
+src-949043c t16 run2 exit 0 92d1aa7e05d8 Number of candidates: 25202151.
+src-949043c t16 run3 exit 0 92d1aa7e05d8 Number of candidates: 25202143.
+src-949043c t16 run4 exit 0 92d1aa7e05d8 Number of candidates: 25202155.
+src-949043c t16 run5 exit 0 92d1aa7e05d8 Number of candidates: 25202223.
+src-949043c t16 run6 exit 0 92d1aa7e05d8 Number of candidates: 25202199.
+src-949043c t16 run7 exit 0 92d1aa7e05d8 Number of candidates: 25202299.
+src-949043c t16 run8 exit 0 92d1aa7e05d8 Number of candidates: 25202283.
+src-949043c t16 run9 exit 0 92d1aa7e05d8 Number of candidates: 25201705.
+src-949043c t16 run10 exit 0 92d1aa7e05d8 Number of candidates: 25202284.
+done
+src-949043c-serialcache t16 run1 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run2 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run3 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run4 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run5 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run6 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run7 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run8 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run9 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c-serialcache t16 run10 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+done
+src-949043c t1 run2 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+src-949043c t1 run1 exit 0 92d1aa7e05d8 Number of candidates: 25201655.
+done-t1

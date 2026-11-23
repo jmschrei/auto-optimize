@@ -1,0 +1,9 @@
+# bug 6 (truncated-gzip-input), chromap=/opt/chromap-949043c/bin/chromap, in /opt/verify/verify-06-truncated-gzip-input-_ekvf1d1
+== setup: exit 0, 0.06 s
+
+== reproduction: exit 0, 0.41 s
+exit status 0
+Number of reads: 993.
+chr1	19940	19970	N	60	+	1
+
+== matched 3 of 3 lines of the actual output

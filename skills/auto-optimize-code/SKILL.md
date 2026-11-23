@@ -8,13 +8,16 @@ description: >-
   size; to improve one number while another must not move ("faster, but
   outputs match to 1e-5"); to check on a running search or read what one
   found ("how is the search going", "what is on the frontier", "what did A7
-  try"); or to end, resume or finish one. Covers
+  try"); to end, resume or finish one; or to ship the winner ("ship it",
+  "open a PR with the result", "apply the change to my script"): written
+  into the original files, as a branch, or as an optimization PR, a
+  unit-test PR and a bug report on GitHub, reviewed before posting. Covers
   the objective/gate/observer interview, a git worktree per iteration,
   optimizing a copy of a GitHub repository, new unit tests as a gate, a setup
   subagent for the benchmark and baseline, median-of-N-seeds against a noise
   band, a tree search that promotes each kept change, generated briefs and
-  READMEs, the paired timing of the winner, the final report, and the
-  dashboard. Router skill: read the step's reference file under `references/`
+  READMEs, the paired timing of the winner, shipping, the final report, and
+  the dashboard. Router skill: read the step's reference file under `references/`
   before doing that step's work.
 ---
 
@@ -86,7 +89,7 @@ write this file's directory as an absolute path. A brief gives both, absolute.
 
 ## The steps
 
-Steps 0 to 5 run in order. Read each step's file just before the step, not in
+Steps 0 to 6 run in order. Read each step's file just before the step, not in
 advance.
 
 | Step | Do | Read |
@@ -96,7 +99,8 @@ advance.
 | 2 | The setup subagent's: write the benchmark, check its seeding, prove its gates and checks, measure the width, run the baseline A0, seed the ledger, write A0's README, close with `setup --done`. The orchestrator relays its questions to the user | the setup subagent: `references/step2-baseline.md`; the orchestrator: `references/step0-interview.md`, *Handing off step 2* |
 | 3 | Once setup and the miner's S1 are done, `autoopt.py loop` starts the orchestrator subagent, which runs the rounds and hands back with the round tables to show the user; start the next phase | `references/step3-rounds.md`, *The orchestrator subagent* |
 | 4 | End the search on the record: `autoopt.py end` refuses while anything is in flight, pairs the winner with A0, writes the last round's summary, `ended.json` and `ended.md`, deletes the regenerable files and snapshots the dashboard. | `references/step4-final.md` |
-| 5 | Finish: copy the winner out, write the final report, reclaim the disk once the user agrees, and give the user the commands that bring the change into their code | `references/step5-finish.md` |
+| 5 | Ship, once the search is over: ask the user how (`ship.py plan`), then apply the change to the original files (plain mode), make a branch in the original repository, or open the GitHub documents they check (the optimization PR, the unit-test PR, the bug report), reviewed together and posted together | `references/step5-ship.md` |
+| 6 | Finish: copy the winner out, write the final report, reclaim the disk once the user agrees | `references/step6-finish.md` |
 
 | Not a step | Read |
 |---|---|
@@ -130,6 +134,10 @@ advance.
 | Every script flag (the dashboard's are in `scripts/dashboard/README.md`) | `references/cli.md` |
 | Reading a search without changing it: `autoopt.py table` and `show`, which file answers which question | `references/reading-a-search.md` |
 | Ending the search, reopening it, an iteration made after the end (`--after-end`), what `end` leaves on disk | `references/step4-final.md` |
+| What the GitHub documents carry and may not say; the stand-in numbers | `references/documents.md` |
+| The optimization PR: its tables, prose, commit messages, `autoopt.py pr` | `references/pr-optimization.md` |
+| The unit-test PR: its tables from step 1's files, the push | `references/pr-tests.md` |
+| The bug report: bugs.tsv, verifying each reproduction, filing it | `references/issue-bugs.md` |
 | Code compiled by numba: speed, exactness classes, compile time | `references/algorithm.md`, *Numba* |
 
 ## Rules that hold everywhere
@@ -139,7 +147,8 @@ and ask what a gate means rather than guess: "the outputs must not change"
 is bitwise identity, a tolerance, or a correlation.
 
 **`$WORK/NOTES.md` is generated, never written.** `python3 $AO/stages.py
-status $WORK` prints the five stages (interview, setup, search, final, finish)
+status $WORK` prints the six stages (interview, setup, search, final, ship,
+finish)
 as `not started`, `running` or `complete`, with the next command; `render`
 writes the file, and `end` calls it.
 
@@ -228,4 +237,12 @@ probe inputs go in `$WORK`, never in `/tmp` or a session's scratchpad, which
 are not part of the search.
 
 **The original repository MUST NOT be written to.** A repository search
-copies it with `init --repo` (`references/repo-mode.md`).
+copies it with `init --repo` (`references/repo-mode.md`). The one exception
+is step 5, on the user's own choice there: `ship.py apply --yes` writes the
+original files, `ship.py branch --yes` adds a branch to the original
+repository, and `ship.py post` pushes and opens what they reviewed.
+
+**Shipping starts with the user's answer, after the search is over.** Step 5
+asks how to ship and records it (`after.ship`); nothing is applied, made or
+posted before that answer, and GitHub documents are posted only together,
+after the user reviewed all of them (`references/step5-ship.md`).

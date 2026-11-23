@@ -48,14 +48,55 @@ it.
 - The README starts a first search with the commands that run the example,
   says what to set in Claude Code before leaving a search to run (tool
   permissions, `askUserQuestionTimeout`) and what the subagents run on the
-  machine, shows how to bring the winner into your own code (apply
-  `idea.patch`, or fetch the winner's branch into the repository and squash
-  it), and lists how to resume, stop or reopen a search.
-- Step 5 ends by giving the user those commands for the search, with its
-  paths and the winner's id written in.
+  machine, explains the ways step 5 brings the winner back into your code,
+  and lists how to resume, stop or reopen a search.
 
 ### Claude Code skill
 
+- **Step 5, shipping**, between ending the search (step 4) and finishing it
+  (step 6, which was step 5). `end` now says the search is over and sends the
+  main session to ask the user how to ship; nothing is applied, made or
+  posted before that answer, recorded as `after.ship`. The public skill had
+  no way to bring a winner back: the kept iterations' commit messages and
+  step 1's suite and bug folders were left for "whatever publishes", which it
+  did not include.
+  - `ship.py apply` (plain mode) writes the winner's version of each copied
+    file back where it came from, after a preview. It refuses a file edited
+    since the copy and leaves out files the search wrote itself. `init
+    --copy` now records each source (`config.json` `copied`); a search made
+    before needs `--to DIR`.
+  - `ship.py branch` (repository mode) makes a branch in the original with
+    one commit per kept change, each with its `## Commit message`.
+  - On GitHub, the user checks which documents to open: the optimization PR,
+    the unit-test PR (when step 1 wrote a suite) and the bug report (when
+    step 1 found bugs). One writer subagent drafts them (`ship.py brief`),
+    `ship.py rehearse` renders and previews all of them, and `ship.py post`
+    posts them only with the digest of the batch the user reviewed, filling
+    each document's number into the next.
+  - The documents are ported from an earlier, private version of this skill
+    and rewritten to hold only what the search recorded. They carry no
+    opening that names the tool or the lab and no title prefix, and
+    `lint_text.py` now refuses both in published text. Each ends with the
+    Claude Code line.
+  - The optimization PR (`opt_pr_tables.py`, `opt_pr_body.py`, `autoopt.py
+    pr`) reports the medians and ranges of the objective and every
+    observer, the paired timing, the first call, each output check's worst
+    value, the separate comparison and the unit tests.
+  - The unit-test PR (`tests_pr_tables.py`, `tests_pr_body.py`,
+    `tests_pr_push.py`) keeps the coverage before and after, and drops the
+    option logging and the local configuration runs.
+  - The bug report (`issue_body.py`) reruns each reproduction on the
+    original before filing.
+  - With a unit-test suite, the optimization PR and the local branch hold only
+    the optimization: each kept change is applied to the original's commit, a
+    change to a suite file is refused, and the commits must equal the
+    measured change outside the suite's files.
+  - Forks: `after.pr_remote` and `after.pr_head_owner`.
+  - `tests-branch` records the original's path, branch, commit and remote in
+    `tests/branch.json`; with a suite, `config.json` describes the clone.
+  - Remote URLs are recorded as configured, before `insteadOf` rewrites.
+  - `ended.json` records the machine the search ran on (`machine`).
+  - `stages.py` reports six stages, `ship` between `final` and `finish`.
 - `autoopt.py table` prints one row per iteration, in-flight ones included,
   filtered by status, category, round, parent, frontier or promotion, sorted
   and cut, as text, TSV or JSON with the columns asked for. `autoopt.py show`

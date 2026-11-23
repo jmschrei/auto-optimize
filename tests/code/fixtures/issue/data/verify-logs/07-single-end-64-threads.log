@@ -1,0 +1,11 @@
+# bug 7 (single-end-64-threads), chromap=/opt/chromap-949043c/bin/chromap, in /opt/verify/verify-07-single-end-64-threads-9ejepozy
+== setup: exit 0, 0.06 s
+
+== reproduction: exit 0, 3.12 s
+-t 63: 0.87 s wall, CPU 562%
+Mapped all reads in 0.22s.
+-t 64: 2.11 s wall, CPU 100%
+Mapped all reads in 1.32s.
+outputs identical
+
+== matched 5 of 5 lines of the actual output

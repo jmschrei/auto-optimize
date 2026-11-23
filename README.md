@@ -140,10 +140,14 @@ code per iteration. Then, without you:
    forked from the root (the last change kept), measure it and write a
    README; a change that passes the keep rule becomes the next root;
 4. the search ends on your word or at the budget you set: the winner is timed
-   against A0 in paired runs and summarized in `ended.md`;
-5. the winner is copied out with a final report, you are given the commands
-   that bring the change into your code (*Getting the result back*, below),
-   and the disk is reclaimed once you agree.
+   against A0 in paired runs and summarized in `ended.md`, and the search is
+   over;
+5. the skill asks how you want to ship the winner: written into your original
+   files, as a branch in your repository, or as GitHub pull requests and a
+   bug report that you review before anything is posted (*Getting the
+   result back*, below);
+6. the winner is copied out with a final report, and the disk is reclaimed
+   once you agree.
 
 The walkthrough below is a search on `examples/one-hot/`.
 
@@ -350,53 +354,51 @@ in `skills/auto-optimize-code/references/layout.md`.
 
 ## Getting the result back
 
-The search never writes to your code, so the change reaches it only when you
-apply it. At the end (step 5) the skill copies the winner to
-`<work>/finish/archive/` and gives you the commands below with this search's
-paths filled in:
+The search never writes to your code. Once it has ended, step 5 asks you how
+to ship the winner, and nothing leaves the search before you answer. Each
+route shows you a preview first and writes nothing until you agree.
 
-| In `finish/archive/` | Holds |
+**A function or a script** (a search made from copied files). The skill
+writes the winner's version of each file back where it was copied from, and
+adds any file the change created beside it. A file you edited since the copy
+is refused, so your edit is never overwritten; the benchmark the search wrote
+for itself is left out.
+
+```bash
+python3 $AO/ship.py apply <work>          # preview
+python3 $AO/ship.py apply <work> --yes    # write the files
+```
+
+**A git repository, as a branch.** One commit per kept change, each with the
+commit message the change's subagent wrote, made as a new branch in your
+repository. It is not checked out, and nothing is pushed.
+
+```bash
+python3 $AO/ship.py branch <work> --name faster          # preview
+python3 $AO/ship.py branch <work> --name faster --yes    # make the branch
+```
+
+**A repository on GitHub, as pull requests.** You check which documents to
+open:
+
+| Document | Holds |
 |---|---|
-| `idea.patch` | the whole change from A0 to the winner, as one diff |
-| `code/` | the winner's files; in repository mode, the whole tree |
-| `README.md`, `result.json` | the winner's write-up and numbers |
+| the optimization PR | one commit per kept change on your branch, with the measured change on the main input, a table of every measure the search tracked, what each change does, and how the output was checked |
+| the unit-test PR | the suite written before the search, when you asked for one, with its coverage before and after; separate from the optimization PR, so the two merge in either order |
+| the bug report | one issue for the bugs that suite found, each with a reproduction the skill reran on your code |
 
-If step 5 has not run, `python3 $AO/autoopt.py archive <work>` writes the
-archive (`--id A7` for an iteration other than the winner, `--dest DIR` for
-another folder).
+A writer subagent drafts the chosen documents from what the search recorded:
+every number in them comes from the search's own measurements. They name no
+tool, and say nothing about checks the search did not run. You review all of
+them together (`ship.py rehearse` renders them and previews every push), and
+`ship.py post` posts them only after you approve that exact batch: the bug
+report first, then the unit-test PR, then the optimization PR, each holding
+the numbers of the ones before it. A repository you cannot push to is reached
+from your fork.
 
-**A function or a script.** Apply the patch in the folder that held the files
-the search copied. `git apply` works outside a git repository too:
-
-```bash
-cd /path/to/your/code
-git apply --check <work>/finish/archive/idea.patch   # applies cleanly? changes nothing
-git apply <work>/finish/archive/idea.patch
-```
-
-Or copy the changed files from `code/`.
-
-**A git repository.** Every iteration is a branch, `autoopt/<id>`, in the
-search's bare clone: your history up to the commit the search started from,
-followed by the kept changes. Fetch the winner's into your repository and make
-a branch of your own from it:
-
-```bash
-cd /path/to/your/repository
-git fetch <work>/autooptimize/repo.git autoopt/7:autoopt-winner   # 7: the winner, named in ended.md
-git log --oneline main..autoopt-winner                            # main: the branch the search started from
-git switch -c faster main
-git merge --squash autoopt-winner
-git commit
-git push -u origin faster                                         # then open a pull request
-```
-
-The branch's commit messages name the search's iterations (`A7: …`), which
-mean nothing outside it, so write your own on the squash, or rebase a copy of
-the branch to keep one commit per change. Each kept iteration's
-`<work>/autooptimize/iterations/<id>/notes.md` has a `## Commit message`
-section written for this, and `autoopt.py path <work> --markdown` lists the
-kept changes in order.
+**Or not now.** The change stays in the search; ask later, or take it by hand
+from `<work>/finish/archive/` (`idea.patch` and the winner's files) after
+step 6.
 
 **Before you merge**, read the final report and the kept iterations'
 READMEs (`autoopt.py show <work> A7`). Their notes say what a change costs
@@ -406,7 +408,7 @@ needs it added to your project's requirements. Run your own tests and CI on
 the result as well: the gates covered the inputs and the machine the search
 measured on.
 
-**Then the disk.** Step 5 reports what `prune` would delete and deletes it
+**Then the disk.** Step 6 reports what `prune` would delete and deletes it
 only on your yes. Keep the search directory while you may still reopen the
 search or check out an iteration again (`autoopt.py restore <work> --id
 A7`). When you are done with it, stop its dashboard publisher

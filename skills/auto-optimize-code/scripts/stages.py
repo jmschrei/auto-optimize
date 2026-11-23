@@ -5,9 +5,10 @@
 	python3 stages.py status WORK     # print the same table
 	python3 stages.py next WORK       # the one command (or question) that is next
 
-Five stages, in order: interview, setup, search, final, finish. Each is
+Six stages, in order: interview, setup, search, final, ship, finish. Each is
 `not started`, `running` or `complete`, derived from state files
-(`state.json`, `ended.json`, `finish/`); nothing is typed into NOTES.md by
+(`state.json`, `ended.json`, `config.json`'s `after.ship`, `ship/`,
+`finish/`); nothing is typed into NOTES.md by
 hand, so a render of the same state is the same bytes. `autoopt.py end` calls
 `render`; it is also safe to run at any time.
 
@@ -139,6 +140,51 @@ def final(work, root, state):
 		'ended': os.path.join(root, 'ended.md')}
 
 
+SHIPPED = {'none': 'not shipped, the user\'s choice',
+	'apply': 'applied to the original files',
+	'branch': 'a branch in the original repository'}
+PENDING = {'apply': 'the change is not applied yet',
+	'branch': 'the branch is not made yet'}
+
+
+def ship(work, root, state):
+	"""Step 5. `after.ship` is the user's answer; the step is complete when
+	what it asked for is done: `ship/applied.json`, `ship/branch.json`, or
+	every chosen GitHub document posted."""
+
+	if not autoopt.load_ended(root):
+		return NOT_STARTED, '', {}
+
+	after = after_of(work)
+	choice = after.get('ship')
+
+	if choice in (None, 'ask'):
+		return NOT_STARTED, 'ask the user how to ship', {}
+
+	if choice == 'none':
+		return COMPLETE, SHIPPED['none'], {}
+
+	if choice in ('apply', 'branch'):
+		record = autoopt.work_path(work, 'ship', '{}.json'.format('applied'
+			if choice == 'apply' else 'branch'))
+
+		if exists(record):
+			return COMPLETE, SHIPPED[choice], {choice: record}
+
+		return RUNNING, PENDING[choice], {}
+
+	documents = after.get('ship_documents') or []
+	posted = {name: autoopt.ship_posted(work, name) for name in documents}
+	done = [name for name in documents if posted[name]]
+	text = '{} of {} document(s) posted{}'.format(len(done), len(documents),
+		': ' + ', '.join(posted[name]['url'] for name in done) if done else '')
+
+	if documents and len(done) == len(documents):
+		return COMPLETE, text, {}
+
+	return RUNNING, text, {}
+
+
 def finish(work, root, state):
 	report = autoopt.work_path(work, 'finish', 'final-report.md')
 
@@ -149,7 +195,7 @@ def finish(work, root, state):
 
 
 STAGES = (('interview', interview), ('setup', setup), ('search', search),
-	('final', final), ('finish', finish))
+	('final', final), ('ship', ship), ('finish', finish))
 
 
 def load_state(root):
@@ -157,7 +203,7 @@ def load_state(root):
 
 
 def collect(work):
-	"""`[(stage, status, text, links)]` for the five stages."""
+	"""`[(stage, status, text, links)]` for the six stages."""
 
 	root = os.path.join(work, 'autooptimize')
 	state = load_state(root)
@@ -198,7 +244,19 @@ NEXT = {
 	'search': 'python3 {ao}/autoopt.py loop {w}; spawn the orchestrator',
 	'final': 'python3 {ao}/autoopt.py end {w} --background; autoopt.py wait '
 		'<log>',
-	'finish': 'references/step5-finish.md: the final report, then prune',
+	'ship': 'references/step5-ship.md: python3 {ao}/ship.py plan {w}, then '
+		'ask the user how to ship',
+	'finish': 'references/step6-finish.md: the final report, then prune',
+}
+
+# Step 5 once the user has answered, by `after.ship`.
+SHIP_NEXT = {
+	'apply': 'python3 {ao}/ship.py apply {w}: show the user the preview, then '
+		'--yes on their word',
+	'branch': 'python3 {ao}/ship.py branch {w}: show the user the preview, '
+		'then --yes on their word',
+	'github': 'python3 {ao}/ship.py status {w}: the documents, then '
+		'references/step5-ship.md, *Review, then post all*',
 }
 
 
@@ -362,6 +420,10 @@ def next_action(work, rows):
 	for name, status, text, _ in rows:
 		if status == COMPLETE:
 			continue
+
+		if name == 'ship' and after.get('ship') in SHIP_NEXT:
+			return name, 'agent', SHIP_NEXT[after['ship']].format(ao=HERE,
+				w=work)
 
 		if name == 'finish' and not config.get('repo') and not exists(
 				autoopt.work_path(work, 'finish', 'archive', 'idea.patch')):

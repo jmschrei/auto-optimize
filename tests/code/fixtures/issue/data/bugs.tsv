@@ -1,0 +1,9 @@
+number	slug	title	short	category	severity	effect	related
+1	single-end-chr-order	Single-end reads are reported on the wrong sequence with `--chr-order`	-	wrong output	high	wrong output	#172, where `--chr-order` is suggested for a lexicographic order
+2	bc-error-threshold-2-n	`--bc-error-threshold 2` does not correct some barcodes that contain an N	-	wrong output	medium	wrong output	#181 (whether N bases are corrected)
+3	feature-matrix	Feature/barcode matrix loses bins on later sequences and peaks at sequence ends	Feature/barcode matrix loses bins and end-of-sequence peaks	wrong output	low	wrong output (code not reachable from the command line)	-
+4	sam-fasta-reads	FASTA reads: `--SAM` aborts or writes another read's QUAL, and `--trim-adapters` crashes	FASTA reads break `--SAM` and `--trim-adapters`	crash	high	crash; wrong output	-
+5	paired-end-nondeterminism	Paired-end output and statistics vary between runs at `-t` > 1	-	nondeterminism	medium	nondeterminism; wrong output	-
+6	truncated-gzip-input	A truncated gzipped read file is mapped without an error	-	silent acceptance of bad input	low	silent acceptance of bad input; wrong output	#134 and #122, which show the existing message; neither is a duplicate
+7	single-end-64-threads	Single-end mapping runs on one thread at `-t 64` and above	-	performance	medium	performance (output correct)	-
+8	version-stdout	`chromap -v` prints to stderr; chromap.1 says stdout	-	documentation mismatch	low	documentation mismatch	-

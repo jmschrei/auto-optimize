@@ -1,0 +1,9 @@
+number	slug	status	exit	seconds	matched	checksum	commit	text	log	note	date
+1	single-end-chr-order	pass	0	0.82	3/3	a709e6fbb245f2bc592bba701e982943d0383cd94f86275a2490f985d3487df1	949043c	cfd6545878f94b81	verify-logs/01-single-end-chr-order.log	-	2026-10-27T03:02Z
+2	bc-error-threshold-2-n	pass	0	1.17	3/3	a709e6fbb245f2bc592bba701e982943d0383cd94f86275a2490f985d3487df1	949043c	c027cc7e256722d0	verify-logs/02-bc-error-threshold-2-n.log	-	2026-10-27T03:03Z
+3	feature-matrix	manual	-	-	-	a709e6fbb245f2bc592bba701e982943d0383cd94f86275a2490f985d3487df1	949043c	067bf57d66c3ac4b	verify-logs/03-feature-matrix.log	it needs the chromap source tree after `make` and a C++ harness built against it	2026-10-27T03:04Z
+4	sam-fasta-reads	pass	0	8.73	9/9	a709e6fbb245f2bc592bba701e982943d0383cd94f86275a2490f985d3487df1	949043c	a68d1079ec8f41a2	verify-logs/04-sam-fasta-reads.log	-	2026-10-27T03:03Z
+5	paired-end-nondeterminism	manual	-	-	-	a709e6fbb245f2bc592bba701e982943d0383cd94f86275a2490f985d3487df1	949043c	91f5b426081bdcc1	verify-logs/05-paired-end-nondeterminism.log	it needs 0.5 GB of downloads and ten runs at `-t 16`, and the counts it shows differ from run to run	2026-10-27T03:04Z
+6	truncated-gzip-input	pass	0	0.41	3/3	a709e6fbb245f2bc592bba701e982943d0383cd94f86275a2490f985d3487df1	949043c	31aaecd1c59a3509	verify-logs/06-truncated-gzip-input.log	-	2026-10-27T03:03Z
+7	single-end-64-threads	pass	0	3.12	5/5	a709e6fbb245f2bc592bba701e982943d0383cd94f86275a2490f985d3487df1	949043c	29187b720a20e514	verify-logs/07-single-end-64-threads.log	-	2026-10-27T03:04Z
+8	version-stdout	pass	0	0.01	1/1	a709e6fbb245f2bc592bba701e982943d0383cd94f86275a2490f985d3487df1	949043c	cb473b84d1f63cc5	verify-logs/08-version-stdout.log	-	2026-10-27T03:04Z

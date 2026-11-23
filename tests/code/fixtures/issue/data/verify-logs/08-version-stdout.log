@@ -1,0 +1,7 @@
+# bug 8 (version-stdout), chromap=/opt/chromap-949043c/bin/chromap, in /opt/verify/verify-08-version-stdout-sihl7jf7
+== setup: exit 0, 0.06 s
+
+== reproduction: exit 0, 0.01 s
+stdout: [] stderr: [0.3.3-r521]
+
+== matched 1 of 1 lines of the actual output

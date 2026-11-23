@@ -60,6 +60,6 @@
 | `end --reopen`: `the search cannot be reopened` | `references/step4-final.md`, *Reopening* |
 | `the search ended on …: only an iteration made after the end`; `refusing to fork an iteration` after `end` | `references/step4-final.md`, *An iteration made after the end* |
 | A search is running and this session knows nothing about it | `references/resume.md` |
-| `has no git checkout: it was pruned, or made by hand`; the search directory has grown to tens of GB | `references/step5-finish.md`, *Reclaim the disk* |
+| `has no git checkout: it was pruned, or made by hand`; the search directory has grown to tens of GB | `references/step6-finish.md`, *Reclaim the disk* |
 | `the harness changed since …`, `the winner relies on the toolchain` | `references/subagent.md`, *Portability* (Toolchain); `autoopt.py harness --accept --reason` for a change that is meant |
 | Start the ideas over without re-running the baseline | `references/changes.md`, *Starting the ideas over* |

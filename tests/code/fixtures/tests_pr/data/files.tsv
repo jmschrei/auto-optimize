@@ -1,0 +1,5 @@
+status	path
+A	tests/conftest.py
+A	tests/test_cli.py
+A	tests/test_core.py
+A	tests/test_io.py
