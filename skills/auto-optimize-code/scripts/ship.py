@@ -101,9 +101,12 @@ def applied_record(work):
 		return None
 
 
-def apply_plan(work, root, config, identifier, to):
+def apply_plan(work, root, config, identifier, to, by_hand=False):
 	"""What `apply` would do: `{'rows': [(path, destination, action)],
-	'skipped': [paths the search wrote], 'problems': [...]}`. A path is
+	'skipped': [paths the search wrote], 'problems': [...], 'hand':
+	[(path, destination)]}`. With `by_hand`, a file that holds neither the
+	copy nor the winner is one the user merged the change into by hand, on
+	their word, and goes in `hand` rather than `problems`. A path is
 	applied where it came from: under `to`, else under the folder that held
 	the files `init --copy` took (`config['copied']`).
 
@@ -129,7 +132,7 @@ def apply_plan(work, root, config, identifier, to):
 
 	copied = config.get('copied') or []
 	names = [entry['as'] for entry in copied]
-	problems, rows, skipped, already = [], [], [], []
+	problems, rows, skipped, already, hand = [], [], [], [], []
 
 	def from_user(path):
 		return any(path == name or path.startswith(name + '/') for name in
@@ -178,6 +181,12 @@ def apply_plan(work, root, config, identifier, to):
 			already.append((path, target))
 			continue
 
+		# A file the user merged the change into by hand, on their word: it
+		# matches neither the copy nor the winner, and is left as it is.
+		if by_hand and current is not None and not applied:
+			hand.append((path, target))
+			continue
+
 		if applied:
 			pass
 		elif status == 'A':
@@ -199,7 +208,7 @@ def apply_plan(work, root, config, identifier, to):
 			'change')))
 
 	return {'rows': rows, 'skipped': skipped, 'problems': problems,
-		'head': head, 'already': already}
+		'head': head, 'already': already, 'hand': hand}
 
 
 def apply(args):
@@ -217,8 +226,14 @@ def apply(args):
 	if problem:
 		fail(problem)
 
+	if args.yes and after_of(config).get('ship') != 'apply':
+		fail('after.ship is {}: the original files are written only on the '
+			'user\'s choice. Ask with `ship.py plan` and record it (`autoopt.py '
+			'config <work> --set after.ship=apply --reason "<their words>"`)'
+			.format(after_of(config).get('ship')))
+
 	to = os.path.abspath(os.path.expanduser(args.to)) if args.to else None
-	plan = apply_plan(work, root, config, identifier, to)
+	plan = apply_plan(work, root, config, identifier, to, args.by_hand)
 	bare = os.path.join(root, 'repo.git')
 	stat = autoopt.git('-C', bare, 'diff', '--stat', 'autoopt/0', plan['head'],
 		'--', *[path for path, _, _ in plan['rows']]).rstrip() if plan[
@@ -238,13 +253,17 @@ def apply(args):
 	for path, target in plan['already']:
 		print('  already holds the change: {}'.format(target))
 
+	for path, target in plan['hand']:
+		print('  applied by hand, on the user\'s word: {} (left as it is)'
+			.format(target))
+
 	if stat:
 		print('\n' + stat)
 
 	if plan['problems']:
 		fail('nothing was written:\n  ' + '\n  '.join(plan['problems']))
 
-	if not plan['rows'] and not plan['already']:
+	if not plan['rows'] and not plan['already'] and not plan['hand']:
 		fail('the change touches none of the copied files; nothing to apply')
 
 	if not plan['rows'] and not args.yes:
@@ -296,7 +315,8 @@ def apply(args):
 
 	# The same winner applied again, with nothing left to write: the first
 	# record already says what was written, so keep it as it is.
-	if not writes and earlier and earlier.get('commit') == commit:
+	if not writes and not plan['hand'] and earlier and earlier.get(
+			'commit') == commit:
 		autoopt.hold_reopen(root, 'apply', 'written into the original files')
 		autoopt.refresh_notes(root)
 		print('\nthe change is applied already, as {} records'.format(
@@ -307,7 +327,7 @@ def apply(args):
 	# written now and those that held it already (an earlier apply's, or
 	# the user's own), so it stands alone after an --after-end winner.
 	held = [path for path, _, _ in plan['rows']] + [path for path, _ in
-		plan['already']]
+		plan['already'] + plan['hand']]
 	patch = os.path.join(folder, 'applied.patch') if held else None
 
 	os.makedirs(folder, exist_ok=True)
@@ -321,6 +341,8 @@ def apply(args):
 		'files': [{'path': path, 'destination': target, 'action': action}
 			for path, target, action in plan['rows']], 'already': [{'path':
 			path, 'destination': target} for path, target in plan['already']],
+		'by_hand': [{'path': path, 'destination': target} for path, target
+			in plan['hand']],
 		'skipped': plan['skipped'], 'patch': patch, 'at': autoopt.now()})
 	autoopt.hold_reopen(root, 'apply', 'written into the original files')
 	autoopt.refresh_notes(root)
@@ -400,7 +422,15 @@ def branch(args):
 		fail('the original repository\'s folder is not recorded: pass --repo '
 			'PATH')
 
-	prefix_problem(config)
+	if not args.name:
+		prefix_problem(config)
+
+	if args.yes and after_of(config).get('ship') != 'branch':
+		fail('after.ship is {}: a branch is made in the original repository '
+			'only on the user\'s choice. Ask with `ship.py plan` and record it '
+			'(`autoopt.py config <work> --set after.ship=branch --reason "<their '
+			'words>"`)'.format(after_of(config).get('ship')))
+
 	messages = local_messages(root, path_steps(root, config, identifier))
 	made = autoopt.pr_commits(root, config, identifier, messages)
 	bare = os.path.join(root, 'repo.git')
@@ -492,7 +522,8 @@ def offer(work, root, config):
 	medians = ended.get('medians') or {}
 	facts.append('the search ended on {}: {} {} {} -> {}'.format((ended.get(
 		'ended_at') or '?')[:10], winner.get('label', '?'), medians.get(
-		'objective', ''), medians.get('A0'), medians.get('winner')))
+		'objective', ''), autoopt.fmt(medians.get('A0')), autoopt.fmt(
+		medians.get('winner'))))
 
 	if found['mode'] == 'plain':
 		copied = config.get('copied') or []
@@ -782,8 +813,9 @@ DIGEST_AFTER = ('branch_prefix', 'pr_remote', 'pr_head_owner')
 def inputs_digest(work, documents, after, names=None):
 	"""A digest of everything the chosen documents are rendered and pushed
 	from: every file in their folders except what is rendered or posted from
-	them, the `after` answers of DIGEST_AFTER, the `--branch` names, and the
-	winner, so a promotion after the rehearsal makes it stale."""
+	them, the unit-test branch's tip commit, the `after` answers of
+	DIGEST_AFTER, the `--branch` names, and the winner, so a promotion after
+	the rehearsal makes it stale."""
 
 	ended = autoopt.load_ended(os.path.join(work, 'autooptimize')) or {}
 	hasher = hashlib.sha256()
@@ -793,6 +825,17 @@ def inputs_digest(work, documents, after, names=None):
 
 	for document in documents:
 		base = folder(work, document)
+
+		# The unit-test PR pushes its branch by name: its tip is an input,
+		# so a commit made after the rehearsal is never pushed unreviewed.
+		if document == 'tests':
+			try:
+				known = autoopt.read_json(os.path.join(base, 'branch.json'))
+				tip = autoopt.git('-C', known['suite'], 'rev-parse',
+					known['branch']).strip()
+			except (OSError, ValueError, KeyError, TypeError, RuntimeError):
+				tip = ''
+			hasher.update('tests tip {}'.format(tip).encode() + b'\0')
 
 		for top, dirs, files in os.walk(base):
 			dirs[:] = sorted(name for name in dirs if name not in OUTPUT_DIRS
@@ -1125,6 +1168,9 @@ def main(argv=None):
 		'search that does not record where its files came from')
 	sub.add_argument('--yes', action='store_true', help='write the files (or '
 		'record them as applied, when they hold the change already)')
+	sub.add_argument('--by-hand', action='store_true', help='a file that holds '
+		'neither the copy nor the winner is one the user merged the change '
+		'into by hand, on their word: left as it is and recorded as applied')
 	sub.set_defaults(func=apply)
 
 	sub = commands.add_parser('branch', help='a repository search: a branch '

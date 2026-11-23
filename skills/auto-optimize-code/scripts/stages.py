@@ -185,6 +185,10 @@ def ship(work, root, state):
 	if not ended:
 		return NOT_STARTED, '', {}
 
+	# A search that kept nothing ends on A0, and there is nothing to ship.
+	if (ended.get('winner') or {}).get('id') == 0:
+		return COMPLETE, 'nothing to ship: no change was kept', {}
+
 	after = after_of(work)
 	choice = after.get('ship')
 
@@ -294,8 +298,8 @@ def render_text(work, rows):
 NEXT = {
 	'interview': 'finish the interview: fill in spec.md (references/'
 		'step0-interview.md)',
-	'setup': 'python3 {ao}/autoopt.py setup {w}; spawn the setup subagent '
-		'and the idea miner',
+	'setup': 'python3 {ao}/autoopt.py setup {w}; spawn the setup subagent, '
+		'and the idea miner once it reports',
 	'search': 'python3 {ao}/autoopt.py loop {w}; spawn the orchestrator',
 	'final': 'python3 {ao}/autoopt.py end {w} --background; autoopt.py wait '
 		'<log>',
@@ -383,7 +387,8 @@ def hours_since(stamp):
 def stop_word(root, config, state, after):
 	"""The When-to-stop criterion that is reached, or None: `floor`,
 	`stalled` (the open round holds a phase's worth of settled iterations) or
-	`budget` (every idea from the `after.budget_stages` idea-miner stages is
+	`budget` (`after.budget_iterations` iterations have settled, every idea
+	from the `after.budget_stages` idea-miner stages is
 	tried or dropped, or the wall clock since step 2 began passes
 	`after.budget_hours`)."""
 
@@ -399,6 +404,24 @@ def stop_word(root, config, state, after):
 		return 'budget'
 
 	return None
+
+
+def end_failure(path):
+	"""The last lines of an `end.log` that finished with a non-zero exit,
+	or None: a failed `end` is shown, not started again."""
+
+	try:
+		with open(path) as handle:
+			lines = [line for line in handle.read().splitlines()
+				if line.strip()]
+	except OSError:
+		return None
+
+	if not lines or not lines[-1].startswith('exit ') or lines[-1] == 'exit 0':
+		return None
+
+	return '{}; {}'.format(lines[-1], ' / '.join(lines[-4:-1])[-400:] or
+		'no output')
 
 
 def log_running(path):
@@ -466,6 +489,13 @@ def search_action(work, root, state, config, after, rows):
 		return 'agent', ('`end` is running: `python3 {} wait {}`, again '
 			'until it prints `wait: finished`'.format(ao, os.path.join(root,
 			'end.log')))
+
+	failed = end_failure(os.path.join(root, 'end.log'))
+
+	if failed:
+		return 'stop', ('`end` failed and the search has not ended: {}. Fix '
+			'what it names (references/step4-final.md), or tell the user, then '
+			'run `end` again'.format(failed))
 
 	if (state.get('loop') or {}).get('open'):
 		return 'agent', ('the orchestrator phase {} is open: wait for its '

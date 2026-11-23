@@ -27,6 +27,7 @@ SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, 'skills',
 sys.path.insert(0, SCRIPTS)
 
 import autoopt
+import stages
 import test_runner as tr
 
 AUTOOPT = tr.AUTOOPT
@@ -385,6 +386,22 @@ def main():
 			out.rstrip().endswith('The search is over. Next: step 5, shipping '
 			'(`references/step5-ship.md`): ask the user how to ship.'),
 			out[-400:])
+
+		# A search that kept nothing ends on A0, with nothing to ship.
+		empty = tr.make_search(os.path.join(base, 'kept-nothing'),
+			staged=False, runs=3)
+		tr.add(empty, 1, 0.40)
+		write_readme(empty, 1)
+		code, out = run_end(empty, reason='stalled')
+		ended = autoopt.load_ended(empty) or {}
+		suite.check('a search that kept nothing ends on A0, without pairing',
+			code == 0 and ended.get('winner', {}).get('id') == 0 and
+			ended.get('paired') is None and 'No change was kept' in read(
+			os.path.join(empty, 'ended.md')) and 'nothing to ship' in out, out)
+		suite.equal('and its ship stage is complete, with nothing to ship',
+			stages.ship(os.path.dirname(empty), empty, autoopt.load_state(
+			empty))[:2], (stages.COMPLETE, 'nothing to ship: no change was '
+			'kept'))
 	finally:
 		autoopt.run_dashboard = real
 

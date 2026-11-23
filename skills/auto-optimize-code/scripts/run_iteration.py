@@ -792,6 +792,10 @@ def promote_on_keep(root, config, meta, result, no_promote=False):
 	if config.get('promote', 'orchestrator') != 'auto':
 		return ['keep: passes ({}); promotion is the orchestrator\'s '
 			'(config "promote")'.format(keep['why'])]
+	if meta.get('after_end'):
+		return ['keep: passes ({}); not promoted: an iteration made after the '
+			'end becomes the winner only by `promote --id`, on the user\'s '
+			'word (references/step4-final.md)'.format(keep['why'])]
 
 	head = autoopt.load_state(root)['root']
 

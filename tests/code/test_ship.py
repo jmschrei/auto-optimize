@@ -206,6 +206,10 @@ def plain(base, suite):
 	suite.check('branch refuses a plain search, naming apply', 'ship.py '
 		'apply' in out, out)
 
+	code, out = run([SHIP, 'apply', work, '--yes'], expect=(1,))
+	suite.check('apply --yes refuses until the user chose to apply',
+		'after.ship is ask' in out and read(os.path.join(user, 'score.py'))
+		== 'QUALITY = 0.50\n', out)
 	set_after(search, ship='apply')
 	suite.equal('the ship stage runs once the user chose to apply',
 		ship_status(work), 'running')
@@ -285,6 +289,25 @@ def plain(base, suite):
 	suite.check('a file edited since the copy is refused, and nothing is '
 		'written', 'changed since the search copied it' in out and read(
 		os.path.join(user, 'score.py')) == 'QUALITY = 0.40\n', out)
+
+	# The user merges the change by hand: --by-hand records it as applied.
+	write(os.path.join(user, 'helper.py'), tr.git('-C', os.path.join(search,
+		'repo.git'), 'show', 'autoopt/2:helper.py'))
+	write(os.path.join(user, 'score.py'), 'QUALITY = 0.80  # by hand\n')
+	code, out = run([SHIP, 'apply', work], expect=(1,))
+	suite.check('a file merged by hand is still refused without --by-hand',
+		'changed since the search copied it' in out, out)
+	code, out = run([SHIP, 'apply', work, '--by-hand'])
+	suite.check('--by-hand previews it as applied by hand, writing nothing',
+		'applied by hand, on the user\'s word' in out and read(os.path.join(
+		user, 'score.py')) == 'QUALITY = 0.80  # by hand\n', out)
+	run([SHIP, 'apply', work, '--by-hand', '--yes'])
+	record = json.load(open(applied))
+	suite.check('--by-hand --yes records it and leaves the file as it is',
+		[row['path'] for row in record['by_hand']] == ['score.py'] and read(
+		os.path.join(user, 'score.py')) == 'QUALITY = 0.80  # by hand\n',
+		record)
+	write(os.path.join(user, 'score.py'), 'QUALITY = 0.40\n')
 
 	config = json.load(open(os.path.join(search, 'config.json')))
 	del config['copied']
@@ -412,10 +435,17 @@ def branches(suite, base):
 		([route[0] for route in offered['routes']], [document[0] for document
 		in offered['documents']]), (['github', 'branch', 'none'],
 		['optimization']))
+	code, out = run([SHIP, 'branch', work, '--name', 'faster', '--yes'],
+		expect=(1,))
+	suite.check('branch --yes refuses until the user chose the branch route',
+		'after.ship is ask' in out and 'after.ship=branch' in out, out)
 	set_after(search, ship='branch')
-	code, out = run([SHIP, 'branch', work, '--name', 'faster'], expect=(1,))
-	suite.check('branch refuses until the user has answered it',
-		'after.branch_prefix' in out, out)
+	code, out = run([SHIP, 'branch', work], expect=(1,))
+	suite.check('branch refuses to name a branch until the user has answered '
+		'the prefix question', 'after.branch_prefix' in out, out)
+	code, out = run([SHIP, 'branch', work, '--name', 'faster'])
+	suite.check('a name the user gave needs no prefix answer', 'preview only'
+		in out, out)
 	set_after(search, branch_prefix='no')
 	code, out = run([SHIP, 'branch', work, '--name', 'faster'])
 	suite.check('the branch preview lists one commit per kept change, by '

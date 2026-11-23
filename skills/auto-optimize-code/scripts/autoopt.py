@@ -8,7 +8,7 @@
 	python3 autoopt.py status  <dir>
 	python3 autoopt.py summary <dir> --round 1
 	python3 autoopt.py promote <dir> --id 7
-	python3 autoopt.py config  <dir> --set mode=tree --reason '...'
+	python3 autoopt.py config  <dir> --set runs_per_iteration=3 --reason '...'
 	python3 autoopt.py path    <dir> --id best
 	python3 autoopt.py wait    <log> [--pid N]      # at most four minutes
 	python3 autoopt.py bg      <dir> <log> '<command>'   # a long command, detached
@@ -156,6 +156,7 @@ if os.environ.get('AUTOOPT_TMPDIR'):
 # it reads with `register_after`; a key no table names is kept as it is (it
 # belongs to whatever extension wrote it).
 AFTER_DEFAULTS = {'stop': 'ask', 'budget_hours': None, 'budget_stages': None,
+	'budget_iterations': None,
 	'disk': 'ask', 'oldest_toolchain_command': None, 'tests_driver_edit': 'ask',
 	'commit_trailer': None, 'pair_cap_hours': 4, 'setup_questions': 'ask',
 	'build_outputs': [], 'ship': 'ask', 'ship_documents': [],
@@ -172,7 +173,7 @@ SHIP_FOLDERS = {'bugs': 'issue-bugs', 'tests': 'pr-tests',
 SHIP_RECORDS = {'bugs': 'filed.json', 'tests': 'pr.json',
 	'optimization': 'pr.json'}
 # Keys that hold a whole number of 1 or more, and a number of 0 or more.
-AFTER_WHOLE = ['budget_stages']
+AFTER_WHOLE = ['budget_stages', 'budget_iterations']
 AFTER_NONNEG = []
 # Functions `check(after)` that fail on a bad value of their own key.
 AFTER_CHECKS = []
@@ -199,7 +200,8 @@ def path_list(text):
 
 # The keys `config --set after.X=V` changes, and how each value is read.
 AFTER_KINDS = {'stop': str, 'disk': str, 'budget_hours': float,
-	'budget_stages': int, 'oldest_toolchain_command': str,
+	'budget_stages': int, 'budget_iterations': int,
+	'oldest_toolchain_command': str,
 	'tests_driver_edit': str,
 	'commit_trailer': str, 'pair_cap_hours': float, 'setup_questions': str,
 	'build_outputs': path_list, 'ship': str, 'ship_documents': path_list,
@@ -2103,6 +2105,55 @@ def stage_budget(root, config, state=None):
 			and untried == 0}
 
 
+def iteration_budget(root, config):
+	"""The search against `after.budget_iterations`, the number of
+	iterations the user agreed to: `budget` (None when there is none),
+	`used` (iterations forked or briefed, other than A0, same-code controls
+	and iterations made after the end), `spent` (that many are used, so
+	nothing more is briefed) and `exhausted` (spent, and every one of them
+	has settled: the search stops for `budget`)."""
+
+	budget = (config.get('after') or {}).get('budget_iterations')
+	used, unsettled = 0, 0
+
+	if budget:
+		for identifier in iteration_ids(root):
+			meta = load_meta(root, identifier) or {}
+			if not identifier or meta.get('control') or meta.get('after_end'):
+				continue
+			used += 1
+			if load_result(root, identifier) is None:
+				unsettled += 1
+		for identifier in pending_briefs(root):
+			try:
+				record = read_json(os.path.join(root, 'briefs',
+					'{}.json'.format(identifier)))
+			except (OSError, ValueError):
+				record = {}
+			if record.get('control') or record.get('after_end'):
+				continue
+			used += 1
+			unsettled += 1
+
+	spent = bool(budget) and used >= budget
+
+	return {'budget': budget, 'used': used, 'spent': spent,
+		'exhausted': spent and not unsettled}
+
+
+def hours_spent(state):
+	"""Wall-clock hours since step 2 began, against which
+	`after.budget_hours` is counted, or None before it began."""
+
+	started = str((state.get('setup') or {}).get('started') or '')[:19]
+
+	try:
+		return (time.time() - time.mktime(time.strptime(started,
+			'%Y-%m-%dT%H:%M:%S'))) / 3600
+	except ValueError:
+		return None
+
+
 def write_spec_template(root, config):
 	path = spec_path(root)
 
@@ -2169,8 +2220,8 @@ def require_spec(root, action):
 
 def require_interview(root, action):
 	"""Like require_spec, but allows the three lines step 2 answers (Gate
-	proof, Width measured, Benchmark): the idea miner starts while step 2
-	runs."""
+	proof, Width measured, Benchmark): setup starts before step 2 answers
+	them, and a miner started blind (`mine --without-profile`) may too."""
 
 	if os.environ.get('AUTOOPT_SKIP_SPEC_CHECK'):
 		return
@@ -2555,6 +2606,16 @@ def mine(args):
 				'open the next stage'.format(mining['stage'],
 					mining.get('started', '?')))
 
+		iterations = iteration_budget(root, config)
+
+		if iterations['spent']:
+			fail('the budget is {} iteration(s) (after.budget_iterations) and '
+				'{} are used, so no new ideas are needed: the search stops '
+				'for `budget` once they settle. With the user\'s yes, raise '
+				'it: `autoopt.py config <work> --set '
+				'after.budget_iterations=<more> --reason "<their words>"`'
+				.format(iterations['budget'], iterations['used']))
+
 		budget = (config.get('after') or {}).get('budget_stages')
 
 		if budget and mining['done'] >= budget:
@@ -2747,8 +2808,7 @@ def setup_missing(root, config):
 			'(`--rerun`), or correct `workers` with the user\'s word'.format(
 			wanted, seen.get('busy_peak', 0), seen.get('samples', 0)))
 
-	if config.get('repo') and config.get('gpu', True) and not config.get(
-			'gpu_command'):
+	if config.get('gpu', True) and not config.get('gpu_command'):
 		missing.append('no gpu_command: `end` takes its GPU lease through '
 			'it, and so does anything run on this search afterwards (`config --set '
 			'gpu_command="<the allocator> --"`; references/step2-baseline.md, '
@@ -2846,12 +2906,22 @@ def loop(args):
 	root = resolve(args.root)
 	config = load_config(root)
 
-	if not args.done:
+	if not args.done and not args.stop:
 		require_open(root, 'open a phase of the orchestrator subagent')
 
 	with Lock(root):
 		state = load_state(root)
 		record = state.setdefault('loop', {'phase': 0})
+
+		if args.stop:
+			if not record.get('open'):
+				fail('no orchestrator-subagent phase is open')
+			record['stop'] = now()
+			save_state(root, state)
+			print('phase {} asked to stop: its next `brief --next` briefs '
+				'nothing and tells it to hand back, which wakes you'.format(
+					record['phase']))
+			return 0
 
 		if args.done:
 			if not record.get('open'):
@@ -2877,7 +2947,7 @@ def loop(args):
 				'orchestrator subagent once it has reported')
 
 		record.update(phase=record.get('phase', 0) + 1, open=True,
-			started=now(), settled_at_start=settled_count(root))
+			started=now(), settled_at_start=settled_count(root), stop=None)
 		was, now_spread = refresh_band(root, state)
 		save_state(root, state)
 		phase = record['phase']
@@ -3178,7 +3248,7 @@ def setup(args):
 			print('recorded the question ({} waiting). First do every step '
 				'that does not depend on an answer and `--ask` what else '
 				'those reach; then stop and report all of them to the '
-				'orchestrator together'.format(len(asked) + 1))
+				'main session together'.format(len(asked) + 1))
 			return 0
 
 		if args.done:
@@ -3191,8 +3261,9 @@ def setup(args):
 			record.update(status='done', finished=now())
 			save_state(root, state)
 			record_harness(root)
-			print('step 2 is done: the orchestrator briefs the first iteration once '
-				'the idea miner\'s S1 has reported')
+			print('step 2 is done: the main session starts the idea miner\'s '
+				'S1 (`autoopt.py mine`), then the orchestrator, which briefs the '
+				'first iteration')
 			taken = [one for one in record.get('answers') or [] if one.get(
 				'by') == 'recommended']
 
@@ -4260,6 +4331,13 @@ def end_reason(root, config, state, text):
 			'tried or dropped)'.format(REASONS['budget'], stages['done'],
 			stages['budget'])}
 
+	iterations = iteration_budget(root, config)
+
+	if iterations['exhausted']:
+		return {'criterion': 'budget', 'text': '{} (derived: {} iteration(s) '
+			'settled against a budget of {})'.format(REASONS['budget'],
+			iterations['used'], iterations['budget'])}
+
 	handback = config.get('loop_handback') or LOOP_HANDBACK
 	count = len(settled_since_promotion(root, state))
 
@@ -4389,7 +4467,10 @@ def ended_markdown(root, config, ended):
 		'- Objective `{}` ({}): the median goes from {} in A0 to {} in {}: '
 		'{}.'.format(objective['name'], objective['direction'], fmt(zero),
 		fmt(winner['median']), winner['label'], gain_line(config, zero,
-		winner['median']))]
+		winner['median'])) if winner['id'] != 0 else '- No change was kept: '
+		'no iteration passed the keep rule, so the code stays as it was. '
+		'Objective `{}` ({}): A0\'s median is {}.'.format(objective['name'],
+		objective['direction'], fmt(zero))]
 
 	gates = winner.get('gates') or {}
 
@@ -4403,7 +4484,11 @@ def ended_markdown(root, config, ended):
 
 	if paired and paired.get('paired'):
 		entry = paired['paired']
-		line = '- Paired, on the search\'s own input: {} vs A0, {}{}'.format(
+		timed = (objective.get('unit') or '').strip().lower() in ('s', 'sec',
+			'seconds')
+		line = '- Paired{}, on the search\'s own input: {} vs A0, {}{}'.format(
+			'' if timed else ' timing (seconds per call, from the timing probe, '
+			'not `{}`)'.format(objective['name']),
 			label(root, paired['winner']), entry['verdict'],
 			', {:+.3g}, {}/{}, p = {:.2g}'.format(entry['median'],
 			entry['wins'], entry['pairs'], entry['p']) if 'median' in entry
@@ -4506,14 +4591,18 @@ def end(args):
 	winner = resolve_id(root, config, args.id if args.id is not None
 		else 'best')
 
-	if winner == 0:
-		fail('the root is still A0: nothing was kept, so there is no winner '
-			'to end on')
+	# A search that kept nothing ends on A0: there is nothing to pair and
+	# nothing to ship, and the record says so. A0 is never chosen over a
+	# change that was kept.
+	if winner == 0 and resolve_id(root, config, 'best') != 0:
+		fail('A0 is the baseline, not a winner: the search kept {}, which '
+			'`end` ends on by default'.format(label(root, resolve_id(root,
+				config, 'best'))))
 
 	reason = end_reason(root, config, state, args.reason)
 	paired = None
 
-	if (config.get('checks') or {}).get('time'):
+	if winner != 0 and (config.get('checks') or {}).get('time'):
 		# After every refusal above, so an ending that will not happen does
 		# not queue for a GPU first.
 		hold_lease(config)
@@ -4580,8 +4669,13 @@ def end(args):
 		'it.'.format('snapshot ' + snapshot
 		if code == 0 else 'no snapshot ({})'.format(output[-120:])))
 
-	print('\nThe search is over. Next: step 5, shipping '
-		'(`references/step5-ship.md`): ask the user how to ship.')
+	if winner == 0:
+		print('\nThe search is over, and no change was kept: the code stays '
+			'as it was, so step 5 has nothing to ship. Next: step 6 '
+			'(`references/step6-finish.md`).')
+	else:
+		print('\nThe search is over. Next: step 5, shipping '
+			'(`references/step5-ship.md`): ask the user how to ship.')
 
 	return 0
 
@@ -5332,6 +5426,14 @@ def brief_next(args):
 			fail('--replace: no brief is waiting to be spawned')
 		count = min(args.count or 1, len(replacing))
 
+	record = load_state(root).get('loop') or {}
+	if record.get('open') and record.get('stop') and not args.replace:
+		print('\nbrief --next: the main session asked phase {} to stop (`loop '
+			'--stop`, {}): nothing more is briefed. Hand back once the '
+			'iterations in flight have reported (your prompt, *Hand back*)'
+			.format(record['phase'], record['stop']))
+		return 0
+
 	if phase and phase['reached']:
 		print('\nbrief --next: this orchestrator subagent\'s phase {} has seen '
 			'{} iterations settle, its {}: nothing more is briefed in it. {}'
@@ -5341,6 +5443,29 @@ def brief_next(args):
 				'have reported (your prompt, *Hand back*)'.format(
 					phase['in_flight'])))
 		return 0
+
+	hours, spent = (config.get('after') or {}).get('budget_hours'), \
+		hours_spent(load_state(root))
+	if hours and spent is not None and spent >= hours and not args.replace:
+		print('\nbrief --next: the budget of {:g} hour(s) (after.budget_hours) '
+			'is spent ({:.2f} h since step 2 began): nothing more is briefed. '
+			'The search stops for `budget` once the iterations in flight '
+			'settle: hand back then (your prompt, *Hand back*)'.format(hours,
+				spent))
+		return 0
+
+	iterations = iteration_budget(root, config)
+	if iterations['spent'] and not args.replace:
+		print('\nbrief --next: the budget of {} iteration(s) '
+			'(after.budget_iterations) is used: nothing more is briefed. {}'
+			.format(iterations['budget'], 'Every one has settled: the search '
+				'stops for `budget`; hand back (your prompt, *Hand back*)'
+				if iterations['exhausted'] else 'The search stops for '
+				'`budget` once the ones in flight settle: hand back then '
+				'(your prompt, *Hand back*)'))
+		return 0
+	if iterations['budget'] and not args.replace:
+		count = min(count, iterations['budget'] - iterations['used'])
 
 	if args.count is not None and args.count <= 0:
 		print('\nbrief --next: --count {}; nothing briefed'.format(args.count))
@@ -5409,7 +5534,8 @@ def brief_next(args):
 	# have asked for a watch.
 	if live_watch(root) is None:
 		print('\nwatch: none running: start `autoopt.py watch <work>` in the '
-			'background before ending the turn')
+			'background before ending the turn (references/step3-rounds.md, '
+			'*The loop*)')
 
 	return 0
 
@@ -5434,6 +5560,16 @@ def brief(args):
 	if not args.prompt:
 		require_open(root, 'brief an iteration', bool(getattr(args, 'after_end',
 			False)))
+		iterations = iteration_budget(root, config)
+		if (iterations['spent'] and not getattr(args, 'control', False)
+				and not getattr(args, 'after_end', False)
+				and args.id not in pending_briefs(root)):
+			fail('the budget is {} iteration(s) (after.budget_iterations) and '
+				'{} are used: nothing more is briefed, except a same-code '
+				'control (--control). With the user\'s yes, raise it: '
+				'`autoopt.py config <work> --set after.budget_iterations=<more> '
+				'--reason "<their words>"`'.format(iterations['budget'],
+					iterations['used']))
 
 	if args.prompt:
 		identifier = to_id(root, args.prompt, '--prompt')
@@ -6381,9 +6517,13 @@ def config_change(args):
 						', '.join(sorted(SETTABLE)), '|'.join(GATE_FIELDS)))
 
 			try:
-				# `null` unsets an `after` answer of any kind.
-				value = None if key.startswith('after.') and text.strip() \
-					.lower() in ('null', 'none') else parse_value(kind,
+				# `null` unsets an `after` answer of any kind; `none` does too,
+				# except where it is one of the key's own choices
+				# (`after.ship=none`).
+				word = text.strip().lower()
+				own = word in AFTER_CHOICES.get(key[len('after.'):], ())
+				value = None if key.startswith('after.') and (word == 'null' or
+					(word == 'none' and not own)) else parse_value(kind,
 						text.strip())
 			except ValueError:
 				fail('{} takes a {}; got {!r}'.format(key, kind.__name__, text))
@@ -7084,13 +7224,16 @@ def status(args):
 	mining = state.get('mining') or {}
 	miner_open = mining.get('stage', 0) > mining.get('done', 0)
 	stages = stage_budget(root, config, state)
+	iterations = iteration_budget(root, config)
 	print('ideas: {} untried, {} tried; idea miner: {}; the next stage is '
-		'called for below {} untried{}'.format(untried, tried,
+		'called for below {} untried{}{}'.format(untried, tried,
 		'stage S{} running since {}'.format(mining['stage'], mining.get(
 			'started', '?')) if miner_open else 'stage S{} done'.format(
 				mining['done']) if mining.get('done') else 'not run yet',
 		MIN_UNTRIED, '; budget: {} idea-miner stage(s)'.format(
-			stages['budget']) if stages['budget'] else ''))
+			stages['budget']) if stages['budget'] else '',
+		'; budget: {} iteration(s), {} used'.format(iterations['budget'],
+			iterations['used']) if iterations['budget'] else ''))
 
 	print('subagent model: {}'.format(config.get('subagent_model') or 'opus'))
 
@@ -7120,7 +7263,15 @@ def status(args):
 		print('machine: load {:.1f} on {} cores, {:.0f}% busy, this search\'s '
 			'runs included'.format(load, cores, 100 * load / cores))
 
-	if stages['exhausted']:
+	if iterations['exhausted']:
+		print('the budget of {} iteration(s) is used and every one has '
+			'settled: the search stops for `budget` (references/'
+			'step3-rounds.md, *When to stop*)'.format(iterations['budget']))
+	elif iterations['spent']:
+		print('the budget of {} iteration(s) is used: nothing more is '
+			'briefed, and the search stops for `budget` once the ones in '
+			'flight settle'.format(iterations['budget']))
+	elif stages['exhausted']:
 		print('the budget of {} idea-miner stage(s) is spent and every idea '
 			'is tried or dropped: the search stops for `budget` '
 			'(references/step3-rounds.md, *When to stop*)'.format(
@@ -7162,8 +7313,9 @@ def status(args):
 		watching = live_watch(root)
 		print('watch: {}'.format('running (pid {}, since {})'.format(
 			watching['pid'], watching.get('started', '?')) if watching
-			else 'none running: start `autoopt.py watch <work>` in the '
-				'background before ending the turn'))
+			else 'none running: the orchestrator starts `autoopt.py watch '
+				'<work>` in the background before ending its turn (the main '
+				'session starts none: a report wakes it)'))
 
 	unwritten = [i for i in iteration_ids(root) if load_result(root, i)
 		is not None and not os.path.exists(os.path.join(iteration_dir(root,
@@ -10183,6 +10335,13 @@ def pr(args):
 		if not record:
 			fail('--edit replaces the title and body of the PR {} records, and '
 				'none is recorded: nothing was opened'.format(record_path))
+		if record.get('id') is not None and record['id'] != identifier:
+			fail('the open PR {} carries the commits of {}, and the winner is '
+				'now {}: --edit changes only its title and body, so the PR would '
+				'describe code it does not carry. Nothing was changed; tell the '
+				'user, who may close it and open a new one for {}'.format(
+					record['url'], label(root, record['id']), label(root,
+						identifier), label(root, identifier)))
 
 		try:
 			posted = fill_commits(body, record.get('commits') or [],
@@ -10316,9 +10475,20 @@ def pr(args):
 	print('\n' + stat)
 
 	if record:
-		print('\nalready opened: {}{}'.format(record['url'], '; the body has '
-			'changed since, and --edit replaces it' if record.get('digest') !=
-			publish.digest(title, body) else ''))
+		changed = record.get('digest') != publish.digest(title, body)
+		print('\nalready opened: {}{}'.format(record['url'], '; the title or '
+			'body has changed since' if changed else ''))
+		if record.get('id') is not None and record['id'] != identifier:
+			print('it carries the commits of {}, and the winner is now {}: '
+				'--edit refuses, since the PR would describe code it does not '
+				'carry'.format(label(root, record['id']), label(root,
+					identifier)))
+		elif changed:
+			print('\n--- title\n{}\n--- body\n{}'.format(title, fill_commits(
+				body, record.get('commits') or [], record['repo'])))
+			print('preview only: nothing was changed. `--edit` replaces the '
+				'open PR\'s title and body with these once the user has '
+				'approved them', flush=True)
 		return 0
 
 	if not args.post:
@@ -10587,7 +10757,9 @@ def archive(args):
 			'## Result', '',
 			'{} median of the baseline {} and of {} {}: see the path below.'
 			.format(objective['name'], zero, label(root, identifier), best),
-			'', '## The path', '', buffer.getvalue().rstrip(), '',
+			'', '<<FILL: the spread across seeds of both medians, the change '
+			'in the objective\'s units, and final.json\'s paired verdict, '
+			'labeled "paired">>', '', '## The path', '', buffer.getvalue().rstrip(), '',
 			'## What produced the gains', '', '<<FILL: the gain by category>>',
 			'', '## What was tried and failed', '', '<<FILL>>', '',
 			'## Compute', '', '<<FILL>>', '', '## Where things are', '',
@@ -11693,6 +11865,11 @@ def busy(args):
 	100% CPU over two seconds. Exit 1 when there is one."""
 
 	root = resolve(args.root)
+
+	if os.environ.get('AUTOOPT_SKIP_QUIET_CHECK'):
+		print('busy: skipped (AUTOOPT_SKIP_QUIET_CHECK is set)')
+		return 0
+
 	threshold = busy_threshold(root)
 	sampler = CpuSampler()
 	found = busy_processes(root, seconds=args.seconds, threshold=threshold)
@@ -12224,7 +12401,7 @@ def build_parser():
 	setter.add_argument('--recommend', help='with --ask: the answer you '
 		'recommend. Under after.setup_questions=recommended it is taken and '
 		'nothing waits')
-	group.add_argument('--answer', help='the orchestrator: record the user\'s '
+	group.add_argument('--answer', help='the main session: record the user\'s '
 		'answer and print the prompt that continues step 2')
 	group.add_argument('--force', action='store_true', help='print a prompt '
 		'for a new subagent that continues after one died')
@@ -12349,6 +12526,9 @@ def build_parser():
 		'phase although one is open (its subagent died)')
 	looper.add_argument('--done', action='store_true', help='close the open '
 		'phase, before its subagent reports')
+	looper.add_argument('--stop', action='store_true', help='ask the open '
+		'phase to stop: its next `brief --next` briefs nothing and tells it '
+		'to hand back (for a session with no SendMessage)')
 	looper.set_defaults(func=loop)
 
 	profiler = subparsers.add_parser('profile', help='run checks.profile on '
@@ -12618,7 +12798,7 @@ def build_parser():
 		'or change a setting mid-search and record why in spec.md')
 	config_parser.add_argument('root')
 	config_parser.add_argument('--set', action='append', metavar='KEY=VALUE',
-		help='a setting such as mode=tree or gates.<name>.threshold=1e-4; '
+		help='a setting such as runs_per_iteration=3 or gates.<name>.threshold=1e-4; '
 			'repeatable')
 	config_parser.add_argument('--add-observer', action='append',
 		metavar='NAME', help='record one more observer from now on; '

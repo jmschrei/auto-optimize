@@ -3347,8 +3347,9 @@ def watching(suite, base):
 	suite.check('and its record is removed',
 		not os.path.exists(os.path.join(search, 'watch.json')))
 	listed = call([AUTOOPT, 'status', search, '--brief'])
-	suite.check('status then asks for one', 'watch: none running: start '
-		'`autoopt.py watch <work>`' in listed, listed)
+	suite.check('status then asks the orchestrator for one', 'watch: none '
+		'running: the orchestrator starts `autoopt.py watch <work>`' in listed,
+		listed)
 
 	capped = start('--cap', '1')
 	said, _ = capped.communicate(timeout=20)
@@ -3817,6 +3818,13 @@ def orchestrator_phases(suite, base):
 	suite.check('and with nothing in flight, says to hand back now',
 		'Nothing is in flight: hand back now' in out, out[-400:])
 	call([AUTOOPT, 'loop', search, '--done'])
+	call([AUTOOPT, 'loop', search])
+	out = call([AUTOOPT, 'loop', search, '--stop'])
+	out = call([AUTOOPT, 'brief', search, '--next'], expect=(0,))
+	suite.check('loop --stop: the open phase briefs nothing and is told to '
+		'hand back', 'asked phase' in out and 'Hand back' in out and not
+		os.path.exists(os.path.join(search, 'briefs', '4.md')), out[-600:])
+	call([AUTOOPT, 'loop', search, '--done'])
 	out = call([AUTOOPT, 'brief', search, '--next'], expect=(0,))
 	suite.check('once the phase is closed, brief --next briefs again',
 		os.path.exists(os.path.join(search, 'briefs', '4.md'))
@@ -4167,6 +4175,7 @@ def perf_hooks(suite, base):
 			os.environ['AUTOOPT_BUSY_PERCENT'] = saved_env
 	env = dict(os.environ)
 	env.pop('AUTOOPT_BUSY_PERCENT', None)
+	env.pop('AUTOOPT_SKIP_QUIET_CHECK', None)
 	done = subprocess.run([sys.executable, AUTOOPT, 'busy', search,
 		'--seconds', '0.2'], capture_output=True, text=True, env=env)
 	suite.check('busy names the threshold that is not the default, and how '

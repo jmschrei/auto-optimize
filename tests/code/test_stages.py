@@ -336,6 +336,18 @@ def main():
 		cleaned.get('theirs') == 'yes' and cleaned.get('another') == 3,
 		cleaned)
 
+	# A failed `end` is shown to the main session, not started again.
+	log = os.path.join(work, 'end.log')
+	with open(log, 'w') as out:
+		out.write('running final\nerror: final did not finish (1)\nexit 1\n')
+	suite.check('end_failure reads a failed end.log', 'exit 1' in (
+		stages.end_failure(log) or '') and 'final did not finish' in
+		stages.end_failure(log))
+	with open(log, 'w') as out:
+		out.write('done\nexit 0\n')
+	suite.equal('and passes over one that succeeded', stages.end_failure(log),
+		None)
+
 	shutil.rmtree(work, ignore_errors=True)
 	print('\n{} passed, {} failed'.format(len(suite.passed), len(suite.failed)))
 
