@@ -60,6 +60,7 @@ python3 $AO/autoopt.py path <work> [--id N|best] [--markdown|--json]
 python3 $AO/autoopt.py table <work> [--fields a,b|all] [--status S,…] [--category C,…] [--round N] [--parent A5]
                               [--frontier] [--promoted] [--sort [-]FIELD|best] [--limit N] [--tsv|--json]   # read-only
 python3 $AO/autoopt.py show <work> [A7|best] [--chars 600] [--json]   # read-only
+python3 $AO/autoopt.py pr <work> [--id best] [--dir D] [--branch NAME] [--remote R --head OWNER:BRANCH] [--other-owner] [--post | --edit]
 python3 $AO/autoopt.py archive <work> [--id N] [--dest DIR] [--force]
 python3 $AO/autoopt.py prune <work> [--keep-recent 20] [--worktrees] [--all] [--outputs-ext .npy,.npz] [--keep-outputs] [--apply]
 python3 $AO/autoopt.py restore <work> --id A7 [--branch NAME]
@@ -71,15 +72,44 @@ python3 $AO/autoopt.py reset <work> [--keep 0,7] [--new-root 7] [--force] [--app
 ## `stages.py` — the stages and the next move
 
 ```bash
-python3 $AO/stages.py status $WORK        # the five stages: interview, setup, search, final, finish
+python3 $AO/stages.py status $WORK        # the six stages: interview, setup, search, final, ship, finish
 python3 $AO/stages.py render $WORK        # the same table, written to $WORK/NOTES.md
 python3 $AO/stages.py next $WORK [--run]  # the one command or question that is next
 ```
 
 Each stage is `not started`, `running` or `complete`, read from `state.json`,
-`ended.json` and `finish/`. `next` prints the move and its kind (`run`,
+`ended.json`, `after.ship`, `ship/` and `finish/`. `next` prints the move and its kind (`run`,
 `agent`, `wait`, `stop`: `references/main-session.md`); `--run` starts a `run`
 move.
+
+## `ship.py` — step 5
+
+```bash
+python3 $AO/ship.py plan <work> [--json]                 # what this search can ship, and the question to ask
+python3 $AO/ship.py apply <work> [--id best] [--to DIR] [--yes]
+python3 $AO/ship.py branch <work> [--id best] [--name N] [--repo PATH] [--yes]
+python3 $AO/ship.py brief <work>                         # the writer agent's prompt
+python3 $AO/ship.py status <work>
+python3 $AO/ship.py render <work> [--only bugs|tests|optimization]
+python3 $AO/ship.py rehearse <work>
+python3 $AO/ship.py post <work> all --approved --digest D [--other-owner]
+```
+
+`apply` and `branch` preview until `--yes`. `post` refuses any digest but the
+last rehearsal's, and inputs changed since (`references/step5-ship.md`).
+
+The documents' own scripts (`references/pr-optimization.md`,
+`references/pr-tests.md`, `references/issue-bugs.md`):
+
+```bash
+python3 $AO/opt_pr_tables.py <work> [--id best] [--out D] [--tests-format KEY=REGEX …]
+python3 $AO/opt_pr_body.py D (--template | --title T --out D/body.md)
+python3 $AO/tests_pr_tables.py collection|files|coverage|names …
+python3 $AO/tests_pr_body.py D (--template | --title T --out D/body.md) [--config FILE] [--allow-source PATH …]
+python3 $AO/tests_pr_push.py D --repo OWNER/REPO [--post | --edit] [--other-owner]
+python3 $AO/issue_body.py template|dupes|verify|status|render|renumber|file|link D …
+python3 $AO/attribution.py check --kind optimization|tests|issue --title T --body FILE
+```
 
 ## `run_iteration.py` — one iteration
 

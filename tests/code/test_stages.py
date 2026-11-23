@@ -162,20 +162,62 @@ def main():
 	suite.check('the final row reads the medians', 'A0 2.5 -> 1' in
 		rows['final'][1], rows['final'])
 
-	suite.equal('five stages, and no others', [name for name, _,
+	suite.equal('six stages, and no others', [name for name, _,
 		_, _ in stages.collect(work)], ['interview', 'setup', 'search', 'final',
-		'finish'])
+		'ship', 'finish'])
 	name, kind, text = stages.next_action(work, stages.collect(work))
-	suite.check('after the end the next move is the finish, as a plain '
-		'search\'s archive', (name, kind) == ('finish', 'run') and
-		' archive ' in text, text)
+	suite.check('after the end the next move is to ask how to ship',
+		(name, kind) == ('ship', 'agent') and 'step5-ship.md' in text and
+		'ship.py plan' in text, text)
+	suite.equal('the ship stage waits for the answer', status(work)['ship'],
+		'not started')
+
 	config = json.load(open(os.path.join(root, 'config.json')))
+	config.setdefault('after', {})['ship'] = 'apply'
+	put(os.path.join(root, 'config.json'), config)
+	name, kind, text = stages.next_action(work, stages.collect(work))
+	suite.check('once the user chose to apply, the next move is the apply '
+		'preview', status(work)['ship'] == 'running' and (name, kind) ==
+		('ship', 'agent') and 'ship.py apply' in text, (status(work), text))
+	put(os.path.join(work, 'ship', 'applied.json'), {'files': ['x.py']})
+	suite.equal('ship/applied.json completes it', status(work)['ship'],
+		'complete')
+
+	config['after'] = {'ship': 'github', 'ship_documents': ['bugs',
+		'optimization']}
+	put(os.path.join(root, 'config.json'), config)
+	suite.equal('GitHub chosen, and the branch names not asked yet, is still '
+		'the question', status(work)['ship'], 'not started')
+	name, kind, text = stages.next_action(work, stages.collect(work))
+	suite.check('so the next move is still to ask', 'ship.py plan' in text,
+		text)
+	config['after']['branch_prefix'] = 'no'
+	put(os.path.join(root, 'config.json'), config)
+	put(os.path.join(work, 'ship', 'issue-bugs', 'filed.json'), {'url':
+		'https://github.com/o/r/issues/4', 'comments_left': 1})
+	suite.equal('an issue with a comment still to post is not posted',
+		status(work)['ship'], 'running')
+	put(os.path.join(work, 'ship', 'issue-bugs', 'filed.json'), {'url':
+		'https://github.com/o/r/issues/4', 'comments_left': 0})
+	suite.equal('one of two chosen documents posted is still running',
+		status(work)['ship'], 'running')
+	put(os.path.join(work, 'ship', 'pr-optimization', 'pr.json'), {'url':
+		'https://github.com/o/r/pull/5'})
+	suite.equal('every chosen document posted completes it',
+		status(work)['ship'], 'complete')
+
+	config['after'] = {'ship': 'none'}
+	put(os.path.join(root, 'config.json'), config)
+	suite.equal('"not now" completes it', status(work)['ship'], 'complete')
+	name, kind, text = stages.next_action(work, stages.collect(work))
+	suite.check('then the finish, as a plain search\'s archive', (name,
+		kind) == ('finish', 'run') and ' archive ' in text, text)
 	config['repo'] = {'path': '/x', 'commit': 'abc'}
 	put(os.path.join(root, 'config.json'), config)
 	name, kind, text = stages.next_action(work, stages.collect(work))
 	suite.check('a repository search finishes the same way, by the finish '
 		'step\'s reference', (name, kind) == ('finish', 'agent') and
-		'step5-finish.md' in text, text)
+		'step6-finish.md' in text, text)
 
 	put(os.path.join(work, 'finish', 'final-report.md'), '# report\n')
 	suite.equal('a final report completes the finish', status(work)['finish'],
@@ -188,7 +230,7 @@ def main():
 	stages.render(work)
 	suite.equal('the same state renders the same bytes', first,
 		open(os.path.join(work, 'NOTES.md')).read())
-	suite.check('NOTES.md lists the five stages', all('| {} |'.format(name)
+	suite.check('NOTES.md lists the six stages', all('| {} |'.format(name)
 		in first for name, _ in stages.STAGES), first[-300:])
 
 	config['after'] = {'theirs': 'yes', 'another': 3}

@@ -3042,7 +3042,7 @@ function scopedFrontier() {
 		steps: snapshot.stats.n_frontier };
 }
 
-/* The ending in the topbar and the five stages as text, both from the
+/* The ending in the topbar and the stages as text, both from the
    search's own state files. */
 const STAGE_WORD = { complete: 'done', running: 'running', 'not started': 'pending' };
 

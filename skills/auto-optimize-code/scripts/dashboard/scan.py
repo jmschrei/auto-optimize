@@ -458,7 +458,7 @@ class RunScanner:
 			paired, dict) else None}
 
 	def stages(self, work):
-		"""`[[stage, status, detail]]` for the search's five stages."""
+		"""`[[stage, status, detail]]` for the search's stages."""
 
 		return [[name, status, detail] for name, status, detail, _ in
 			stages.collect(work)]

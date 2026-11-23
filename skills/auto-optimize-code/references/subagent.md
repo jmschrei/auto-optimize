@@ -224,7 +224,7 @@ name.
 | Section | Holds |
 |---|---|
 | *Change* | first line `name: <three to six words naming the change>`; then what the change does as it stands in the code, in complete sentences, with no number a table computes |
-| *Commit message* | the commit's message: an imperative subject of at most 72 characters with no closing period, a blank line, then the body: what this change does and what stays the same (output, defaults, the plain build), wrapped at 72 columns, in the repository's own style (`git -C $WORK/autooptimize/repo.git log --oneline -20`). Leave out the `after.commit_trailer` line here, though the commits you make in the worktree end with it: whatever uses the message adds it |
+| *Commit message* | the commit's message: an imperative subject of at most 72 characters with no closing period, a blank line, then the body: what this change does and what stays the same (output, defaults, the plain build), wrapped at 72 columns, in the repository's own style (`git -C $WORK/autooptimize/repo.git log --oneline -20`). Leave out the `after.commit_trailer` line here, though the commits you make in the worktree end with it: step 5 adds it when it makes the commits the user ships (`references/pr-optimization.md`) |
 
 ```markdown
 ## Change

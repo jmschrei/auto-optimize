@@ -98,7 +98,7 @@ Panels, marks and interactions are specified in `scripts/dashboard/README.md`,
 | External validation | its own section (`references/external-validation.md`) |
 | GPUs idle or contended | the GPU cards and the process table |
 | Whether it ended, and how | the topbar's `ended <date> · A<id> <median> vs A0 <median> · <reason>` line; its tooltip has the paired timing from `final.json` |
-| Which stages are done | the strip under the category chips: `interview done · setup done · … · finish pending` (`done`, `running`, `pending`), from `stages.py` |
+| Which stages are done | the strip under the category chips: `interview done · setup done · … · ship pending · finish pending` (`done`, `running`, `pending`), from `stages.py` |
 | An iteration's toolchain answer | `toolchain` in its open log entry (`no` or `specific`); `specific` carries the tooltip *not promotable* |
 
 The ended line and the stage strip read `ended.json`, `final.json` and
@@ -126,7 +126,7 @@ A publisher outlives the notebook kernel. `autoopt.py end` writes
 `final/dashboard.html` with `--export` (`references/step4-final.md`) and
 leaves the publisher running, so the ended line and the stage strip stay
 current; `end --reopen` finds it still running. Stop it with `--stop` once the
-search is finished (step 5), or by hand for a search that is over some other
+search is finished (step 6), or by hand for a search that is over some other
 way.
 One writer publishes into a directory, and a search has one writer: a second
 writer into a directory refuses, and `--start` or `show()` stops any writer

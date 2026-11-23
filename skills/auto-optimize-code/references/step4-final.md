@@ -3,8 +3,7 @@
 The search ends on the record, once, by a command. Run it when *When to stop*
 (`references/step3-rounds.md`) is reached and the user does not go on, or when
 the user says the search is over. Nothing after it needs the search to run:
-finishing (step 5) reads `ended.json`, and so does anything that takes the
-winner elsewhere.
+shipping (step 5) and finishing (step 6) read `ended.json`.
 
 ```bash
 python3 $AO/autoopt.py end $WORK --reason <stalled|variations|budget|noise|floor|"<the user's words>"> --background
@@ -45,9 +44,10 @@ python3 $AO/autoopt.py wait $WORK/autooptimize/end.log   # again, until it print
 3. Writes `autooptimize/ended.json` (below), then `ended.md`, and prints it: the median from A0 to the winner with each gate's status; the paired line, labeled "paired, on the search's own input"; the winning iterations by category with each one's change from its parent. Every number is read from `result.json` and `final.json`.
 4. Deletes the regenerable files (below) and records what it freed.
 5. Writes a static snapshot of the dashboard, `autooptimize/final/dashboard.html`,
-   and leaves the publisher running. Step 5 stops it. A missing `plotly`
+   and leaves the publisher running. Step 6 stops it. A missing `plotly`
    leaves no snapshot and says so.
-6. Prints the next step: step 5.
+6. Prints the next step: step 5, shipping, which starts by asking the user
+   how to ship (`references/step5-ship.md`).
 
 Show the user `ended.md`, the paired verdict beside the medians, and quote the
 paired line in the final report.
@@ -99,9 +99,9 @@ Reopen when the user wants the search itself to go on, then end again. The
 clean-up stays done.
 
 It is refused while `autooptimize/reopen-lock.json` holds a hold
-(`{"holds": [{"by", "reason", "at"}]}`), printing each: whatever publishes the
-winner writes one with `autoopt.hold_reopen(root, by, reason)` (a `reason` of
-None withdraws it). A published winner changes only through an iteration made with
+(`{"holds": [{"by", "reason", "at"}]}`), printing each: step 5 writes one when it applies the change, makes a
+branch or posts a document (`autoopt.hold_reopen(root, by, reason)`; a
+`reason` of None withdraws it). A published winner changes only through an iteration made with
 `--after-end` (above).
 
 ## Paused, not finished

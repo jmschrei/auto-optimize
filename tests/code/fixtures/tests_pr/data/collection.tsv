@@ -1,0 +1,9 @@
+nodeid	pinned
+tests/test_io.py::test_read[small]	no
+tests/test_io.py::test_read[large]	no
+tests/test_io.py::test_write	yes
+tests/test_cli.py::test_help	no
+tests/test_cli.py::TestRun::test_threads[1]	no
+tests/test_cli.py::TestRun::test_threads[4]	no
+tests/test_cli.py::TestRun::test_version	yes
+tests/test_core.py::test_score	no

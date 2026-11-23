@@ -66,6 +66,11 @@ WORDS = (
 		r"calls|rate|position|positions|\d))|\bbase (?:build|binary|time|"
 		r'median|iteration)\b', 'name the target branch (`main`)'),
 	('stock', r'\bstock\b', 'name the target branch or its release'),
+	('tool', r'\bauto-optimize\b(?!/)|\bProgrammable Genomics\b', 'a '
+		'published document does not name the tool or the lab'),
+	('notice', r'(?i)\bgenerated (?:with|by) \[?claude\b|\bwritten (?:by|with) '
+		r'(?:claude|an? (?:ai|llm|model))\b', 'a published document says '
+		'nothing of how it was written'),
 )
 # Read in a label: a table cell with no sentence.
 STRICT = (

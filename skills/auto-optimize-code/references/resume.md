@@ -11,8 +11,10 @@ search without continuing it, read `references/reading-a-search.md` instead.
 
 `autooptimize/ended.json` means it has (`references/step4-final.md`). Read
 `ended.md`, put the publisher back up if it died (`end` leaves it running
-and writes `final/dashboard.html`; step 5 stops it), and go on with step 5
-(`references/step5-finish.md`).
+and writes `final/dashboard.html`; step 6 stops it), and go on with step 5
+(`references/step5-ship.md`): `stages.py next $WORK` says whether the user has
+been asked how to ship and what is left, then step 6
+(`references/step6-finish.md`).
 `end --reopen` is only for a user who wants the search itself to go on, and
 is refused once the winner is published. Otherwise:
 

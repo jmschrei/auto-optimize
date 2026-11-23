@@ -1,0 +1,5 @@
+part	excluded	tests_before	tests_after	counted
+pkg/	no	3	9	per-test
+pkg/cli/	no	2	6	per-test
+vendor/	yes	1	2	per-test
+(total)	no	3	10	per-test

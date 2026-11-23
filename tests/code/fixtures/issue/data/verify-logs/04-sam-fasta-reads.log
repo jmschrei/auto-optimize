@@ -1,0 +1,18 @@
+# bug 4 (sam-fasta-reads), chromap=/opt/chromap-949043c/bin/chromap, in /opt/verify/verify-04-sam-fasta-reads-jgqr9oud
+== setup: exit 0, 0.06 s
+
+== reproduction: exit 0, 8.73 s
+/opt/verify/verify-04-sam-fasta-reads-jgqr9oud/reproduction.sh: line 15: 2765859 Aborted                 (core dumped) chromap $M -1 fa.fa --SAM -o fa.sam 2> fa.log
+FASTA --SAM: exit status 134
+  what():  basic_string: construction from null is not valid
+fa0	55555555555555555555555555
+fq0	55555555555555555555555555
+fa1	55555555555555555555555555
+/opt/verify/verify-04-sam-fasta-reads-jgqr9oud/reproduction.sh: line 18: 2766030 Segmentation fault      (core dumped) chromap $M -1 ad_1.$x -2 ad_2.$x $o -o ad.bed 2> /dev/null
+fa --trim-adapters: exit status 139
+fq --trim-adapters: exit status 0
+/opt/verify/verify-04-sam-fasta-reads-jgqr9oud/reproduction.sh: line 18: 2766162 Segmentation fault      (core dumped) chromap $M -1 ad_1.$x -2 ad_2.$x $o -o ad.bed 2> /dev/null
+fa --preset atac: exit status 139
+fq --preset atac: exit status 0
+
+== matched 9 of 9 lines of the actual output

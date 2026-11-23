@@ -1,0 +1,5 @@
+name	defined_in	tests
+Reader	pkg/io.py	2
+Reader.close	pkg/io.py	0
+score	pkg/core.py	1
+unused_helper	pkg/unused.py	0

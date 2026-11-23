@@ -1,0 +1,9 @@
+# bug 2 (bc-error-threshold-2-n), chromap=/opt/chromap-949043c/bin/chromap, in /opt/verify/verify-02-bc-error-threshold-2-n-cbx1ewtg
+== setup: exit 0, 0.06 s
+
+== reproduction: exit 0, 1.17 s
+n_then_sub: 0 of 12 changed barcodes corrected
+sub_then_n: 12 of 12 changed barcodes corrected
+two_n: 0 of 12 changed barcodes corrected
+
+== matched 3 of 3 lines of the actual output

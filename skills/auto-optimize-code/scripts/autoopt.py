@@ -158,10 +158,19 @@ if os.environ.get('AUTOOPT_TMPDIR'):
 AFTER_DEFAULTS = {'stop': 'ask', 'budget_hours': None, 'budget_stages': None,
 	'disk': 'ask', 'oldest_toolchain_command': None, 'tests_driver_edit': 'ask',
 	'commit_trailer': None, 'pair_cap_hours': 4, 'setup_questions': 'ask',
-	'build_outputs': []}
+	'build_outputs': [], 'ship': 'ask', 'ship_documents': [],
+	'pr_remote': None, 'pr_head_owner': None, 'branch_prefix': 'ask'}
 AFTER_CHOICES = {'stop': ('ask', 'auto'), 'disk': ('ask', 'keep', 'prune'),
 	'tests_driver_edit': ('ask', 'yes', 'no'), 'setup_questions': ('ask',
-	'recommended')}
+	'recommended'), 'ship': ('ask', 'github', 'branch', 'apply', 'none'),
+	'branch_prefix': ('ask', 'yes', 'no')}
+# What step 5 can open on GitHub, in the order they are posted, each with
+# its folder under `<work>/ship/` and the record posting it writes there.
+SHIP_DOCUMENTS = ('bugs', 'tests', 'optimization')
+SHIP_FOLDERS = {'bugs': 'issue-bugs', 'tests': 'pr-tests',
+	'optimization': 'pr-optimization'}
+SHIP_RECORDS = {'bugs': 'filed.json', 'tests': 'pr.json',
+	'optimization': 'pr.json'}
 # Keys that hold a whole number of 1 or more, and a number of 0 or more.
 AFTER_WHOLE = ['budget_stages']
 AFTER_NONNEG = []
@@ -193,7 +202,8 @@ AFTER_KINDS = {'stop': str, 'disk': str, 'budget_hours': float,
 	'budget_stages': int, 'oldest_toolchain_command': str,
 	'tests_driver_edit': str,
 	'commit_trailer': str, 'pair_cap_hours': float, 'setup_questions': str,
-	'build_outputs': path_list}
+	'build_outputs': path_list, 'ship': str, 'ship_documents': path_list,
+	'pr_remote': str, 'pr_head_owner': str, 'branch_prefix': str}
 
 
 def register_after(defaults, kinds, choices=None, whole=(), nonneg=(),
@@ -253,6 +263,15 @@ def check_after(after):
 			.format(value))
 
 	after['build_outputs'] = list(value)
+	documents = after.get('ship_documents') or []
+
+	if not isinstance(documents, list) or any(one not in SHIP_DOCUMENTS
+			for one in documents):
+		fail('config.json "after.ship_documents" is {!r}; a list of {}'.format(
+			documents, ', '.join(SHIP_DOCUMENTS)))
+
+	after['ship_documents'] = [one for one in SHIP_DOCUMENTS if one in
+		documents]
 
 	for check in AFTER_CHECKS:
 		check(after)
@@ -512,9 +531,11 @@ PATHS = {
 	'inputs': ('inputs',),
 	'tests': ('tests',),
 	'tests-suite': ('tests', 'suite'),
+	'tests-branch': ('tests', 'branch.json'),
 	'setup': ('setup',),
 	'proof': ('setup', 'gateproof'),
 	'width': ('setup', 'width'),
+	'ship': ('ship',),
 	'finish': ('finish',),
 	'scratch': ('scratch',),
 	'dashboard': ('dashboard.ipynb',),
@@ -1266,7 +1287,10 @@ def copy_repository(source, repo, allow_dirty):
 		pass
 
 	try:
-		remote_url = git('-C', top, 'remote', 'get-url', remote).strip()
+		# As configured: `remote get-url` applies `insteadOf` rewrites, and the
+		# record names the repository, not this machine's route to it.
+		remote_url = git('-C', top, 'config', '--get', 'remote.{}.url'.format(
+			remote)).strip()
 	except RuntimeError:
 		remote_url = None
 
@@ -1411,6 +1435,19 @@ def build_env_from(given):
 	return pairs
 
 
+def copied_sources(sources):
+	"""`[{'source': <absolute path>, 'as': <name in the baseline>}]` for each
+	`--copy` argument, in order: `init` copies each to its base name."""
+
+	copied = []
+
+	for source in sources or []:
+		source = os.path.normpath(os.path.abspath(os.path.expanduser(source)))
+		copied.append({'source': source, 'as': os.path.basename(source)})
+
+	return copied
+
+
 def init(args):
 	root = os.path.abspath(os.path.expanduser(args.root))
 
@@ -1514,6 +1551,13 @@ def init(args):
 		config['repo'] = copy_repository(args.repo, repo, args.allow_dirty)
 	elif not os.path.isdir(repo):
 		git('init', '--bare', '-q', repo)
+
+	# Plain mode: where each copied file or folder came from, so step 5 can
+	# apply the winner's change to it (`ship.py apply`). `--force` without
+	# --copy keeps the record the first `init` wrote.
+	if not args.repo:
+		config['copied'] = copied_sources(args.copy) or previous.get(
+			'copied', [])
 
 	# Only now, so a refused --repo leaves nothing behind.
 	os.makedirs(os.path.join(root, 'rounds'), exist_ok=True)
@@ -4392,7 +4436,7 @@ def end(args):
 		r for r in results if r['id'] != 0]), 'winning_iterations':
 		len(winning)}, 'winning_iterations': winning,
 		'round_summary': summary_path, 'cleanup': None, 'dashboard': None,
-		'winner_changes': []}
+		'winner_changes': [], 'machine': machine_record()}
 
 	# The record first: a failure below leaves a search that has ended.
 	write_ended(root, config, ended)
@@ -4413,13 +4457,40 @@ def end(args):
 	print('Cleaned up: {} file(s) and {} worktree(s) removed, {} freed (record '
 		'in ended.json).'.format(cleanup['files_removed'],
 		cleanup['worktrees_removed'], human(cleanup['bytes_freed'])))
-	print('Dashboard: {}; the publisher keeps running until the finish '
-		'step stops it.'.format('snapshot ' + snapshot
+	print('Dashboard: {}; the publisher keeps running until step 6 stops '
+		'it.'.format('snapshot ' + snapshot
 		if code == 0 else 'no snapshot ({})'.format(output[-120:])))
 
-	print('\nNext: step 5, finishing (`references/step5-finish.md`).')
+	print('\nThe search is over. Next: step 5, shipping '
+		'(`references/step5-ship.md`): ask the user how to ship.')
 
 	return 0
+
+
+def machine_record():
+	"""The machine `end` runs on, which is the one the search measured on:
+	what a published document says the numbers came from. Linux files are
+	read where they exist; a value that cannot be read is None."""
+
+	def first(path, prefix, separator):
+		try:
+			with open(path) as handle:
+				for line in handle:
+					if line.startswith(prefix):
+						return line.split(separator, 1)[1].strip().strip('"')
+		except (OSError, IndexError):
+			return None
+
+		return None
+
+	return {'os': platform.system() or None,
+		'distribution': first('/etc/os-release', 'PRETTY_NAME=', '='),
+		'release': platform.release() or None,
+		'arch': platform.machine() or None,
+		'cpu': first('/proc/cpuinfo', 'model name', ':') or
+			platform.processor() or None,
+		'cores': os.cpu_count(),
+		'python': platform.python_version()}
 
 
 def reopen_lock_path(root):
@@ -9357,6 +9428,627 @@ def outputs_stripper(root, config, repository=None):
 	return lambda tree: strip_tree(repository, tree, patterns, base)
 
 
+###
+# pr: the optimization PR on GitHub (references/pr-optimization.md)
+###
+
+def commit_identity(repository, commit):
+	"""`commit`'s author and commit date, as the environment `git
+	commit-tree` reads: the commit made with them needs no git identity on
+	this machine, and the same inputs give the same commit."""
+
+	name, email, date = git('-C', repository, 'log', '-1',
+		'--format=%an%n%ae%n%cI', commit).split('\n')[:3]
+
+	return {'GIT_AUTHOR_NAME': name, 'GIT_AUTHOR_EMAIL': email,
+		'GIT_AUTHOR_DATE': date, 'GIT_COMMITTER_NAME': name,
+		'GIT_COMMITTER_EMAIL': email, 'GIT_COMMITTER_DATE': date}
+
+
+def squash_commit(repository, tree, parent, message, identity):
+	"""One commit on `parent` holding `tree`, with the commit message
+	`message` (text), made as `identity` (`commit_identity`)."""
+
+	return git('-C', repository, 'commit-tree', tree, '-p', parent,
+		input=message, env=dict(os.environ, **identity)).strip()
+
+
+def apply_tree(repository, parent_tree, before, after):
+	"""`parent_tree` with the change from tree `before` to tree `after`
+	applied, as a tree id, in a temporary index: no worktree is touched.
+	Raises RuntimeError when the change does not apply."""
+
+	with tempfile.TemporaryDirectory() as scratch:
+		env = dict(os.environ, GIT_INDEX_FILE=os.path.join(scratch, 'index'))
+		git('-C', repository, 'read-tree', parent_tree, env=env)
+		patch = subprocess.run(['git', '-C', repository, 'diff', '--binary',
+			before, after], capture_output=True)
+
+		if patch.returncode != 0:
+			raise RuntimeError('git diff failed: {}'.format(
+				patch.stderr.decode(errors='replace').strip()))
+
+		done = subprocess.run(['git', '-C', repository, 'apply', '--cached',
+			'--binary'], input=patch.stdout, env=env, capture_output=True)
+
+		if done.returncode != 0:
+			raise RuntimeError('the change does not apply: {}'.format(
+				done.stderr.decode(errors='replace').strip()))
+
+		return git('-C', repository, 'write-tree', env=env).strip()
+
+
+def branch_of(root, identifier):
+	return (load_meta(root, identifier) or {}).get('branch',
+		'autoopt/{}'.format(identifier))
+
+
+def pr_commits(root, config, identifier, messages):
+	"""Make, in the search's `repo.git`, the commits a PR or a local branch
+	carries for `identifier`: one for each kept iteration on its path that
+	changes the repository, in order, with the message `messages[id]`
+	(text), made as the author and date of that iteration's measured
+	commit, so the same inputs give the same commits. Nothing is pushed and
+	no worktree is touched; the last commit is left at `refs/pr/<id>`.
+
+	Without a unit-test suite from step 1 the commits sit on the commit the
+	search copied, and each holds its iteration's tree exactly, so the last
+	is the measured code. With one, the search's code is the original plus
+	the suite, and the commits sit on the original's commit instead: each
+	iteration's change is applied there, an iteration that changes a file
+	the suite adds is refused, and the change the commits make must equal
+	the measured change outside the suite's files.
+
+	Returns `{base, tip, series: [(id, commit)], steps, owned, suite,
+	start, head}`; `fail`s with the reason when the commits cannot be made."""
+
+	bare = os.path.join(root, 'repo.git')
+	work = os.path.dirname(root)
+	original = original_of(work, config)
+	start = config['repo']['commit']
+	strip = outputs_stripper(root, config)
+	chain = lineage(root, identifier)
+	head = git('-C', bare, 'rev-parse', branch_of(root, identifier)).strip()
+	start_tree = strip(git('-C', bare, 'rev-parse', start + '^{tree}').strip())
+	head_tree = strip(git('-C', bare, 'rev-parse', head + '^{tree}').strip())
+	steps = winning_steps(root, chain, lambda i: strip(git('-C', bare,
+		'rev-parse', branch_of(root, i) + '^{tree}').strip()), start_tree)
+
+	if not steps:
+		fail('{} made no change to the repository; there is nothing to '
+			'commit'.format(label(root, identifier)))
+
+	missing = [label(root, i) for i, _ in steps if not (messages.get(i) or
+		'').strip()]
+
+	if missing:
+		fail('no commit message for {}'.format(', '.join(missing)))
+
+	suite = original.get('suite')
+	owned = []
+
+	try:
+		if suite:
+			base = original['commit']
+			owned = [name for name in git('-C', bare, 'diff', '-z',
+				'--name-only', base, start).split('\0') if name]
+			parent, before, series = base, start_tree, []
+
+			for step, tree in steps:
+				touched = {name for name in git('-C', bare, 'diff', '-z',
+					'--name-only', before, tree).split('\0') if name}
+				clash = sorted(touched & set(owned))
+
+				if clash:
+					fail('{} changes {}, which the unit-test suite adds, so '
+						'the optimization cannot be separate from it'.format(
+						label(root, step), ', '.join(clash)))
+
+				new_tree = apply_tree(bare, git('-C', bare, 'rev-parse',
+					parent + '^{tree}').strip(), before, tree)
+				parent = squash_commit(bare, new_tree, parent, messages[step],
+					commit_identity(bare, git('-C', bare, 'rev-parse',
+					branch_of(root, step)).strip()))
+				series.append((step, parent))
+				before = tree
+
+			exclude = ['--', '.'] + [':(exclude){}'.format(name) for name
+				in owned]
+			measured = subprocess.run(['git', '-C', bare, 'diff', '--binary',
+				start_tree, head_tree] + exclude, capture_output=True)
+			made = subprocess.run(['git', '-C', bare, 'diff', '--binary', base,
+				parent], capture_output=True)
+
+			if measured.returncode or made.returncode or \
+					measured.stdout != made.stdout:
+				fail('the commits on {} are not the measured change outside '
+					'the unit-test suite\'s files'.format(base[:10]))
+		else:
+			base, parent, series = start, start, []
+
+			for step, tree in steps:
+				parent = squash_commit(bare, tree, parent, messages[step],
+					commit_identity(bare, git('-C', bare, 'rev-parse',
+					branch_of(root, step)).strip()))
+				series.append((step, parent))
+
+			if git('-C', bare, 'rev-parse', parent + '^{tree}').strip() != \
+					head_tree:
+				fail('the last commit\'s tree is not {}\'s: the commits would '
+					'not be the measured code'.format(branch_of(root,
+					identifier)))
+	except RuntimeError as error:
+		fail('could not make the commits: {}'.format(error))
+
+	git('-C', bare, 'update-ref', 'refs/pr/{}'.format(identifier), parent)
+
+	return {'base': base, 'tip': parent, 'series': series, 'steps': steps,
+		'owned': owned, 'suite': suite, 'start': start, 'head': head,
+		'chain': chain}
+
+
+def github_slug(url):
+	"""`owner/name` from an https or ssh GitHub remote, or None."""
+
+	match = re.match(r'^(?:https?://github\.com/|git@github\.com:|'
+		r'ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?/?$', url or '')
+
+	return '{}/{}'.format(*match.groups()) if match else None
+
+
+def fork_url(bare, path, name):
+	"""The URL of remote `name` for a fork push: as the search's bare repo
+	knows it, else as the original's clone at `path` does, else `name` itself
+	when it is a URL or a path. None when it is none of these."""
+
+	for place in (bare, path):
+		if not place:
+			continue
+
+		try:
+			return git('-C', place, 'config', '--get', 'remote.{}.url'.format(
+				name)).strip()
+		except (RuntimeError, OSError):
+			continue
+
+	return name if re.match(r'^(https?://|git@|ssh://|/)', name) else None
+
+
+def fill_commits(body, shas, slug):
+	"""`body` with each `{{commit:N}}` (N counts the PR's commits from 1)
+	replaced by the short hash of that commit, linked to it on `slug`'s
+	GitHub when the slug is known. Raises RuntimeError for a number the PR
+	has no commit for."""
+
+	def one(match):
+		number = int(match.group(1))
+
+		if not 1 <= number <= len(shas):
+			raise RuntimeError('the body names commit {}, and the PR has {} '
+				'commit(s)'.format(number, len(shas)))
+
+		sha = shas[number - 1]
+
+		if not slug:
+			return '`{}`'.format(sha[:10])
+
+		return '[`{}`](https://github.com/{}/commit/{})'.format(sha[:10], slug,
+			sha)
+
+	return re.sub(r'\{\{commit:([0-9]+)\}\}', one, body)
+
+
+def measured_problem(root, config, identifier):
+	"""Why `identifier` cannot be published, or None: it passed every gate,
+	its branch is the commit the runner measured, and its checkout holds no
+	edit that was never measured."""
+
+	result = load_result(root, identifier)
+
+	if result is None or result.get('status') != 'ok':
+		return ('{} is {}; only an iteration that passed every gate can be '
+			'published'.format(label(root, identifier), (result or {}).get(
+			'status', 'unfinished')))
+
+	head = git('-C', os.path.join(root, 'repo.git'), 'rev-parse', branch_of(
+		root, identifier)).strip()
+
+	if result.get('commit') and result['commit'] != head:
+		return ('{} is at {} but {} measured {}; something was committed '
+			'after the measurement. Measure it again (`run_iteration.py`)'
+			.format(branch_of(root, identifier), head[:10], label(root,
+			identifier), result['commit'][:10]))
+
+	# What is published is the commit; an edit left in a repository-mode
+	# checkout (`src/`, which holds nothing else) is one the subagent never
+	# measured, so it is named. A plain-mode iteration's folder also holds
+	# its records, which are no edit.
+	checkout = checkout_dir(root, identifier, config)
+
+	if config.get('repo') and os.path.exists(os.path.join(checkout, '.git')):
+		known = test_artifacts(root)
+		dirty = unmeasured(checkout, known, 'all' if known else 'normal',
+			exclude=build_outputs(config))
+
+		if dirty:
+			return ('{} has uncommitted changes that were never measured:\n{}'
+				.format(checkout, dirty))
+
+	return None
+
+
+def pr_messages(root, directory, steps):
+	"""The commit message of each step from `<directory>/messages/<id>.txt`,
+	`fail`ing with every problem at once (`message_problems`)."""
+
+	messages, problems = {}, []
+
+	for step, _ in steps:
+		path = os.path.join(directory, 'messages', '{}.txt'.format(step))
+
+		try:
+			with open(path, encoding='utf-8') as handle:
+				messages[step] = handle.read()
+		except OSError:
+			problems.append('{}: missing, the commit message of {}'.format(
+				path, label(root, step)))
+			continue
+
+		problems += ['{}: {}'.format(path, problem) for problem in
+			message_problems(root, messages[step])]
+
+	if problems:
+		fail('the commit messages are refused:\n  {}\n(references/'
+			'pr-optimization.md, *The commit messages*)'.format('\n  '.join(
+			problems)))
+
+	return messages
+
+
+# What a branch step 5 makes or pushes starts with, when the user chose it
+# (`after.branch_prefix` yes).
+BRANCH_PREFIX = 'auto-optimize/'
+
+
+def ship_branch(config, base):
+	"""`base`, the name of a branch step 5 makes or pushes, with
+	BRANCH_PREFIX in front when the user chose it at step 5; without it
+	otherwise, an unanswered question included."""
+
+	after = dict(AFTER_DEFAULTS, **(config.get('after') or {}))
+
+	return BRANCH_PREFIX + base if after.get('branch_prefix') == 'yes' else \
+		base
+
+
+def tests_branch_remote(config, local):
+	"""The name step 1's tests branch (`local`) is pushed under: its own
+	name, `auto-optimize/<date>-unit-tests`, with the prefix;
+	`unit-tests-<date>` without it."""
+
+	after = dict(AFTER_DEFAULTS, **(config.get('after') or {}))
+
+	if after.get('branch_prefix') == 'yes':
+		return local
+
+	match = re.match(r'^{}(\d{{4}}-\d\d-\d\d)-unit-tests$'.format(re.escape(
+		BRANCH_PREFIX)), local)
+
+	if match:
+		return 'unit-tests-' + match.group(1)
+
+	return local[len(BRANCH_PREFIX):] if local.startswith(BRANCH_PREFIX) else \
+		local
+
+
+def pr_branch_name(title):
+	"""A branch name from the PR's title: lower case, words joined by
+	hyphens, at most 50 characters."""
+
+	words = re.findall(r'[a-z0-9]+', title.lower())
+	name = ''
+
+	for word in words:
+		if len(name) + len(word) + 1 > 50:
+			break
+		name = '{}-{}'.format(name, word) if name else word
+
+	return name or 'optimization'
+
+
+def pr(args):
+	"""Step 5: open the optimization PR on GitHub (`references/
+	pr-optimization.md`). A preview by default: everything is checked and
+	the commits are made locally (`refs/pr/<id>`), and nothing is pushed.
+	`--post` pushes the branch and opens the PR; `--edit` replaces an open
+	PR's title and body."""
+
+	import publish
+	import attribution
+	import lint_text
+
+	root = resolve(args.root)
+	config = load_config(root)
+	work = os.path.dirname(root)
+
+	if not config.get('repo'):
+		fail('this search was not made with `init --repo`, so there is no '
+			'repository to open a PR on; `ship.py apply` applies a plain '
+			'search\'s change to the original files')
+
+	require_ended(root, 'open a PR')
+	directory = os.path.abspath(os.path.expanduser(args.dir or work_path(work,
+		'ship', SHIP_FOLDERS['optimization'])))
+	identifier = resolve_id(root, config, args.id)
+	problem = measured_problem(root, config, identifier)
+
+	if problem:
+		fail(problem)
+
+	body_path = os.path.join(directory, 'body.md')
+
+	try:
+		title = publish.read(os.path.join(directory, 'body.title')).strip()
+		body = publish.read(body_path)
+	except OSError as error:
+		fail('{}: render the PR first (`opt_pr_body.py {} --title ... --out '
+			'{}`)'.format(error, directory, body_path))
+
+	try:
+		tabled = read_json(os.path.join(directory, 'branch.json')).get('id')
+	except OSError:
+		tabled = None
+
+	if tabled != identifier:
+		fail('{} holds the tables of {}, not of {}: the winner changed since '
+			'they were written; run opt_pr_tables.py again'.format(directory,
+			label(root, tabled) if tabled is not None else 'nothing',
+			label(root, identifier)))
+
+	# A stand-in for a document not posted yet is expected in a preview,
+	# and refused by the post, which needs every number filled.
+	stand_ins = attribution.placeholder_problems(body)
+	problems = [problem for problem in attribution.problems('optimization',
+		title, body) if args.post or problem[len('body: '):] not in stand_ins]
+
+	with tempfile.TemporaryDirectory() as scratch:
+		out = os.path.join(scratch, 'body.md')
+		done = subprocess.run([sys.executable, os.path.join(SCRIPTS,
+			'opt_pr_body.py'), directory, '--title', title, '--out', out],
+			capture_output=True, text=True)
+
+		if done.returncode != 0:
+			problems.append('the tables and prose do not render:\n    ' +
+				done.stderr.strip().replace('\n', '\n    '))
+		elif publish.read(out) != body:
+			problems.append('body.md is not what the tables and prose render '
+				'to; render it again with opt_pr_body.py')
+
+	if problems:
+		fail('{} is not ready to open a PR with:\n  {}'.format(body_path,
+			'\n  '.join(problems)))
+
+	bare = os.path.join(root, 'repo.git')
+	original = original_of(work, config)
+	start = config['repo']['commit']
+	strip = outputs_stripper(root, config)
+	steps = winning_steps(root, lineage(root, identifier), lambda i: strip(
+		git('-C', bare, 'rev-parse', branch_of(root, i) + '^{tree}').strip()),
+		strip(git('-C', bare, 'rev-parse', start + '^{tree}').strip()))
+	messages = pr_messages(root, directory, steps)
+	labels = [label(root, i) for i in iteration_ids(root)]
+	found = lint_text.branch_problems(bare, branch_of(root, identifier), start,
+		os.path.join(directory, 'messages'), labels)
+
+	if found:
+		fail('the commit messages or the comments the branch adds name the '
+			'search; reword them (a code change is a new iteration made with '
+			'--after-end):\n  {}'.format('\n  '.join(found)))
+
+	record_path = os.path.join(directory, 'pr.json')
+	record = read_json(record_path) if os.path.exists(record_path) else None
+	url = original.get('remote_url')
+	slug = github_slug(url)
+
+	if args.edit:
+		if not record:
+			fail('--edit replaces the title and body of the PR {} records, and '
+				'none is recorded: nothing was opened'.format(record_path))
+
+		try:
+			posted = fill_commits(body, record.get('commits') or [],
+				record['repo'])
+		except RuntimeError as error:
+			fail(str(error))
+
+		with tempfile.TemporaryDirectory() as scratch:
+			posted_path = os.path.join(scratch, 'body.md')
+			publish.write(posted_path, posted)
+			problem = publish.edit_pull(record_path, record, title, body,
+				posted_path, args.other_owner)
+
+		if problem:
+			fail(problem)
+
+		print('edited {}'.format(record['url']))
+		return 0
+
+	made = pr_commits(root, config, identifier, messages)
+	target_branch = original.get('branch')
+
+	if not slug:
+		not_github = ('the original\'s remote {!r} is not a GitHub URL, so gh '
+			'cannot open a PR on it; `ship.py branch` makes a local branch '
+			'instead'.format(url))
+
+		if args.post:
+			fail(not_github)
+	else:
+		not_github = None
+
+	moved = None
+
+	if slug and target_branch:
+		try:
+			git('-C', bare, 'fetch', '-q', url, 'refs/heads/{}'.format(
+				target_branch))
+			remote_head = git('-C', bare, 'rev-parse', 'FETCH_HEAD').strip()
+		except RuntimeError as error:
+			fail('could not fetch {} from {}: {}'.format(target_branch, url,
+				error))
+
+		try:
+			git('-C', bare, 'merge-base', '--is-ancestor', made['base'],
+				remote_head)
+		except RuntimeError:
+			fail('the commit the PR builds on ({}) is not on {}/{}, so the PR '
+				'would carry commits nobody measured. Push {} first, then run '
+				'this again.'.format(made['base'][:10], slug, target_branch,
+				target_branch))
+
+		moved = int(git('-C', bare, 'rev-list', '--count', '{}..{}'.format(
+			made['base'], remote_head)).strip())
+
+	after = dict(AFTER_DEFAULTS, **(config.get('after') or {}))
+	fork = args.remote or after.get('pr_remote')
+	head_owner = None
+	branch_name = args.branch or ship_branch(config, pr_branch_name(title))
+
+	if args.head and not fork:
+		fail('--head OWNER:BRANCH needs --remote (or after.pr_remote): the '
+			'remote of the fork the branch is pushed to')
+
+	if args.head:
+		head_owner, colon, named = args.head.partition(':')
+
+		if not (head_owner and colon and named):
+			fail('--head is OWNER:BRANCH; got {!r}'.format(args.head))
+
+		if args.branch and args.branch != named:
+			fail('--branch {} and --head {} name different branches'.format(
+				args.branch, args.head))
+
+		branch_name = named
+	elif fork:
+		head_owner = after.get('pr_head_owner')
+
+		if not head_owner:
+			fail('a push to the fork {} needs --head OWNER:BRANCH or '
+				'after.pr_head_owner (`config --set after.pr_head_owner=OWNER`)'
+				.format(fork))
+
+	if branch_name == target_branch:
+		fail('--branch {} is the branch the PR targets; name a new one'.format(
+			branch_name))
+
+	push_url = url
+
+	if fork:
+		push_url = fork_url(bare, original.get('path'), fork)
+
+		if not push_url:
+			fail('remote {} is not known to {} or the original, and is not a '
+				'URL'.format(fork, bare))
+
+	push_slug = github_slug(push_url) or push_url
+	shas = [sha for _, sha in made['series']]
+
+	try:
+		posted = fill_commits(body, shas, slug)
+	except RuntimeError as error:
+		fail(str(error))
+
+	listing = git('-C', bare, 'log', '--reverse', '--format=%h %s',
+		'{}..{}'.format(made['base'], made['tip'])).rstrip()
+	stat = git('-C', bare, 'diff', '--stat', made['base'], made['tip']).rstrip()
+	head_ref = '{}:{}'.format(head_owner, branch_name) if fork else branch_name
+
+	print('{} ({}), path {}'.format(label(root, identifier), (load_result(root,
+		identifier) or {}).get('title'), ' -> '.join(label(root, i) for i in
+		made['chain'])))
+	print('{} commit(s) on {} ({}), last {} (refs/pr/{})'.format(len(shas),
+		target_branch or '?', made['base'][:10], made['tip'][:10], identifier))
+
+	if made['suite']:
+		print('separate from the unit-test suite: each change applied to the '
+			'original\'s commit, none of the suite\'s {} file(s) changed'.format(
+			len(made['owned'])))
+
+	if moved:
+		print('note: {} has {} commit(s) since the search copied it; GitHub '
+			'says whether they conflict. Nothing was rebased, so the PR is the '
+			'measured code.'.format(target_branch, moved))
+
+	print('push target: {} ({}) -> {}:{}; the PR opens on {} (base {}) with '
+		'head {}'.format('the fork, remote ' + fork if fork else 'the '
+		'original\'s remote', push_url, push_slug, branch_name, slug,
+		target_branch, head_ref))
+	print('\nthe commits, oldest first:\n' + listing)
+	print('\n' + stat)
+
+	if record:
+		print('\nalready opened: {}{}'.format(record['url'], '; the body has '
+			'changed since, and --edit replaces it' if record.get('digest') !=
+			publish.digest(title, body) else ''))
+		return 0
+
+	if not args.post:
+		print('\n--- title\n{}\n--- commit messages\n{}\n--- body\n{}'.format(
+			title, '\n\n'.join('--- {}\n{}'.format(sha[:10], git('-C', bare,
+			'log', '-1', '--format=%B', sha).rstrip()) for sha in shas),
+			posted))
+
+		if slug:
+			print('\n'.join(publish.post_needs('{}/{}'.format(head_owner,
+				slug.split('/')[-1]) if fork else slug, '{} -> {}:{}'.format(
+				push_url, push_slug, branch_name))))
+
+		print('preview only: nothing was pushed. `--post` pushes and opens '
+			'the PR once the user has approved it', flush=True)
+
+		if not_github:
+			fail(not_github)
+
+		return 0
+
+	if git('-C', bare, 'ls-remote', '--heads', push_url, 'refs/heads/' +
+			branch_name).strip():
+		fail('branch {} already exists on {}; nothing was pushed. Pass '
+			'--branch with a name that is not taken.'.format(branch_name,
+			push_slug))
+
+	problem = publish.account_problem('{}/{}'.format(head_owner, slug.split(
+		'/')[-1]) if fork else slug, args.other_owner)
+
+	if problem:
+		fail('{}; nothing was pushed'.format(problem))
+
+	git('-C', bare, 'push', '-q', push_url, '{}:refs/heads/{}'.format(
+		made['tip'], branch_name))
+	hold_reopen(root, 'the optimization PR', 'pushed to {} as {}'.format(
+		push_slug, branch_name))
+
+	with tempfile.TemporaryDirectory() as scratch:
+		posted_path = os.path.join(scratch, 'body.md')
+		publish.write(posted_path, posted)
+		opened = subprocess.run(['gh', 'pr', 'create', '--repo', slug, '--base',
+			target_branch, '--head', head_ref, '--title', title, '--body-file',
+			posted_path], capture_output=True, text=True)
+
+	if opened.returncode != 0:
+		fail('pushed {} but gh could not open the PR: {}\nOpen it with: gh pr '
+			'create --repo {} --base {} --head {}'.format(branch_name,
+			opened.stderr.strip(), slug, target_branch, head_ref))
+
+	link = opened.stdout.strip().splitlines()[-1]
+	publish.write_record(record_path, publish.new_record(slug, link,
+		branch_name, title, body, id=identifier, base=made['base'],
+		commits=shas, head=head_ref))
+	print('\n' + link)
+
+	return 0
+
+
 def tests_branch(args):
 	"""Step 1's git sequence: check the original, clone it into
 	`<work>/tests/suite` with the original's remote, and branch; or, with
@@ -9404,7 +10096,7 @@ def tests_branch(args):
 		fail('{} is on a detached HEAD: settle which branch with the user'
 			.format(original))
 
-	remote = git('-C', original, 'remote', 'get-url', 'origin').strip()
+	remote = git('-C', original, 'config', '--get', 'remote.origin.url').strip()
 	pushed = git('-C', original, 'ls-remote', 'origin', 'refs/heads/' +
 		branch).split()[:1]
 	local = git('-C', original, 'rev-parse', branch).strip()
@@ -9422,13 +10114,80 @@ def tests_branch(args):
 	git('clone', '-q', original, suite)
 	git('-C', suite, 'remote', 'set-url', 'origin', remote)
 	git('-C', suite, 'checkout', '-q', '-b', name)
+
+	# `init --repo` then copies the clone, so config.json describes the
+	# suite's branch; this is the only record of the original's.
+	write_json(work_path(work, 'tests-branch'), {'path': original,
+		'branch': branch, 'commit': local, 'remote_url': remote,
+		'suite': suite, 'tests_branch': name})
 	print('cloned {} to {} on {}; origin is {}'.format(original, suite, name,
 		remote))
 	return 0
 
 
+def ship_posted(work, document):
+	"""The record of `document` (`bugs`, `tests`, `optimization`) once it is
+	on GitHub, else None: the issue with every comment it needs, or the
+	PR."""
+
+	path = work_path(work, 'ship', SHIP_FOLDERS[document],
+		SHIP_RECORDS[document])
+
+	try:
+		record = read_json(path)
+	except OSError:
+		return None
+
+	if not record.get('url') or record.get('comments_left'):
+		return None
+
+	return record
+
+
+def original_of(work, config):
+	"""The original repository the search copied, as a dict: `path` (None when
+	unknown), `branch`, `commit`, `remote_url`, and `suite`, the step-1 record
+	(`tests/branch.json`) when the search was made on a new unit-test suite,
+	else None.
+
+	With a suite, `config['repo']` describes the suite's clone and branch,
+	whose one commit sits on the original's; a search made before
+	`tests-branch` wrote its record is read from the clone: the parent of
+	that commit, and the branch `origin/HEAD` names."""
+
+	repo = config.get('repo') or {}
+	record_path = work_path(work, 'tests-branch')
+	suite = work_path(work, 'tests-suite')
+
+	if os.path.exists(record_path):
+		record = read_json(record_path)
+		return {'path': record.get('path'), 'branch': record['branch'],
+			'commit': record['commit'], 'remote_url': record.get('remote_url')
+			or repo.get('remote_url'), 'suite': record}
+
+	if repo and os.path.realpath(repo.get('path') or '') == os.path.realpath(
+			suite):
+		bare = os.path.join(work, 'autooptimize', 'repo.git')
+		commit = git('-C', bare, 'rev-parse', repo['commit'] + '^').strip()
+
+		try:
+			head = git('-C', suite, 'symbolic-ref', '--short',
+				'refs/remotes/origin/HEAD').strip()
+			branch = head.split('/', 1)[1]
+		except (RuntimeError, IndexError):
+			branch = None
+
+		return {'path': None, 'branch': branch, 'commit': commit,
+			'remote_url': repo.get('remote_url'), 'suite': {'suite': suite,
+			'tests_branch': repo.get('branch'), 'commit': commit}}
+
+	return {'path': repo.get('path'), 'branch': repo.get('branch'),
+		'commit': repo.get('commit'), 'remote_url': repo.get('remote_url'),
+		'suite': None}
+
+
 def archive(args):
-	"""Step 5, section 1: the winner's patch, code, README and result in one
+	"""Step 6, section 1: the winner's patch, code, README and result in one
 	folder, and the final report's skeleton with the sections the files
 	settle already written."""
 
@@ -11216,7 +11975,32 @@ def build_parser():
 		'message')
 	branching.set_defaults(func=tests_branch)
 
-	archiver = subparsers.add_parser('archive', help='step 5: the winner\'s '
+	opener = subparsers.add_parser('pr', help='step 5: the optimization PR. '
+		'Checks the rendered body and the commit messages, makes one commit '
+		'per kept change locally (refs/pr/<id>) and previews the push; '
+		'--post pushes the branch and opens the PR on GitHub')
+	opener.add_argument('root')
+	opener.add_argument('--id', default='best', help='an iteration, or best '
+		'(default)')
+	opener.add_argument('--dir', help='the rendered PR: body.md, body.title '
+		'and messages/<id>.txt (default <work>/ship/pr-optimization)')
+	opener.add_argument('--branch', help='the branch to push (default: from '
+		'the title, after `auto-optimize/` when after.branch_prefix is yes); '
+		'refused when it is the target or exists already')
+	opener.add_argument('--post', action='store_true', help='push and open the '
+		'PR; records pr.json in --dir')
+	opener.add_argument('--edit', action='store_true', help='replace the open '
+		'PR\'s title and body; pushes nothing')
+	opener.add_argument('--remote', help='push to this fork\'s remote (default '
+		'after.pr_remote); the PR still opens on the original')
+	opener.add_argument('--head', help='OWNER:BRANCH on the fork (default '
+		'after.pr_head_owner and --branch)')
+	opener.add_argument('--other-owner', action='store_true', help='confirm a '
+		'repository owned by an account other than the one gh is logged in '
+		'as, once the user has seen the push target')
+	opener.set_defaults(func=pr)
+
+	archiver = subparsers.add_parser('archive', help='step 6: the winner\'s '
 		'patch, code, README and result copied out, and the final report\'s '
 		'skeleton')
 	archiver.add_argument('root')

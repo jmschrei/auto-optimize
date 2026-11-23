@@ -247,9 +247,13 @@ def main():
 			'publisher left running for the later stages', calls == [(search,
 			('--export', os.path.join(search, 'final', 'dashboard.html')))]
 			and not ended['dashboard']['publisher_stopped'], calls)
-		suite.check('a plain-mode search is sent to step 5, with no word of '
-			'after_end', 'Next: step 5, finishing' in out and 'after_end' not in
-			out.split('Next: step 5')[1], out[-300:])
+		suite.check('a plain-mode search is sent to step 5, shipping, with '
+			'no word of after_end', 'Next: step 5, shipping' in out and
+			'after_end' not in out.split('Next: step 5')[1], out[-300:])
+		suite.check('ended.json records the machine the search ran on',
+			set(ended.get('machine') or {}) >= {'os', 'arch', 'cpu', 'cores',
+			'python'} and ended['machine']['cores'] == os.cpu_count(),
+			ended.get('machine'))
 
 		code, out = run_end(search)
 		suite.check('ending twice refuses, naming --reopen', code == 1 and
@@ -370,9 +374,10 @@ def main():
 		suite.equal('repository mode: the winner and its winning iterations',
 			(code, record['winner']['id'], record['winning_iterations']),
 			(0, 2, [1, 2]))
-		suite.check('and the next step is the finish, as in plain mode',
-			out.rstrip().endswith('Next: step 5, finishing '
-			'(`references/step5-finish.md`).'), out[-400:])
+		suite.check('and the next step is shipping, as in plain mode',
+			out.rstrip().endswith('The search is over. Next: step 5, shipping '
+			'(`references/step5-ship.md`): ask the user how to ship.'),
+			out[-400:])
 	finally:
 		autoopt.run_dashboard = real
 
