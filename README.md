@@ -42,7 +42,7 @@ is shaped slightly differently, and so our approach will be to release skills fo
 each kind of thing one can auto-optimize that perfectly fits that setting.
 
 (1) auto-optimize-code: the focus of this skill is optimizing the runtime and memory
-usage of code while keeping identical outputs. Hence, things like unit tests, running
+usage of code while keeping its outputs identical, or within a tolerance you set. Hence, things like unit tests, running
 small real examples at each iteration, and comparison of outputs at the byte-level
 are relevant. This can be run on functions in a code-base, command-line tools, or
 entire end-to-end algorithms or multi-step procedures.
@@ -344,9 +344,12 @@ winner costs elsewhere: a cold first call of 0.24 s for numba's compile
 
 **What it took.** 15 iterations and the baseline, 80 runs and 217 s of
 benchmark time. The wall clock was 2 h 9 min, about 30 minutes of it
-waiting on questions nobody was there to answer. By `autoopt.py tokens`,
-25 agent sessions spent 9.5 million weighted tokens (cache reads weigh 0.05,
-output 5); each iteration subagent averaged 131 thousand.
+waiting on questions nobody was there to answer. When the search ended,
+`autoopt.py tokens` counted 9.5 million weighted tokens over 25 agent
+sessions (cache reads weigh 0.05, output 5): 6.8 million in the 24
+subagents, where each iteration subagent averaged 131 thousand, and the rest
+in the main session. The main session's count goes on growing with whatever
+else that session is used for, so a later `tokens` reports more.
 
 ## More examples
 
@@ -361,8 +364,9 @@ the prompt, the dashboard when the search ended, and what it found.
 | [`examples/smooth-coverage/`](examples/smooth-coverage/) | a tolerance of 1e-9 as the gate, which a prefix-sum rewrite passes and a bitwise gate would refuse | 1.671 s to 0.002741 s, and the costs the observers caught | 24 min |
 
 The time runs from the start of setup to the end of the search, and does not
-include the interview or the minutes the main session waits on you. Each
-search spent about 4 million weighted tokens.
+include the interview or the minutes the main session waits on you. By
+`autoopt.py tokens` when it ended, each search had spent about 4 million
+weighted tokens.
 
 ## Watching it
 
@@ -446,9 +450,6 @@ python3 $AO/ship.py apply <work>          # preview
 python3 $AO/ship.py apply <work> --yes    # write the files
 ```
 
-These are the commands the skill runs at step 5, after it records your
-choice (`after.ship`); `--yes` refuses until that choice is recorded.
-
 **A git repository, as a branch.** One commit per kept change, each with the
 commit message the change's subagent wrote, made as a new branch in your
 repository. It is not checked out, and nothing is pushed.
@@ -457,6 +458,9 @@ repository. It is not checked out, and nothing is pushed.
 python3 $AO/ship.py branch <work> --name faster          # preview
 python3 $AO/ship.py branch <work> --name faster --yes    # make the branch
 ```
+
+These two are the commands the skill runs at step 5, once it has recorded
+your choice (`after.ship`); each `--yes` refuses until then.
 
 **A repository on GitHub, as pull requests.** You check which documents to
 open:
@@ -527,7 +531,7 @@ later with `autoopt.py config <work> --set KEY=VALUE --reason "…"`:
 | To change | Setting |
 |---|---|
 | how outputs are compared, timed and profiled | `checks.compare`, `checks.time`, `checks.first_call`, `checks.profile` |
-| your package's tests as a gate on every iteration | `tests` |
+| your package's tests as a gate on every iteration | `tests.command` |
 | keep only changes worth at least 2%, or twice the noise | `keep.min_gain_pct=2`, `keep.band_k=2` |
 | how many iterations, batches of ideas or hours the search may spend | `after.budget_iterations`, `after.budget_stages`, `after.budget_hours` |
 | a keep rule in your own words | `promote=orchestrator`, and the rule in `spec.md` |
@@ -561,7 +565,7 @@ tests/
   code/                  the skill's script suites; dashboard/ holds the browser tests
   package/               the installer and the shipped files (pytest)
 examples/                one-hot/, the walkthrough's slow function, and three shorter examples
-docs/walkthrough/        the walkthrough's screenshots
+docs/walkthrough/        the walkthrough's screenshots, and the scripts that captured them
 docs/banner/             the banner above, and make_banner.py, which draws it
 ```
 
