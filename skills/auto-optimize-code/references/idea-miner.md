@@ -28,8 +28,9 @@ together, as your prompt lists.
 4. The code, read only, starting from what one run calls: your prompt's
    *What one run does* line, and the harness (repository mode:
    `autooptimize/harness/`; plain mode: the benchmark in the baseline's
-   directory) only for what the line leaves out. At S1 the benchmark may not
-   exist yet: start from the function the spec's task names. Your prompt's
+   directory) only for what the line leaves out. A miner started with `mine
+   --without-profile` may run before the benchmark exists: then start from
+   the function the spec's task names. Your prompt's
    *The code* lists each source file with its line count, and each Python
    function with its line, the profile's files first: go from it straight to
    `sed -n` ranges, not to `ls`, `find` or whole files. Follow the calls the objective's time is spent in.
@@ -59,8 +60,8 @@ together, as your prompt lists.
   *Exact*, and drop an idea the gate rules out unless a guard with a fallback
   keeps the output (say so). Respect *Off limits* and *Portability*.
 - **It works on any OS, compiler and CPU.** Propose nothing that needs one: a compiler-specific flag or pragma, `-march=native` or an intrinsic, a syscall or `/proc` read, a size or thread count fit to this machine, a GPU-generation feature; even where *Portability* names this machine's OS only. A run-time choice with an identical-output fallback is allowed.
-- **It is not toolchain-specific.** No change whose gain depends on a compiler's decisions: a hint, pragma, flag, LTO or source order that steers inlining, or a gain explained by a compiler or pass; hints on a new function are allowed, even where *Off limits* lists compiler flags (`references/subagent.md`, *Toolchain*).
-- **It vectorizes portably** (`references/subagent.md`, *Vectorizing*): numba in Python, else restructure for the compiler; never raw intrinsics.
+- **It is not toolchain-specific.** No change whose gain depends on a compiler's decisions: a hint, pragma, flag, LTO or source order that steers inlining, or a gain explained by a compiler or pass; hints on a new function are allowed, even where *Off limits* lists compiler flags (`references/subagent.md`, *Portability*, Toolchain).
+- **It vectorizes portably** (`references/subagent.md`, *Portability*, Vectorizing): numba in Python, else restructure for the compiler; never raw intrinsics.
 - **It names its place**: `file:function`, or a line range.
 - **Gain comes from the profile** as the share of the call the idea could
   remove, or reads "unmeasured". Never invent a number. A function the
@@ -99,8 +100,9 @@ Exactly this, and nothing more:
 1. The number of ideas per category.
 2. The three you would brief first, one line each.
 3. At most two sentences: a ledger entry or README premise you found false
-   first, then anything else the orchestrator must know.
+   first, then anything else the agent that spawned you must know: the main
+   session at S1, the orchestrator from S2 on.
 
 If writing a file was refused, return the idea lines in your report instead:
-the main session writes them to the stage's file and closes the stage (`mine
---done`).
+the agent that spawned you writes them to the stage's file and closes the
+stage (`mine --done`).

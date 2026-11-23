@@ -96,7 +96,7 @@ advance.
 |---|---|---|
 | 0 | **REQUIRED first:** interview the user, choose the search directory, `init`, fill in `spec.md`, then spawn the setup subagent (`autoopt.py setup`); the idea miner follows when setup is done (`autoopt.py mine`), because it prices ideas against A0's profile | `references/step0-interview.md` |
 | 1 | Repository mode, on a yes at step 0 only: write the new unit tests in a clone, passing on the base in every CI configuration, then `init` on it and spawn the setup subagent, and the miner once setup is done | `references/step1-unit-tests.md` |
-| 2 | The setup subagent's: write the benchmark, check its seeding, prove its gates and checks, measure the width, run the baseline A0, seed the ledger, write A0's README, close with `setup --done`. The orchestrator relays its questions to the user | the setup subagent: `references/step2-baseline.md`; the orchestrator: `references/step0-interview.md`, *Handing off step 2* |
+| 2 | The setup subagent's: write the benchmark, check its seeding, prove its gates and checks, measure the width, run the baseline A0, seed the ledger, write A0's README, close with `setup --done`. The main session relays its questions to the user | the setup subagent: `references/step2-baseline.md`; the main session: `references/main-session.md` |
 | 3 | Once setup and the miner's S1 are done, `autoopt.py loop` starts the orchestrator subagent, which runs the rounds and hands back with the round tables to show the user; start the next phase | `references/step3-rounds.md`, *The orchestrator subagent* |
 | 4 | End the search on the record: `autoopt.py end` refuses while anything is in flight, pairs the winner with A0, writes the last round's summary, `ended.json` and `ended.md`, deletes the regenerable files and snapshots the dashboard. | `references/step4-final.md` |
 | 5 | Ship, once the search is over: ask the user how (`ship.py plan`), then apply the change to the original files (plain mode), make a branch in the original repository, or open the GitHub documents they check (the optimization PR, the unit-test PR, the bug report), reviewed together and posted together | `references/step5-ship.md` |
@@ -131,6 +131,7 @@ advance.
 | Optimizing code in a git repository without touching it: the copy, the harness, the unit-test gate | `references/repo-mode.md` |
 | The checks `promote` makes without measuring: text, the `## Change` and `## Commit message` sections of `notes.md`, indentation, license markers, the oldest toolchain (`preflight.py`, `lint_text.py`) | `references/promotion.md`, *The preflight* |
 | What is on disk, what the JSON files hold, the version fields | `references/layout.md` |
+| Changing what the skill does: every setting, environment variable and hook, and where to edit the code when none fits | `references/extending.md` |
 | Every script flag (the dashboard's are in `scripts/dashboard/README.md`) | `references/cli.md` |
 | Reading a search without changing it: `autoopt.py table` and `show`, which file answers which question | `references/reading-a-search.md` |
 | Ending the search, reopening it, an iteration made after the end (`--after-end`), what `end` leaves on disk | `references/step4-final.md` |
@@ -158,13 +159,14 @@ the absolute paths in git's worktree records, `config.json` and the harness.
 
 **A running search MUST NOT wait on the user.** Once iterations are in
 flight, do not end a turn on a question. Take the answer that does the least
-damage if it is wrong, record it, and keep the queue full
+damage if it is wrong, record it, and keep briefing the next iteration
 (`references/step3-rounds.md`, *Questions while the search runs*).
 
 **Rules live in `spec.md`, and briefs come from `autoopt.py brief`.** Record a
 rule decided mid-search before using it: a setting with `autoopt.py config
---set`, anything else as a dated line in the user's words under *Rules added
-during the search*.
+--set … --reason "<the user's words>"`, which writes the dated line itself,
+anything else as a dated line in the user's words under *Rules added during
+the search*. `setup --answer` writes the line for a setup question's answer.
 
 **Name an iteration with its label, everywhere: `A107`, never `107` or
 `#107`.** Directories and branches keep the bare number (`iterations/107/`,
@@ -176,7 +178,7 @@ and deletes the regenerable files.
 Afterwards `new`, `brief`, `loop` and `mine` refuse, except an iteration made
 with `--after-end` (a notice, a fix, a clean-up), and
 `--id best` is `ended.json`'s winner. `end --reopen` undoes the ending until
-the winner is published (`reopen-lock.json`), never the clean-up
+step 5 ships the winner (a hold in `reopen-lock.json`), never the clean-up
 (`references/step4-final.md`).
 
 **One subagent, one iteration.** A subagent implements one idea, measures
@@ -201,7 +203,8 @@ pass that starts in the background and is watched with `autoopt.py wait <log>`
 (it returns within 200 s with the new lines), repeated until it prints `wait:
 finished`.
 `end`, `final`, `validate`, `run_iteration.py`, `width` and `prove` take
-`--background`; anything else is `autoopt.py bg $WORK <log> '<command>'` in the
+`--background` (under a `gpu_command`, `validate` and `width` go through `bg`
+whole, allocator included, since their own `--background` drops the lease); anything else is `autoopt.py bg $WORK <log> '<command>'` in the
 main session and `(<command>; echo "exit $?") > <log> 2>&1 &` in a subagent.
 **A turn never ends on a background command that nothing waits for**: the
 next call is `autoopt.py wait <log>`.

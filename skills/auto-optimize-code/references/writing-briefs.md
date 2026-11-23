@@ -8,7 +8,7 @@ cannot know.
 
 ```bash
 python3 $AO/autoopt.py brief $WORK --next                                  # a brief when the slot is free
-python3 $AO/autoopt.py brief $WORK --next --count 1 --gpus 2 --note '…'    # one, with a note
+python3 $AO/autoopt.py brief $WORK --next --gpus 2 --note '…'             # the same, with a note
 ```
 
 It prints `status --brief`, then the table of each round summary written
@@ -16,19 +16,19 @@ since the last call, then a brief and its spawn prompt when the one slot is
 free: one iteration runs at a time, so the slot is free when no iteration is
 still worked on (a STALLED one included) and no brief is waiting to start.
 It takes the next untried line of `ideas.md`, the latest miner stage first
-and top to bottom. `--count N` briefs N lines regardless of the slot. It
-fills:
+and top to bottom. Leave out `--count` (or give 0, below): a count above the
+free slot briefs ideas that wait unspawned, each counted against
+`after.budget_iterations`. It fills:
 
 | Flag | From |
 |---|---|
 | `--id` | the next free id |
 | `--idea-line`, `--category` | the line, and its tag |
 | `--title` | the line's function and the first clause of what it changes, cut to 70 characters |
-| `--tried` | every iteration whose diff changed any file the line's *where* names: its median against its parent's, and whether it is in the root, passed the keep rule but is not in the root, was not kept and why, or is in flight |
+| `--tried` | every iteration whose diff changed any file the line's *where* names: its median against its parent's, and whether it is in the root, passed the keep rule but is not in the root, was not kept and why, or is in flight. Past 15, it lists the root path, the latest 15 whose title names the line's function and the latest 15 overall, and counts the rest by fate in one line. The files each change touched are cached in `autooptimize/touched.json` |
 | `--sections` | `code:<the file's name>` when the ledger has that tag, and `harness`, `machine` and `closed` when it has them |
 
-A flag given beside `--next` replaces what it would fill (with `--count 1`,
-since it applies to every brief written); `--note`, `--checks`, `--gpus`,
+A flag given beside `--next` replaces what it would fill; `--note`, `--checks`, `--gpus`,
 `--validate` and `--predict` pass through. `--count 0` prints the status and
 the new summaries and briefs nothing. Add a `--note` for what the records
 do not hold, such as a premise a report corrected.
@@ -72,7 +72,7 @@ It makes `new`'s checks before writing anything (the parent exists and is
 |---|---|
 | `id N is taken (an iteration, a branch, or a directory set aside)` | use the next free id it names; `status` prints it too |
 | `id N is taken (a brief not yet started …)` | another brief holds that id: take the next one, or pass `--replace` to rewrite that brief |
-| `this search uses GPUs and records no gpu_command: pass --gpus …` | give the indices this iteration holds, or the command that allocates them on this machine |
+| `this search uses GPUs and records no \`gpu_command\`: pass --gpus …` | give the indices this iteration holds, or the command that allocates them on this machine |
 | `parent … is gate-failed` | `references/step3-rounds.md`, *Ids, parents and briefs* |
 | `refusing to brief an iteration: step 0 is not finished` | `references/step0-interview.md`, *Writing it down* |
 

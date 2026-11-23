@@ -33,7 +33,7 @@ then the original plus the suite, and every iteration's branch is built on it.
    as you like while writing; when the suite passes in every configuration
    (*It passes on the base*, below), collapse everything the branch holds
    above the original's commit into one commit, with a message that could be
-   published as it is: `python3 $AO/autoopt.py tests-branch --work $WORK --squash -m '<message>'`
+   posted as it is: `python3 $AO/autoopt.py tests-branch --work $WORK --squash -m '<message>'`
    (it refuses unless exactly one commit is left above `origin/HEAD`).
    `init --repo` refuses a clone on `auto-optimize/<YYYY-MM-DD>-unit-tests`
    that is more than one commit ahead of `origin/HEAD`.

@@ -4,8 +4,12 @@ A live dashboard over an `autooptimize/` directory, mounted in a JupyterLab
 notebook output. It needs nothing instrumented and works against a finished
 search or one this session did not start. It writes only its notebook
 (`$WORK/dashboard.ipynb`, beside `autooptimize/`), its payload directory
-(`autooptimize/monitor/` by default) and an index entry under
-`~/.cache/autoopt-monitor/`; it never touches iterations, records or code.
+(`autooptimize/monitor/` by default, else
+`~/autoopt-monitor/<project>-<8 hex of the search's path>/`), an index entry
+under `~/.cache/autoopt-monitor/`, and the GPU sample its publishers share and
+the writer lock in `/dev/shm/dashboard-monitor-<uid>/` (the temporary
+directory where `/dev/shm` is not writable); it never touches iterations,
+records or code.
 
 ```bash
 DASH=$AO/dashboard
@@ -98,7 +102,7 @@ Panels, marks and interactions are specified in `scripts/dashboard/README.md`,
 | External validation | its own section (`references/external-validation.md`) |
 | GPUs idle or contended | the GPU cards and the process table |
 | Whether it ended, and how | the topbar's `ended <date> · A<id> <median> vs A0 <median> · <reason>` line; its tooltip has the paired timing from `final.json` |
-| Which stages are done | the strip under the category chips: `interview done · setup done · … · ship pending · finish pending` (`done`, `running`, `pending`), from `stages.py` |
+| Which stages are done | the strip under the category chips: `interview complete · setup complete · … · ship not started · finish not started`, in `stages.py`'s own words (`complete`, `running`, `not started`) |
 | An iteration's toolchain answer | `toolchain` in its open log entry (`no` or `specific`); `specific` carries the tooltip *not promotable* |
 
 The ended line and the stage strip read `ended.json`, `final.json` and
@@ -128,6 +132,9 @@ leaves the publisher running, so the ended line and the stage strip stay
 current; `end --reopen` finds it still running. Stop it with `--stop` once the
 search is finished (step 6), or by hand for a search that is over some other
 way.
+The export is meant to be passed around, so it leaves out the hostname, the
+GPUs' serial numbers and who holds a GPU lease, and writes the home directory
+as `~`. The live page shows all of them.
 One writer publishes into a directory, and a search has one writer: a second
 writer into a directory refuses, and `--start` or `show()` stops any writer
 into it that the pidfile does not name and any writer of the search into

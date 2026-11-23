@@ -12,6 +12,7 @@ failures worth catching are the ones where two of them disagree.
 No GPU, no network; the whole suite takes a few minutes.
 """
 
+import io
 import os
 import sys
 import json
@@ -697,8 +698,9 @@ def auto_promotion(suite, base):
 		and pair[loser]['promoted'] is False, pair)
 
 	out = call([AUTOOPT, 'status', search, '--brief'])
-	suite.check('status prints the machine\'s load', 'machine: load' in out,
-		out[:600])
+	suite.check('status prints how idle the machine is, from /proc/stat',
+		re.search(r'\nmachine: \d+ cores, \d+% idle, ~\d+ free over 0.1 s, '
+			r'this search\'s runs included\n', out), out[:600])
 
 	head = autoopt.load_state(search)['root']
 
@@ -3185,9 +3187,9 @@ def one_run_first(suite, base):
 	suite.check('and each observer beside the parent\'s',
 		re.search(r'\nobs size +100 median \(A0 100\)\n', report), report)
 	rows = re.findall(r'(?m)^run (\d) +(\S+) \(A0 (\S+)\)  size 100 \(100\)  '
-		r'load \d+\.\d$', report)
+		r'idle \d+%$', report)
 	suite.check('and one row per run, beside the parent\'s run of the same '
-		'seed, with the load at its start',
+		'seed, with how idle the CPUs were at its start',
 		[int(seed) for seed, _, _ in rows] == [0, 1, 2, 3, 4]
 		and all(mine == autoopt.fmt(run['objective']) and theirs
 			== autoopt.fmt(other['objective']) for (_, mine, theirs), run, other
@@ -3217,7 +3219,7 @@ def one_run_first(suite, base):
 			gated['n_runs'], out[-600:]))
 	suite.check('and its run\'s row names the gate it broke',
 		re.search(r'\nrun 0 +\S+ \(A0 \S+\)  size 100 \(100\)  cost 2 BROKEN  '
-		r'load', open(os.path.join(directory, 'report.txt')).read()),
+		r'idle', open(os.path.join(directory, 'report.txt')).read()),
 		open(os.path.join(directory, 'report.txt')).read())
 
 
@@ -3345,8 +3347,9 @@ def watching(suite, base):
 	suite.check('and its record is removed',
 		not os.path.exists(os.path.join(search, 'watch.json')))
 	listed = call([AUTOOPT, 'status', search, '--brief'])
-	suite.check('status then asks for one', 'watch: none running: start '
-		'`autoopt.py watch <work>`' in listed, listed)
+	suite.check('status then asks the orchestrator for one', 'watch: none '
+		'running: the orchestrator starts `autoopt.py watch <work>`' in listed,
+		listed)
 
 	capped = start('--cap', '1')
 	said, _ = capped.communicate(timeout=20)
@@ -3815,6 +3818,13 @@ def orchestrator_phases(suite, base):
 	suite.check('and with nothing in flight, says to hand back now',
 		'Nothing is in flight: hand back now' in out, out[-400:])
 	call([AUTOOPT, 'loop', search, '--done'])
+	call([AUTOOPT, 'loop', search])
+	out = call([AUTOOPT, 'loop', search, '--stop'])
+	out = call([AUTOOPT, 'brief', search, '--next'], expect=(0,))
+	suite.check('loop --stop: the open phase briefs nothing and is told to '
+		'hand back', 'asked phase' in out and 'Hand back' in out and not
+		os.path.exists(os.path.join(search, 'briefs', '4.md')), out[-600:])
+	call([AUTOOPT, 'loop', search, '--done'])
 	out = call([AUTOOPT, 'brief', search, '--next'], expect=(0,))
 	suite.check('once the phase is closed, brief --next briefs again',
 		os.path.exists(os.path.join(search, 'briefs', '4.md'))
@@ -3979,6 +3989,28 @@ def token_audit(suite, base):
 		re.search(r'\nsetup +1 +2 +', out) and 'per iteration: 0k weighted, '
 		'mean of 1' in out, out)
 
+	setup = os.path.join(agents, 'agent-a1.jsonl')
+	os.utime(setup, (time.time() - 86400 * 400, time.time() - 86400 * 400))
+	out = call([AUTOOPT, 'tokens', search, '--projects', projects, '--json'])
+	suite.check('a transcript last written before init is not read',
+		sorted(row['agent'] for row in json.loads(out)) == ['A1: one idea',
+			'session main1'], out)
+	out = call([AUTOOPT, 'tokens', search, '--projects', projects, '--json',
+		'--all-projects'])
+	suite.check('unless --all-projects asks for every transcript',
+		'Setup subagent: step 2' in [row['agent'] for row in json.loads(out)],
+		out)
+	config = autoopt.load_config(search)
+	elsewhere = os.path.join(projects, autoopt.project_folder(work))
+	os.makedirs(elsewhere)
+	suite.check('init records where it ran, and tokens reads only the project '
+		'folders of that directory, the search\'s and the session\'s once one '
+		'of them is there', config['origin']['cwd'] == os.getcwd()
+		and autoopt.transcript_folders(search, config, projects) == {
+			autoopt.project_folder(work)}, autoopt.transcript_folders(search,
+				config, projects))
+	os.rmdir(elsewhere)
+
 
 def waiting(suite, base):
 	"""`wait`: a background command watched in calls of at most four
@@ -4028,6 +4060,14 @@ def waiting(suite, base):
 	suite.check('and the default fits inside a 240000 ms Bash timeout',
 		'default 200' in out, out[-400:])
 
+	long = os.path.join(folder, 'long.log')
+	with open(long, 'w') as handle:
+		handle.write(''.join('{:079d}\n'.format(i) for i in range(
+			3 * autoopt.WAIT_TAIL // 80)) + 'exit 4\n')
+	out = call([AUTOOPT, 'wait', long, '--max', '5'], expect=(0,))
+	suite.check('a log longer than the tail it reads still finishes at its '
+		'exit line', 'wait: finished, exit 4' in out, out[-300:])
+
 	noisy = os.path.join(folder, 'noisy.log')
 	with open(noisy, 'w') as handle:
 		handle.write(''.join('row {}\n'.format(i) for i in range(500))
@@ -4055,6 +4095,192 @@ def waiting(suite, base):
 	suite.check('and a slow one in the background, watched with wait',
 		'On A0 the runner took 10 min: start it with `--background` and '
 		'watch `probe/runner.log` with `autoopt.py wait`' in out, out[-1500:])
+
+
+def perf_hooks(suite, base):
+	"""The CPU idle sample, /proc as a requirement, `busy_percent`, the keep
+	rule's settings and the dashboard's state.json writer."""
+
+	fake = os.path.join(base, 'fake-proc')
+	os.makedirs(os.path.join(fake, 'self'))
+	stat = os.path.join(fake, 'stat')
+	with open(stat, 'w') as handle:
+		handle.write('cpu  100 0 100 700 100 0 0 0 0 0\ncpu0 1 1 1 1\n')
+	saved = autoopt.PROC
+	autoopt.PROC = fake
+	try:
+		sampler = autoopt.CpuSampler()
+		with open(stat, 'w') as handle:
+			handle.write('cpu  150 0 150 1500 200 0 0 0 0 0\n')
+		sample = sampler.sample(0)
+		again = sampler.sample(60)
+	finally:
+		autoopt.PROC = saved
+	cores = os.cpu_count()
+	suite.equal('the idle share is the idle and iowait ticks over all ticks '
+		'since the last sample', sample, {'cores': cores, 'idle_pct': 90.0,
+			'free': int(cores * 0.9)})
+	suite.equal('a sample asked for sooner than its least gets the last one, '
+		'without waiting', again, sample)
+	suite.equal('in the words status and busy print', autoopt.machine_words(
+		{'cores': 256, 'idle_pct': 82.4, 'free': 210}),
+		'256 cores, 82% idle, ~210 free')
+	real = autoopt.cpu_idle(0.05)
+	suite.check('on this machine, from /proc/stat', real['cores'] == cores
+		and 0 <= real['idle_pct'] <= 100 and 0 <= real['free'] <= cores, real)
+
+	search = make_search(os.path.join(base, 'hooks'), staged=False, runs=3,
+		promote='auto')
+
+	autoopt.PROC = os.path.join(base, 'no-proc')
+	try:
+		refusals = []
+		for name, action in (('busy_processes', lambda:
+				autoopt.busy_processes(search, seconds=0.1)), ('busy_threads',
+				lambda: autoopt.busy_threads(os.getpid())), ('run_shell',
+				lambda: autoopt.run_shell('true', base, sample={}))):
+			stderr = sys.stderr
+			sys.stderr = captured = io.StringIO()
+			try:
+				action()
+				refusals.append((name, None))
+			except SystemExit:
+				refusals.append((name, captured.getvalue()))
+			finally:
+				sys.stderr = stderr
+		missing = autoopt.cpu_idle(0)
+	finally:
+		autoopt.PROC = saved
+	suite.check('without /proc the busy check, the thread count and a run '
+		'that counts threads stop, saying why, rather than read quiet or 0',
+		all(text and 'needs /proc (Linux)' in text for _, text in refusals)
+		and 'AUTOOPT_SKIP_QUIET_CHECK' in refusals[0][1], refusals)
+	suite.check('and the idle sample is None', missing is None, missing)
+
+	out = call([AUTOOPT, 'config', search, '--set', 'busy_percent=100000',
+		'--reason', 'test'], expect=(0,))
+	suite.check('busy_percent is set with config --set', autoopt.load_config(
+		search)['busy_percent'] == 100000, out)
+	suite.equal('and is the busy threshold', autoopt.busy_threshold(search),
+		100000.0)
+	saved_env = os.environ.get('AUTOOPT_BUSY_PERCENT')
+	os.environ['AUTOOPT_BUSY_PERCENT'] = '75'
+	try:
+		suite.equal('AUTOOPT_BUSY_PERCENT overrides it',
+			autoopt.busy_threshold(search), 75.0)
+	finally:
+		if saved_env is None:
+			os.environ.pop('AUTOOPT_BUSY_PERCENT')
+		else:
+			os.environ['AUTOOPT_BUSY_PERCENT'] = saved_env
+	env = dict(os.environ)
+	env.pop('AUTOOPT_BUSY_PERCENT', None)
+	env.pop('AUTOOPT_SKIP_QUIET_CHECK', None)
+	done = subprocess.run([sys.executable, AUTOOPT, 'busy', search,
+		'--seconds', '0.2'], capture_output=True, text=True, env=env)
+	suite.check('busy names the threshold that is not the default, and how '
+		'idle the machine is', done.returncode == 0 and 'no process outside '
+		'this search is above 100000% CPU' in done.stdout and re.search(
+			r'machine: \d+ cores, \d+% idle, ~\d+ free over 0.2 s',
+			done.stdout), done.stdout + done.stderr)
+	for value in ('0', '-5', 'many'):
+		out = call([AUTOOPT, 'config', search, '--set', 'busy_percent=' + value,
+			'--reason', 'test'], expect=(1,))
+		suite.check('busy_percent={} is refused'.format(value), 'busy_percent'
+			in out, out[-300:])
+
+	# The keep rule's settings, on records: the defaults give today's words.
+	config = autoopt.load_config(search)
+	parent = {'objective': {'median': 1.0}}
+	result = {'status': 'ok', 'stage': 'confirmed', 'noise_band': 0.1,
+		'objective': {'median': 1.25}}
+	suite.equal('the default keep rule: beyond one noise band',
+		autoopt.keep_verdict(config, result, parent), (True, 'its median beats '
+			'its parent\'s by 0.25 > the noise band 0.1'))
+	suite.equal('and within it, in the same words as before',
+		autoopt.keep_verdict(config, dict(result, objective={'median': 1.05}),
+			parent), (False, 'its median is within the noise band 0.1 of its '
+			'parent\'s (+0.05)'))
+	suite.equal('and worse', autoopt.keep_verdict(config, dict(result,
+		objective={'median': 0.9}), parent), (False, 'its median is worse than '
+		'its parent\'s by 0.1'))
+	wider = dict(config, keep={'band_k': 3})
+	suite.equal('keep.band_k widens the band, and the words say by how much',
+		autoopt.keep_verdict(wider, result, parent), (False, 'its median is '
+			'within 3 x the noise band 0.1 = 0.3 of its parent\'s (+0.25)'))
+	suite.equal('and passes what clears it', autoopt.keep_verdict(wider,
+		dict(result, objective={'median': 1.35}), parent), (True, 'its median '
+		'beats its parent\'s by 0.35 > 3 x the noise band 0.1 = 0.3'))
+	least = dict(config, keep={'min_gain_pct': 30})
+	suite.equal('keep.min_gain_pct asks for a gain of that share of the '
+		'parent\'s median', autoopt.keep_verdict(least, result, parent),
+		(False, 'its median beats its parent\'s by 0.25 > the noise band 0.1, '
+			'but by 25% of its parent\'s median, under the minimum gain 30%'))
+	suite.equal('and passes one that reaches it', autoopt.keep_verdict(least,
+		dict(result, objective={'median': 1.3}), parent), (True, 'its median '
+		'beats its parent\'s by 0.3 > the noise band 0.1, and by 30% >= the '
+		'minimum gain 30%'))
+	lower = dict(config, objective=dict(config['objective'], direction='min'),
+		keep={'min_gain_pct': 10})
+	suite.equal('a minimized objective gains by going down',
+		autoopt.keep_verdict(lower, dict(result, objective={'median': 0.75}),
+			parent)[0], True)
+
+	for setting, ok in (('keep.band_k=2.5', True), ('keep.min_gain_pct=1',
+			True), ('keep.band_k=0', False), ('keep.min_gain_pct=-1', False),
+			('keep.margin=2', False)):
+		out = call([AUTOOPT, 'config', search, '--set', setting, '--reason',
+			'test'], expect=(0,) if ok else (1,))
+		suite.check('config --set {} is {}'.format(setting, 'taken' if ok
+			else 'refused'), ok == ('->' in out), out[-300:])
+	suite.equal('the keep block holds what was set', autoopt.load_config(
+		search)['keep'], {'band_k': 2.5, 'min_gain_pct': 1.0})
+
+	# The runner applies the same rule, so promote: auto follows it.
+	values = autoopt.load_result(search, 0)['objective']['values']
+	spread = statistics.stdev(values)
+	call([AUTOOPT, 'config', search, '--set', 'keep.band_k=3', '--set',
+		'keep.min_gain_pct=null', '--reason', 'test'], expect=(0,))
+	held = add(search, 1, 0.5 + 2 * spread)
+	suite.check('the runner records the keep rule\'s settings, and promote: '
+		'auto promotes nothing they keep out', held['keep']['verdict'] == 'fail'
+		and '3 x the noise band' in held['keep']['why']
+		and autoopt.load_state(search)['root'] == 0, held.get('keep'))
+	call([AUTOOPT, 'config', search, '--set', 'keep.band_k=null', '--reason',
+		'test'], expect=(0,))
+	kept = add(search, 2, 0.5 + 2 * spread)
+	suite.check('and with the default back, the same gain is promoted, in '
+		'the default\'s words', kept['keep']['verdict'] == 'pass'
+		and kept['keep'].get('promoted') and kept['keep']['why'].endswith(
+			'> the noise band {}'.format(autoopt.fmt(kept['noise_band'])))
+		and autoopt.load_state(search)['root'] == 2, kept.get('keep'))
+
+	# The dashboard writer: state.json from one serialization, rewritten
+	# only on a change when asked to.
+	sys.path.insert(0, os.path.join(SCRIPTS, 'dashboard'))
+	import monitor_writer
+	path = os.path.join(base, 'state.json')
+	snapshot = {'generated': 1000.5, 'uptime': 3.0, 'iterations': [{'id': 0,
+		'value': 0.123456789}], 'root': search}
+	writer = monitor_writer.StateWriter(path, skip_unchanged=True)
+	first = writer.write(snapshot)
+	written = json.load(open(path))
+	suite.check('the writer puts the stamps beside the rest, rounded as '
+		'before', first and written == monitor_writer._round(snapshot)
+		and written['generated'] == 1000.5, written)
+	again = writer.write(dict(snapshot, generated=1020.5, uptime=23.0))
+	suite.check('with skip_unchanged, a scan that changed nothing but the '
+		'stamps writes nothing', again is None and json.load(open(path))[
+			'generated'] == 1000.5, json.load(open(path)))
+	writer.write(dict(snapshot, generated=1040.5, iterations=[{'id': 0,
+		'value': 0.5}]))
+	suite.check('and one that changed is written', json.load(open(path))[
+		'iterations'][0]['value'] == 0.5, json.load(open(path)))
+	always = monitor_writer.StateWriter(path)
+	always.write(snapshot)
+	always.write(dict(snapshot, generated=2000.0))
+	suite.equal('by default every scan is written, so the page\'s pulse sees '
+		'generated change', json.load(open(path))['generated'], 2000.0)
 
 
 def racy_index(suite, base):
@@ -4641,6 +4867,7 @@ def main(argv=None):
 		orchestrator_phases(suite, base)
 		tree_reference(suite, base)
 		token_audit(suite, base)
+		perf_hooks(suite, base)
 		every_help(suite, base)
 		racy_index(suite, base)
 

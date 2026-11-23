@@ -27,6 +27,7 @@ SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, 'skills',
 sys.path.insert(0, SCRIPTS)
 
 import autoopt
+import stages
 import test_runner as tr
 
 AUTOOPT = tr.AUTOOPT
@@ -295,7 +296,10 @@ def main():
 		suite.check('ended.md follows the winner', 'Winner changed after '
 			'the end: A9' in read(os.path.join(search, 'ended.md')))
 
-		# Reopen.
+		# Reopen, after the user said "not now" to shipping this winner.
+		config = autoopt.read_json(os.path.join(search, 'config.json'))
+		config['after'].update(ship='none', branch_prefix='no')
+		autoopt.write_json(os.path.join(search, 'config.json'), config)
 		del calls[:]
 		code, out = run_end(search, reopen=True)
 		suite.check('reopen archives ended.json and restarts the publisher',
@@ -303,6 +307,10 @@ def main():
 			'ended.json')) and os.path.exists(os.path.join(search,
 			'ended-1.json')) and calls == [(search, ('--start',))], (out,
 			calls))
+		after = autoopt.load_config(search)['after']
+		suite.check('and asks how to ship again: after.ship is ask, the other '
+			'answers stay', (after['ship'], after['branch_prefix']) == ('ask',
+			'no') and 'after.ship was none' in out, (after, out[-300:]))
 		tr.call([AUTOOPT, 'new', search, '--id', '10', '--title', 'again',
 			'--category', 'MISC'])
 		suite.check('after a reopen, new works without --after-end',
@@ -378,6 +386,22 @@ def main():
 			out.rstrip().endswith('The search is over. Next: step 5, shipping '
 			'(`references/step5-ship.md`): ask the user how to ship.'),
 			out[-400:])
+
+		# A search that kept nothing ends on A0, with nothing to ship.
+		empty = tr.make_search(os.path.join(base, 'kept-nothing'),
+			staged=False, runs=3)
+		tr.add(empty, 1, 0.40)
+		write_readme(empty, 1)
+		code, out = run_end(empty, reason='stalled')
+		ended = autoopt.load_ended(empty) or {}
+		suite.check('a search that kept nothing ends on A0, without pairing',
+			code == 0 and ended.get('winner', {}).get('id') == 0 and
+			ended.get('paired') is None and 'No change was kept' in read(
+			os.path.join(empty, 'ended.md')) and 'nothing to ship' in out, out)
+		suite.equal('and its ship stage is complete, with nothing to ship',
+			stages.ship(os.path.dirname(empty), empty, autoopt.load_state(
+			empty))[:2], (stages.COMPLETE, 'nothing to ship: no change was '
+			'kept'))
 	finally:
 		autoopt.run_dashboard = real
 
@@ -435,6 +459,27 @@ def main():
 	suite.check('archive refuses to replace an archive without --force',
 		again.returncode != 0 and 'already holds' in again.stderr,
 		again.stderr)
+	where = text.split('## Where things are', 1)[-1]
+	suite.check('with nothing shipped, *Where things are* asks for what step 5 '
+		'did', '<<FILL: what step 5 did' in where, where)
+
+	# What step 5 recorded goes into *Where things are*.
+	shipped = os.path.join(work, 'ship')
+	os.makedirs(os.path.join(shipped, 'pr-optimization'))
+	autoopt.write_json(os.path.join(shipped, 'applied.json'), {'id': 2,
+		'label': 'A2', 'files': [{'path': 'bench.py', 'destination':
+		'/home/user/bench.py', 'action': 'change'}], 'already': [], 'patch':
+		os.path.join(shipped, 'applied.patch')})
+	autoopt.write_json(os.path.join(shipped, 'pr-optimization', 'pr.json'),
+		{'url': 'https://github.com/o/r/pull/5'})
+	done = subprocess.run([sys.executable, AUTOOPT, 'archive', mine,
+		'--force'], capture_output=True, text=True)
+	where = read(report).split('## Where things are', 1)[-1]
+	suite.check('the files apply wrote and the URL of each document posted '
+		'fill *Where things are*', done.returncode == 0 and
+		'`/home/user/bench.py`' in where and 'The optimization PR: '
+		'https://github.com/o/r/pull/5' in where and '<<FILL' not in where,
+		(done.stderr, where))
 
 	shutil.rmtree(base, ignore_errors=True)
 	print('\n{} passed, {} failed'.format(len(suite.passed), len(suite.failed)))

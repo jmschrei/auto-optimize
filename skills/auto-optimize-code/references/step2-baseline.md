@@ -25,7 +25,8 @@ call re-reads your whole context.
 
 **Use `wait` for anything over four minutes** (`SKILL.md`).
 `run_iteration.py`, `width` and `prove` take `--background`, which detaches
-them and prints the log to wait on; anything else:
+them and prints the log to wait on (`width` under a `gpu_command` goes through
+`bg` instead: *GPU leases*); anything else:
 
 ```bash
 (<command>; echo "exit $?") > $WORK/autooptimize/setup/<name>.log 2>&1 &
@@ -205,6 +206,9 @@ python3 $AO/autoopt.py init $WORK … \
 	--command "AUTOOPT_REF=$WORK/autooptimize/reference python3 bench.py --iteration {iteration} --seed {seed} --out {out}"
 ```
 
+`init` ran at step 0: when the benchmark needs the reference path or another
+flag the recorded command lacks, set it with `autoopt.py config $WORK --set
+command="…" --reason "…"`, which is accepted until A0 has run.
 A `$WORK` holding a space needs single quotes of its own inside the double
 quotes (`AUTOOPT_REF='…/autooptimize/reference'`). `{iteration}` is the
 iteration's absolute directory in both modes. Placeholder rules:
@@ -330,8 +334,8 @@ the defaults' (yes or no).
   `setup --ask`: "option X takes N s against M s at the defaults, outputs equal
   (or not); keep the objective at the defaults, or time with X on?" A search at
   the defaults whose best idea reproduces the option reports a gain users can
-  already have; with X on, it starts from what users get with it. Record the
-  answer as a rule in `spec.md`.
+  already have; with X on, it starts from what users get with it. `setup
+  --answer` records the answer in `spec.md`.
 
 ## Prove the gate
 
@@ -411,7 +415,8 @@ writes checks only for paths they cannot reach:
 
 The public functions are the second group because the benchmark calls one
 entry point: a change to a shared helper can keep its output identical and
-break every other caller (`references/subagent.md`, *Off-benchmark callers*).
+break every other caller (`references/subagent.md`, *Off-benchmark callers of the code you are
+changing*).
 
 Register them, absolute paths in double quotes, and `checks.threads`, the
 second thread count `final` pairs at, when `spec.md` names one. A check that
@@ -445,13 +450,13 @@ harness builds the worktree (`references/repo-mode.md`, *Setting it up*).
 
 | What | Run by | How |
 |---|---|---|
-| `command`, the benchmark | `run_iteration.py`, once per run; `prove` and `width` the same way | in the iteration directory, with `{seed}`, `{out}` (the run's directory, relative to it; `{out_abs}` absolute), `{iteration}` (the iteration's absolute directory), `{src}` (its worktree) and `{cache}` (`iterations/<id>/cache/<commit>`) filled shell-quoted; `CUDA_VISIBLE_DEVICES` set to one leased GPU; killed with its process group after `timeout_seconds`. A non-zero exit, or a `metrics.json` without the objective or a gate, fails the run |
+| `command`, the benchmark | `run_iteration.py`, once per run; `prove` and `width` the same way | in the iteration directory, with `{seed}`, `{out}` (the run's directory, relative to it; `{out_abs}` absolute), `{iteration}` (the iteration's absolute directory), `{src}` (its worktree) and `{cache}` (`iterations/<id>/cache/<commit>`, the commit's first 12 characters, as in `check/` and `profile/`) filled shell-quoted; `CUDA_VISIBLE_DEVICES` set to one leased GPU; killed with its process group after `timeout_seconds`. A non-zero exit, or a `metrics.json` without the objective or a gate, fails the run |
 | `checks.compare` | the runner, after an iteration's first run; `check --reference`; `prove --compare` | `{src}`: the iteration's commit as `git archive` writes it (tracked files, no `.git`) in `iterations/<id>/check/<commit>/`; `{reference}`: `reference/checks/outputs/`; in the iteration directory, with the same timeout. Exit 0 is `pass`, 1 `differ`, anything else or a timeout `error`; its last non-empty line is the `check:` line's summary |
 | caching A0's outputs | the runner, before the first compare and after any change to the compare command, the gates or a file under `checks/` | A0's commit exported to `reference/checks/trees/`; the compare run with `AUTOOPT_WRITE_REFERENCE=1` into a new directory, which must not stay empty; then A0 compared against it, which must pass. Earlier outputs stay beside the new ones |
 | `checks.time` | `final`, through `paired.py` | `{src}`, a tree; the seconds are the last number on its last line; a non-zero exit stops the pairing as a wrong output. Run again at `checks.threads` with `OMP_NUM_THREADS`, `NUMBA_NUM_THREADS`, `MKL_NUM_THREADS` and `OPENBLAS_NUM_THREADS` all set to it |
 | `checks.first_call` | the runner, before an iteration's runs, through `cold.py` | `{src}`, the exported tree; two repetitions, each with `NUMBA_CACHE_DIR`, `TRITON_CACHE_DIR` and `TORCHINDUCTOR_CACHE_DIR` on an empty directory of its own; the seconds are the last number on its last line |
 | `checks.build` | `variant`, `prove --id`, `finish` and `checkers` | `{src}`: an exported tree under the iteration's `probe/`; run in that tree with the runner's timeout, once per tree, its log beside it as `<tree>.build.log` ending `exit <code>` |
-| `checks.profile` | `promote`, on each new root; `autoopt.py profile --id <id>` by hand | `{src}`: the measured commit exported to `iterations/<id>/profile/<commit>/` and built with `checks.build`; `{out}`: that folder; in the iteration directory with the runner's timeout. Its standard output becomes `iterations/<id>/profile.txt`; a failure is reported on `promote`'s `profile:` line and never stops a promotion |
+| `checks.profile` | `promote`, on each new root; `autoopt.py profile --id <id>` by hand | `{src}`: the measured commit exported to `iterations/<id>/profile/<commit>/` and built with `checks.build`; `{out}`: `iterations/<id>/profile/`; in the iteration directory with the runner's timeout. Its standard output becomes `iterations/<id>/profile.txt`; a failure is reported on `promote`'s `profile:` line and never stops a promotion |
 
 **Prove them as you prove a gate**, before the baseline, against a scratch
 reference. Plant two faults, each in a copy of its own: one output value
@@ -525,8 +530,12 @@ halve each one's `gpus_per_agent`.
 Size every thread and worker count inside what `spec.md`'s *Machine and
 environment* line allows. On a CPU benchmark, before A0 runs: `python3 $AO/autoopt.py busy $WORK`
 samples every process for two seconds and names each one outside this search
-above about 100% CPU, with its user, its share and its command (exit 1 when
-there is one). A busy machine is the user's decision (*Decisions that are the
+above about 110% of one core (`busy_percent` in `config.json`, or
+`AUTOOPT_BUSY_PERCENT`), with its user, its share and its command (exit 1
+when there is one). It reads `/proc`: on a machine without it, the check stops
+with `needs /proc (Linux)`, and `AUTOOPT_SKIP_QUIET_CHECK=1` skips it.
+The runner reports each run's CPU idle share (`idle 82%` in its report,
+`runs[].idle` in `result.json`), and `width` prints it per concurrency. A busy machine is the user's decision (*Decisions that are the
 user's*): ask with `setup --ask`, giving those processes and these options,
 and on their answer run A0 as usual. The runner names what was busy at A0's
 start in its report (`busy at start:`) and `result.json`, and never
@@ -567,14 +576,20 @@ Two iterations never hold the same GPU, and no subagent picks a device from
 | `gpu_command` | The scripts | Everything else that runs the code |
 |---|---|---|
 | recorded (`init --gpu-command`, `config --set gpu_command=...`): the machine's allocator, as the words before a command (`srun --gres=gpu:1`) | run them bare. `run_iteration.py`, `check_seeding.py`, `prove`, `end` and `final` start themselves again under it when `CUDA_VISIBLE_DEVICES` is unset, and wait while no GPU is free (a try a minute, a day at most) | put the allocator's words before it: `paired.py`, `cold.py`, `width`, `check`, `validate`, a probe |
-| none: a machine with no allocator | prefix each with `CUDA_VISIBLE_DEVICES=<indices>`: the orchestrator reads `nvidia-smi` once, gives each brief its own indices (`brief --gpus`) and reuses one only after that iteration settles; the setup subagent takes free cards, since nothing else in the search holds a GPU before the first iteration | the same prefix |
+| none: a search made before `setup --done` required one | `setup --done` refuses a GPU search without it: record `env CUDA_VISIBLE_DEVICES=<index>` on a machine with no allocator. A search that already ran without one prefixes each with `CUDA_VISIBLE_DEVICES=<indices>`, the orchestrator giving each brief its own indices (`brief --gpus`) | the same prefix |
+
+Allocator words before `width --background` or `validate --background` hold
+the lease only until the command detaches, which is at once: the detached job
+then runs with no lease. Detach the whole command, allocator included:
+`python3 $AO/autoopt.py bg $WORK <log> '<allocator words> python3
+$AO/autoopt.py validate …'`.
 
 `gpus_per_agent` = 1 is one card, seeds one after another; with 4, the lease
 is four cards (`CUDA_VISIBLE_DEVICES=2,3,4,5`, or four in `gpu_command`) and
 four seeds run at once. The runner pins each run to one index and says so
 when fewer were given than `gpus_per_agent`.
 
-In repository mode `setup --done` refuses a GPU search with no `gpu_command`:
+`setup --done` refuses a GPU search with no `gpu_command`:
 `end` takes its lease through it, and so does anything run on the search
 afterwards. On a machine with no allocator that the user has to themselves,
 record `env CUDA_VISIBLE_DEVICES=<index>` with the index they named: it sets
@@ -659,7 +674,7 @@ python3 $AO/autoopt.py setup $WORK --done
 It refuses with `step 2 is not finished`, one line per item missing: a TODO
 left in `spec.md`, A0 not `ok` with its full count of runs, A0 without a
 README, no entry in `knowledge.md`, a question still waiting for the user,
-in a GPU repository search no `gpu_command`, with `workers` set an A0 that never ran that many threads at once, and, in an algorithm search, `checks.compare` or
+in a GPU search no `gpu_command`, with `workers` set an A0 that never ran that many threads at once, and, in an algorithm search, `checks.compare` or
 `checks.time` not registered or A0's compare outputs not cached. Then report back exactly this, and
 nothing more:
 
@@ -668,7 +683,7 @@ nothing more:
 3. Each check's proof, one line each: it passes on unchanged code and fails
    on its planted faults.
 4. The documented speed options' verdict: the table's rows that moved the objective, or "no documented option moves it".
-5. At most two sentences of anything else the orchestrator must know.
+5. At most two sentences of anything else the main session must know.
 
 ## A benchmark skeleton
 

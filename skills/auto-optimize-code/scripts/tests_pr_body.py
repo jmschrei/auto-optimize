@@ -1220,7 +1220,7 @@ def main(argv=None):
 		attribution.TITLE_LIMIT))
 	parser.add_argument('--config', help='the search\'s config.json, whose '
 		'after.tests_driver_edit allows a `driver` edit and whose '
-		'after.ship_documents says whether the bug report is published (default: '
+		'after.ship_documents says whether the bug report is posted (default: '
 		'DIR/../../autooptimize/config.json, when it exists)')
 	parser.add_argument('--allow-source', action='append', default=[],
 		metavar='PATH', help='a changed file outside the tests, other than a '

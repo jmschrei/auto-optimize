@@ -1,4 +1,4 @@
-"""The fixed parts of the documents step 5 publishes: the title rule, the
+"""The fixed parts of the documents step 5 posts: the title rule, the
 stand-in numbers, and the bug report's fixed sentences. Nothing is added
 that names the tool or says how a document was written.
 
@@ -131,7 +131,7 @@ def main(argv=None):
 	import sys
 
 	parser = argparse.ArgumentParser(description='Check a document step 5 '
-		'publishes: exits 1 and lists every problem with its title or body.')
+		'posts: exits 1 and lists every problem with its title or body.')
 	sub = parser.add_subparsers(dest='command', required=True)
 	check = sub.add_parser('check', help='check a title and a body file')
 	check.add_argument('--kind', required=True, choices=KINDS)

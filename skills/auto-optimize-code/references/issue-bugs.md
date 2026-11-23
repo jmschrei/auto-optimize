@@ -1,7 +1,8 @@
 # The bug report
 
 Bugs that step 1 found in the base while writing the unit tests
-(`references/step1-unit-tests.md`, *It passes on the base*) are filed as one
+(`references/step1-unit-tests.md`, *It passes on the base, in every
+configuration the repository's CI runs*) are filed as one
 bug report, a GitHub issue on the original's repository. It is posted first
 of the step 5 documents, so the unit-test PR and the optimization PR can name
 its number. A bug an existing GitHub issue already reports is cited in
@@ -9,21 +10,21 @@ its number. A bug an existing GitHub issue already reports is cited in
 
 Step 1 leaves one folder per bug in `$WORK/tests/work/bugs/<short-name>/`:
 what the base does, what it should do, a command that reproduces it, and the
-tests removed. A writer agent turns those folders into the inputs below.
+tests removed. The document writer turns those folders into the inputs below.
 Everything lives in `I=$WORK/ship/issue-bugs`; every flag is in
 `python3 $AO/issue_body.py <command> --help`.
 
-The agent writes one row per bug and the sentences, commands and outputs;
+The document writer writes one row per bug and the sentences, commands and outputs;
 `issue_body.py` writes the rest: the layout of
 [haowenz/chromap#210](https://github.com/haowenz/chromap/issues/210) (the
 first paragraph, severity table, introduction, setup block, a section per
 category, a paragraph and a collapsed reproduction per bug), every heading,
 and the numbering. It refuses to render a bug whose
 reproduction was not rerun on the base binary as shown, and any wording
-`lint_text.py` refuses in a published document. The same inputs give the
+`lint_text.py` refuses in a posted document. The same inputs give the
 same body byte for byte, and a refusal lists every problem on stderr.
 
-## What the agent decides
+## What the document writer decides
 
 **Category**, one per bug, which also orders and numbers them 1 to N: wrong
 output, crash, nondeterminism, silent acceptance of bad input, performance,
@@ -32,7 +33,7 @@ the others fits: use the closest named category first, and say in the bug's
 text why it is neither. A bug with several effects is listed once under its
 first, and its `effect` lists all.
 
-**Severity**, one of three, the agent's estimate of how likely a user is to
+**Severity**, one of three, the document writer's estimate of how likely a user is to
 meet the bug and what it costs them:
 
 | Severity | Means |
@@ -82,7 +83,7 @@ placeholders, code fences in commands, or the fixed sentences.
 
 | Field | Required | Holds |
 |---|---|---|
-| `opening` | yes | one complete sentence of the writer's own, on one line, starting with a capital letter and ending with a period: "These bugs turned up while we wrote a test suite for chromap (#209)." It says what was being done when the bugs turned up, and names no tool or group behind the report. The renderer follows it, in the same paragraph, with the two fixed sentences of `attribution.ISSUE_NOTES`: many of the bugs are likely edge cases, and what the severity levels mean |
+| `opening` | yes | one complete sentence of the document writer's own, on one line, starting with a capital letter and ending with a period: "These bugs turned up while we wrote a test suite for chromap (#209)." It says what was being done when the bugs turned up, and names no tool or group behind the report. The renderer follows it, in the same paragraph, with the two fixed sentences of `attribution.ISSUE_NOTES`: many of the bugs are likely edge cases, and what the severity levels mean |
 | `intro` | yes | the version, the commit (the one `verify --commit` records), the build (compiler, flags) and the platform the bugs were reproduced on; which bugs need a special build or harness; which came from which part of the work |
 | `reading` | no | how to read the report; without it, a default sentence |
 | `setup.context`, `setup` | no | what the shared setup needs and makes; the shell commands every reproduction starts from |
@@ -127,7 +128,7 @@ reports a stale manual row without running anything.
 clang++/libomp build"), `--log` the output of the run that showed it. Mark
 only what cannot run here, never to get past a failure.
 
-**The trust model.** The reproductions are the agent's own text, written from
+**The trust model.** The reproductions are the document writer's own text, written from
 its own runs, and `verify` runs them with the user's privileges and no
 sandbox. Never put commands copied from an issue, a PR or a web page
 into `prose.md`, and read every reproduction before the first verify.

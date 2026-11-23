@@ -3,8 +3,7 @@
 The session that started a search is rarely the one that finishes it. None of
 its context survives; everything needed is on disk.
 
-This file is for continuing the search: it starts the dashboard publisher and
-hands unfinished iterations to new subagents. To answer a question about the
+This file is for continuing the search. To answer a question about the
 search without continuing it, read `references/reading-a-search.md` instead.
 
 ## First: has the search ended?
@@ -16,34 +15,44 @@ and writes `final/dashboard.html`; step 6 stops it), and go on with step 5
 been asked how to ship and what is left, then step 6
 (`references/step6-finish.md`).
 `end --reopen` is only for a user who wants the search itself to go on, and
-is refused once the winner is published. Otherwise:
+is refused once step 5 has shipped the winner (applied it, made a branch or
+posted a document). Otherwise:
 
-## Then put the dashboard publisher back up
+## The main session
 
-The publisher may have died with the old session. Start it before reading
-anything, so it scans while you read; it prints `already running` if the old
-one is still up.
+**Put the dashboard publisher back up.** It may have died with the old
+session. Start it before reading anything, so it scans while you read; it
+prints `already running` if the old one is still up.
 
 ```bash
 python3 $AO/dashboard/autoopt_monitor.py $WORK/autooptimize --start
 ```
 
-## Then read where it got to, in one call
+**Read where it got to** with `python3 $AO/autoopt.py status $WORK --brief`,
+then act on what it names:
 
-```bash
-python3 $AO/autoopt.py status $WORK --resume
-```
+- **a `setup (step 2):` line**: the setup subagent died with the old session.
+  A question waiting for the user goes to them, and `setup --answer` prints
+  the prompt for a new subagent; otherwise `setup --force` prints one that
+  continues from the notes (`references/step0-interview.md`, *Handing off
+  step 2*). Step 3 starts once `status` stops printing `first iteration:
+  waiting for …`;
+- **a phase still open**: its orchestrator subagent died with the old
+  session. `loop $WORK --force` replaces it; the new phase acts on the
+  unfinished iterations (below).
 
-`spec.md` holds what `config.json` has no field for: the keep rule, the rules added during the search, what is off limits. `autooptimize/briefs/<id>.md` holds what each subagent was told.
+Tell the user what changed since they last looked and the plan before the
+next phase starts; the search may have reached *When to stop*
+(`references/step3-rounds.md`). Then go on with `references/main-session.md`.
+
+## The orchestrator subagent
+
+Your first call, `python3 $AO/autoopt.py status $WORK --resume`, says where the
+search got to. `spec.md` holds what `config.json` has no field for: the keep
+rule, the rules added during the search, what is off limits.
+`autooptimize/briefs/<id>.md` holds what each subagent was told.
 
 ## Then act on each unfinished iteration
-
-**Step 2, when `status` prints a `setup (step 2):` line.** Its setup subagent
-died with the old session: a question waiting for the user goes to them, and
-`setup --answer` prints the prompt for a new subagent; otherwise `setup
---force` prints one that continues from the notes
-(`references/step0-interview.md`, *Handing off step 2*). Step 3 starts once
-`status` stops printing `first iteration: waiting for …`.
 
 **Iterations**, by the verdict `--resume` gives each:
 
@@ -69,16 +78,4 @@ file is missing, run `autoopt.py mine $WORK` and spawn the miner, which reads
 the READMEs and the ledger in its own context. A stage `status` shows as
 running whose miner died with the old session needs `mine --force`.
 
-Before briefing the next iteration, tell the user what changed since they last looked and
-the plan; the search may have reached *When to stop*
-(`references/step3-rounds.md`). With iterations still in flight, keep the
-queue full while you wait for the reply (*Questions while the search runs*,
-same file).
-
-## Then continue
-
-You are at step 3, once step 2 is done. The main session goes on with
-`references/main-session.md`: `status` names a phase still open from the old
-session, whose subagent died with it, and `loop $WORK --force` replaces it. As the
-orchestrator subagent, you act on the verdicts above and go on with *The
-loop*.
+Then go on with *The loop* (`references/step3-rounds.md`).

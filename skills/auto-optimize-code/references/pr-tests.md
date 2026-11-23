@@ -1,6 +1,6 @@
 # The unit-test PR
 
-One of the documents step 5 can publish, when step 1 wrote a suite and the
+One of the documents step 5 can post, when step 1 wrote a suite and the
 user chose this PR (`after.ship_documents` holds `tests`). It is opened from
 step 1's branch, its commits as they are, and holds only test files: at most one dependency
 manifest that declares a test dependency, the repository's test driver when
@@ -10,13 +10,13 @@ the optimization is.
 
 | | |
 |---|---|
-| Branch | step 1's `auto-optimize/<YYYY-MM-DD>-unit-tests` in `$WORK/tests/suite`, one commit above the original's, pushed under the same name |
+| Branch | step 1's `auto-optimize/<YYYY-MM-DD>-unit-tests` in `$WORK/tests/suite`, one commit above the original's, pushed under that name, or as `unit-tests-<YYYY-MM-DD>` when the user said branch names do not start with `auto-optimize/` (`after.branch_prefix=no`) |
 | Targets | the original's branch: `branch` in `$WORK/tests/branch.json` |
 | Title | "Add unit tests for `<scope>`", passed to `tests_pr_body.py --title`, which refuses a title that does not start with a capital letter, ends with a period or is longer than 72 characters, and writes it to `$WORK/ship/pr-tests/body.title` |
 | Body | `$WORK/ship/pr-tests/body.md`, rendered by `tests_pr_body.py` from the tables in `$WORK/ship/pr-tests/` and the prose in `$WORK/ship/pr-tests/prose.md` |
 
 `tests_pr_tables.py` writes the tables from the files step 1 left in
-`$WORK/tests/work/` and from the clone, the agent writes only what no table
+`$WORK/tests/work/` and from the clone, the document writer writes only what no table
 can say, and `tests_pr_body.py` renders the two: every count, total,
 percentage and ranking is computed from the tables. The body says what the
 suite is and what it checks. It does not name the tool that wrote it, and it
@@ -217,7 +217,8 @@ reviewed them all: `python3 $AO/ship.py rehearse $WORK`,
 then `python3 $AO/ship.py post $WORK all --approved --digest D`
 (`references/step5-ship.md`). No document is posted on its own. The post
 pushes step 1's branch, under the name the user's answer about branch
-names gives (`references/step5-ship.md`; `--remote-branch` for another),
+names gives (`references/step5-ship.md`; `ship.py rehearse` and `post` with
+`--branch tests=NAME` for another, which reaches this script as `--remote-branch`),
 opens the PR with `gh pr create`, and
 records it in `$T/pr.json` (repository, URL, number, branch, title, a digest
 of title and body, and the time); `ship.py post` then renders the other
@@ -234,21 +235,11 @@ Each default gives way to its flag:
 
 **When the original belongs to another account** (an open-source upstream),
 the PR comes from the user's fork, and `tests-branch` leaves the clone's
-`origin` pointing at the upstream. A search that has ended records the fork
-as `after.pr_remote` and `after.pr_head_owner`, and `ship.py post` uses it.
-For a unit-test PR posted without an ended search, after the user approves
-the preview and says to create the fork:
-
-```bash
-gh repo fork <owner/repo> --clone=false       # prints the fork's URL
-git -C $WORK/tests/suite remote add fork https://github.com/<you>/<name>.git
-python3 $AO/tests_pr_push.py $T --repo <owner/repo> --remote fork --head <you>:<the tests branch> --other-owner --post
-```
-
-Without `--other-owner` the post prints `refused, nothing done` and exits 1;
-the line comes **below** the preview, so read the exit code, not only the
-first lines. Add the flag only once the user has confirmed the target
-repository.
+`origin` pointing at the upstream. Step 5 records the fork as
+`after.pr_remote` and `after.pr_head_owner` (`references/step5-ship.md`,
+*From a fork*), and `ship.py post` uses it. A post refused for another
+account's repository prints `refused, nothing done` **below** the preview
+and exits 1: read the exit code, not only the first lines.
 
 **A change to the tests branch after the search** (a test removed because
 CI fails it, say) is committed on the branch, which may hold any number of
@@ -258,5 +249,6 @@ PR already shows. It is not in the measured optimization branch. Say so in
 the optimization PR, and run the optimized code's tests against the updated
 branch before the user merges either. Run `tests_pr_tables.py collection`
 and `files` again, and `coverage` when the change could move it, render the
-body again, and replace the PR's title and body with `tests_pr_push.py $T
---repo <owner/repo> --edit`, which pushes nothing.
+body again, run `tests_pr_push.py $T --repo <owner/repo>` with no flag to
+preview the new title and body, show the user, and on their yes replace
+them with `--edit`, which pushes nothing.

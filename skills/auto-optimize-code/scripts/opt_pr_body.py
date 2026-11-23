@@ -287,8 +287,14 @@ class Context:
 		self.machine = read_json(directory, 'machine.json', problems)
 		self.tests = read_json(directory, 'tests.json', problems)
 		self.prose = read_prose(os.path.join(directory, 'prose.md'), problems)
-		self.documents = self.branch.get('documents') or publish.chosen(
-			directory)
+		# The live answer when the search is found, so a document the user
+		# dropped after the tables were written is not cited; the copy in
+		# branch.json for a folder rendered on its own.
+		search_config = os.path.join(os.path.dirname(os.path.dirname(
+			os.path.abspath(directory))), 'autooptimize', 'config.json')
+		self.documents = publish.chosen(directory) if os.path.exists(
+			search_config) else (self.branch.get('documents') or
+			publish.chosen(directory))
 
 		for row in self.performance:
 			for key in ('first_median', 'first_min', 'first_max', 'kept_median',

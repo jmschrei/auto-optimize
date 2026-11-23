@@ -17,7 +17,8 @@ gives way to its flag:
 	`$WORK/tests/branch.json`, which `autoopt.py tests-branch` wrote, else the
 	original's branch as the search's config.json records it;
 - the remote pushed to (`--remote`): `after.pr_remote` of the search, else
-	origin;
+	origin; a remote name the clone does not know is read from the original
+	repository (`$WORK/tests/branch.json`'s `path`), else taken as a URL;
 - the name the branch gets there (`--remote-branch`): its own,
 	`auto-optimize/<date>-unit-tests`, when the user chose that prefix at step 5
 	(`after.branch_prefix` yes), else `unit-tests-<date>`;
@@ -328,9 +329,22 @@ def main(argv=None):
 		return refuse(problems)
 
 	changed_body = record and record.get('digest') != publish.digest(title, body)
-	# The URL as the clone names it, before any `insteadOf` rewrite.
+	# The URL as the clone names it, before any `insteadOf` rewrite; a remote
+	# the clone lacks is read from the original's clone, or taken as a URL,
+	# as `autoopt.py pr` reads after.pr_remote.
 	url = run(['git', '-C', args.suite, 'config', '--get', 'remote.{}.url'
 		.format(args.remote)])[1]
+	target = args.remote
+
+	if not url:
+		try:
+			original = autoopt.original_of(work, config).get('path') if config \
+				else None
+		except (RuntimeError, OSError, KeyError):
+			original = None
+
+		url = autoopt.fork_url(None, original, args.remote)
+		target = url or args.remote
 
 	print('repository: {} (target branch {}, from {})'.format(args.repo,
 		args.target_branch, target_from))
@@ -379,7 +393,7 @@ def main(argv=None):
 	if problem:
 		return refuse([problem])
 
-	code, out, err = run(['git', '-C', args.suite, 'push', args.remote,
+	code, out, err = run(['git', '-C', args.suite, 'push', target,
 		'{}:refs/heads/{}'.format(args.branch, args.remote_branch)])
 
 	if code != 0:

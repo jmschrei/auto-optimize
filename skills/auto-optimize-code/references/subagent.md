@@ -86,7 +86,7 @@ the task's checks (your brief's *Checks* section says so) it prints a
 | 0. before the runs | with compiled code (`first_call`), the cold first call on empty caches, beside your parent's recorded value | a crash is `error`, and nothing runs |
 | 1. the first run | one seed, every gate and observer | `error` or `gate-failed`, and nothing more runs |
 | 2. the code's checks | the unit tests (with `{selected}`, only the files for the modules you changed), then the compare: your code against A0's cached outputs, on the benchmark's inputs, the edge cases and every public function | `gate-failed` (`failed_check: compare` for the compare) |
-| 3. the other runs | the rest of `runs_per_iteration`, one seed each, every gate and observer on every run; on one GPU or none they run one at a time and stop at the first that fails | `error` or `gate-failed` |
+| 3. the other runs | the rest of `runs_per_iteration`, one seed each, every gate and observer on every run, `gpus_per_agent` at once (one per leased GPU on a GPU search); run one at a time, they stop at the first that fails | `error` or `gate-failed` |
 | 4. the whole suite | with `{selected}`, only when your median passes the keep rule: only such an iteration can be promoted | `gate-failed` |
 | 5. the keep rule | the verdict against your parent, your median beyond the noise band of your parent's, recorded as `keep` and on the `keep:` line | none: a `keep: no` is a result |
 | 6. promotion | with `promote: auto`: a pass while your parent is still the root promotes you, then runs the closed round's approved validation | none. You promote nothing |
@@ -214,7 +214,7 @@ past one block, where the startup is amortised.
 
 **When the runner's `keep:` line reads `promoted` or `passes`, in a repository
 search, add two more sections; `finish` refuses the README without them.** They
-are the text published with your change, so nobody has to read your diff again
+are the text shipped with your change, so nobody has to read your diff again
 to describe it. An iteration made with `--after-end` writes them before
 `promote`. `finish` and `promote` lint both (`references/promotion.md`, *The
 preflight*): name nothing of the search (no winner, baseline, round, label such

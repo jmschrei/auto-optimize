@@ -60,7 +60,7 @@ never end a turn with work in flight and nothing to wake the session:
     hour), after 3 hours, or once nothing has been in flight for 30
     minutes. Never a `sleep` timer: a wake-up after a quiet spell
     rewrites the whole context, and a timer wakes the session to find
-    nothing to do. Inside /loop, also ScheduleWakeup at 3600 s
+    nothing to do
 
 whenever the subagent reports, and at every wake-up:
     autoopt.py brief $WORK --next   # status --brief (working, STALLED,
@@ -96,7 +96,8 @@ whenever the subagent reports, and at every wake-up:
 ```
 
 The loop hands back after `loop_handback` settled iterations
-(`autoopt.py loop`), and at *When to stop*.
+(`autoopt.py loop`), at *When to stop*, and whenever `brief --next` says to
+(a budget spent, or the main session's `loop --stop`).
 
 ## Questions while the search runs
 
@@ -108,15 +109,13 @@ search until morning. Once the first iteration is in flight:
    promoting on the keep rule.
 2. Take the answer that does the least damage if it is wrong: the reversible,
    narrower, cheaper one, often not the one you would mark recommended. When
-   the question is whether to promote, delete, publish or change a gate, the
+   the question is whether to promote, delete, ship or change a gate, the
    answer is no until the user replies; hold that one decision and keep
    everything else moving.
 3. Write the question, the answer taken and why in `ideas.md` under
    *Decisions taken while the user was away*, and say it in the next message.
 4. When the user answers, apply it and re-run what the default decided
-   wrongly. A changed setting goes through `autoopt.py config --set …
-   --reason "<their words>"`; any other new rule goes under *Rules added during
-   the search* in `spec.md`, dated and in their words, before it is used.
+   wrongly, recording it first (`SKILL.md`, *Rules that hold everywhere*).
 
 Claude Code's `askUserQuestionTimeout` setting (`60s`, `5m`, `10m`, or
 `never`, in the user's `settings.json` or `/config`) lets an unanswered
@@ -153,13 +152,15 @@ never picks one, since two launches seconds apart take the same free card.
 
 `spec.md`'s *Machine and environment* line says how many cores and how much
 memory the search may use: keep the runs at once, and each run's threads,
-inside it. Before every iteration, read `status`'s `machine:` line, the load against the
-cores with this search's runs included: an iteration that starts quiet can
+inside it. Before every iteration, read `status`'s `machine:` line (`256 cores,
+86% idle, ~219 free over 0.1 s`), a short sample of the CPUs' idle share with
+this search's runs included, never the load average, which counts threads a
+container's quota holds back: an iteration that starts quiet can
 finish contended. `gpus_per_agent` processes at about 100% are the iteration
 working; anything above that is somebody else (`autoopt.py busy $WORK` names
 them).
 
-**The exact test is a same-code control.** Load is a hint; the objective is
+**The exact test is a same-code control.** The idle share is a hint; the objective is
 the measurement. Brief the root unchanged and spawn a subagent with it, like
 any iteration; you measure nothing yourself:
 
@@ -174,9 +175,9 @@ the measurement the frontier rests on. The control stays in the table, never
 holds the frontier however it reads, and cannot be promoted.
 
 **The machine is busy** when, on a CPU benchmark, any process outside this
-search runs above about 100% CPU, or the control's median falls outside the
+search runs above `busy_percent` (110% of one core by default), or the control's median falls outside the
 noise band. **When it is busy before the first iteration**, put the choice to the
-user with `AskUserQuestion`, giving the load, what is running and, once there
+user with `AskUserQuestion`, giving the idle share, what is running and, once there
 is one, the control's median against the band. Do not narrow the runs
 quietly.
 
@@ -196,10 +197,8 @@ that it was measured under contention.
 `autooptimize/ideas.md` holds one line per idea, in the form at its top
 (`- [CATEGORY] where: what. Why: … Gain: … Exact: … (S<n>)`), so `status`
 can count what is left. `brief --next` takes the top of the miner's latest
-stage and, when `--count` briefs more than one, keeps them on different
-functions while it can. Ideas briefed together must be **different from each
-other**, and an idea that is one parameter swept over four values is one
-iteration, not four. Pass `--idea-line` with text only that line holds (a
+stage for the one free slot; do not pass `--count` above it. An idea that is
+one parameter swept over four values is one iteration, not four. Pass `--idea-line` with text only that line holds (a
 number shifts when lines are added above it) to choose another, and strike a
 line whose premise is gone with `autoopt.py drop $WORK --idea-line <text>
 --reason <why>`, or `brief --next` picks it again. The subagent's `finish` strikes the line with its label
@@ -217,6 +216,9 @@ that reading lands in the orchestrator's. It runs:
   the miner's prompt; spawn one subagent with it, unedited. Keep briefing from
   what is left while it works. One miner runs at a time; if its subagent
   died, `mine --force` opens the next stage.
+- **never past the user's iteration budget**, `after.budget_iterations`:
+  once that many iterations are briefed, `brief --next` briefs nothing, `mine`
+  refuses, and the search stops for `budget` when they settle;
 - **never past the user's stage budget**, `after.budget_stages`: once that
   many stages have closed, `mine` refuses, `status` says the budget is spent,
   and the ideas left are briefed until none is; then the search stops for
@@ -339,7 +341,7 @@ Stop and tell the user when one of these is reached. `autoopt.py end
 |---|---|
 | `stalled` | the root has not moved through a phase's worth of settled iterations (`loop_handback`) |
 | `variations` | the remaining ideas are variations of ones that failed |
-| `budget` | the compute spent has passed what the user agreed to: every idea from the `after.budget_stages` idea-miner stages is tried or dropped (`status` says so, and `mine` refuses a further stage), or the wall clock since step 2 began has passed `after.budget_hours` |
+| `budget` | the compute spent has passed what the user agreed to: `after.budget_iterations` iterations have settled, every idea from the `after.budget_stages` idea-miner stages is tried or dropped (`status` says so, and `mine` refuses a further stage), or the wall clock since step 2 began has passed `after.budget_hours`. Once the iteration or hour budget is spent, or the stage budget's last idea is briefed, `brief --next` briefs nothing and says to hand back, so the phase hands back when the iteration in flight settles |
 | `noise` | the frontier's improvements are smaller than the noise band |
 | `floor` | a minimized objective's root is at or under `floor`, the smallest value the user called worth measuring (step 0). `stages.py next` stops for the user even under `after.stop=auto`: end, or a new search on a larger input seeded from this root (`references/changes.md`) |
 

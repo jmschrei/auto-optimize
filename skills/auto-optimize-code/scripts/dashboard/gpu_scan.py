@@ -16,6 +16,7 @@ the command line does not show, such as a shell-redirected stdout
 
 import os
 import json
+import stat
 import time
 import ctypes
 import shutil
@@ -425,13 +426,34 @@ SHARED_WAIT = 1.5
 
 def shared_dir():
 	"""This user's directory for what every publisher on the host shares:
-	/dev/shm where there is one, since locks on a network filesystem stall."""
+	/dev/shm where there is one, since locks on a network filesystem stall.
+
+	The name is predictable, so another user of the host can make it first
+	and plant symlinks that redirect these writes. A directory of that name
+	this user does not own, or that others may write to, is passed over for
+	one under ~/.cache."""
 
 	base = '/dev/shm' if os.access('/dev/shm', os.W_OK) else tempfile.gettempdir()
-	path = os.path.join(base, 'dashboard-monitor-{}'.format(os.getuid()))
-	os.makedirs(path, mode=0o700, exist_ok=True)
+	name = 'dashboard-monitor-{}'.format(os.getuid())
 
-	return path
+	return own_dir([os.path.join(base, name),
+		os.path.join(os.path.expanduser('~'), '.cache', name)])
+
+
+def own_dir(paths):
+	"""The first of `paths`, made if missing, that is a directory (not a
+	symlink to one) this user owns and no one else may write to."""
+
+	for path in paths:
+		os.makedirs(path, mode=0o700, exist_ok=True)
+		info = os.lstat(path)
+
+		if (stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+				and not info.st_mode & 0o022):
+			return path
+
+	raise OSError('none of {} is a directory this user alone can write '
+		'to'.format(', '.join(paths)))
 
 
 def _read_sample(path):
@@ -879,9 +901,17 @@ class Hardware:
 			return {}
 
 		memory = psutil.virtual_memory()
+		# The busy share since the last sample, from /proc/stat's idle
+		# ticks: what says how much of the machine is free. The load
+		# average counts threads another job's CPU quota holds back, and
+		# reads in the hundreds on an idle shared machine; it stays in the
+		# payload only for pages that still print it.
+		busy, count = psutil.cpu_percent(), psutil.cpu_count() or 1
 
-		return {'cpu_percent': psutil.cpu_percent(),
-			'cpu_count': psutil.cpu_count(), 'load': list(os.getloadavg()),
+		return {'cpu_percent': busy, 'cpu_count': count,
+			'idle_percent': round(100.0 - busy, 1),
+			'cores_free': int(count * (100.0 - busy) / 100.0),
+			'load': list(os.getloadavg()),
 			'memory_used': memory.used, 'memory_total': memory.total,
 			'memory_percent': memory.percent}
 

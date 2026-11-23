@@ -116,7 +116,14 @@ def _round(value, digits=5):
 	return value
 
 
-def write_json(path, payload):
+def dumps(payload):
+	"""The payload as the page reads it: numbers rounded, no spaces."""
+
+	return json.dumps(_round(payload), separators=(',', ':'),
+		default=lambda value: None)
+
+
+def write_text(path, text):
 	"""Atomically, so the page never reads half a file. The temporary name
 	is per process and thread: two writers sharing one name interleave
 	into a file that is not JSON."""
@@ -125,8 +132,7 @@ def write_json(path, payload):
 
 	try:
 		with open(tmp, 'w') as out:
-			json.dump(_round(payload), out, separators=(',', ':'),
-				default=lambda value: None)
+			out.write(text)
 
 		os.replace(tmp, path)
 	finally:
@@ -134,6 +140,54 @@ def write_json(path, payload):
 			os.unlink(tmp)
 
 	return os.path.getsize(path)
+
+
+def write_json(path, payload):
+	return write_text(path, dumps(payload))
+
+
+# The keys of state.json that change on every scan whatever the search did.
+VOLATILE = ('generated', 'uptime')
+
+
+class StateWriter:
+	"""Writes state.json, serializing each snapshot once.
+
+	The snapshot without its VOLATILE stamps is serialized and hashed, and
+	the stamps are appended to that text. With `skip_unchanged`, a snapshot
+	whose digest equals the last one written is not written again: at a
+	thousand iterations state.json is megabytes, and an idle search
+	rewrites the same bytes every scan. It is off by default because the
+	page's pulse takes `generated` changing as the sign the publisher is
+	alive; once the page reads `writer.scanned` from resources.json, which
+	every good scan sets, it can be turned on (`--skip-unchanged`)."""
+
+	def __init__(self, path, skip_unchanged=False):
+		self.path = path
+		self.skip_unchanged = skip_unchanged
+		self.digest = None
+
+	def write(self, snapshot):
+		"""The bytes written, or None when the write was skipped."""
+
+		body = dumps({key: value for key, value in snapshot.items()
+			if key not in VOLATILE})
+		digest = hashlib.sha1(body.encode()).hexdigest()
+
+		if self.skip_unchanged and digest == self.digest and os.path.exists(
+				self.path):
+			return None
+
+		stamps = ','.join('{}:{}'.format(json.dumps(key), dumps(snapshot[key]))
+			for key in VOLATILE if key in snapshot)
+
+		if stamps:
+			body = body[:-1] + (',' if body != '{}' else '') + stamps + '}'
+
+		size = write_text(self.path, body)
+		self.digest = digest
+
+		return size
 
 
 def claim(out_dir):
@@ -285,7 +339,7 @@ class Busy(RuntimeError):
 	"""Another writer holds `out_dir`'s lock."""
 
 
-def run(root, out_dir, interval, resource_interval):
+def run(root, out_dir, interval, resource_interval, skip_unchanged=False):
 	os.makedirs(out_dir, exist_ok=True)
 
 	# Taken before anything is written, so two starts racing past the
@@ -339,10 +393,13 @@ def run(root, out_dir, interval, resource_interval):
 		# Each cadence is the longest of the last few gaps: a sample served
 		# from nvidia-smi's short cache follows a slow one at once, and the
 		# last gap alone would swing between the two.
+		# `scanned` is when the last scan succeeded, whether or not it
+		# rewrote state.json (StateWriter).
 		status = {'interval': float(interval),
 			'resource_interval': float(resource_interval),
 			'state_cadence': None, 'resource_cadence': None,
-			'scan_error': None, 'scan_error_at': None, 'live': False}
+			'scan_error': None, 'scan_error_at': None, 'live': False,
+			'scanned': None}
 		gaps = {'state': deque(maxlen=5), 'resource': deque(maxlen=5)}
 
 		def lap(kind, gap):
@@ -396,6 +453,8 @@ def run(root, out_dir, interval, resource_interval):
 		threading.Thread(target=hardware, name='hardware', daemon=True).start()
 
 		installed = assets_version()
+		states = StateWriter(os.path.join(out_dir, 'state.json'),
+			skip_unchanged)
 		last_state = None
 		readme_seen = {}
 		diff_seen = {}
@@ -432,7 +491,7 @@ def run(root, out_dir, interval, resource_interval):
 				# An open page compares this with the ?v= it was loaded with
 				# and asks for the cell to be re-run when they differ.
 				snapshot['assets'] = installed
-				size = write_json(os.path.join(out_dir, 'state.json'), snapshot)
+				size = states.write(snapshot)
 
 				# Whole READMEs for the tree's node panel, one small file per
 				# iteration, rewritten only when its README.md changes.
@@ -454,8 +513,11 @@ def run(root, out_dir, interval, resource_interval):
 					lap('state', start - last_state)
 				last_state = start
 				status['scan_error'] = status['scan_error_at'] = None
-				logger.info('state %.0f kB, %d iterations, %d running, '
-					'frontier %s', size / 1024, snapshot['counts']['iterations'],
+				status['scanned'] = start
+				logger.info('state %s, %d iterations, %d running, '
+					'frontier %s', 'unchanged, not rewritten' if size is None
+					else '{:.0f} kB'.format(size / 1024),
+					snapshot['counts']['iterations'],
 					snapshot['counts']['running'], snapshot['frontier']['value'])
 			except (Exception, SystemExit) as error:
 				reason = said.getvalue().strip() or '{}: {}'.format(
@@ -596,6 +658,9 @@ def main(argv=None):
 		help='seconds between full scans (default: %(default)s)')
 	parser.add_argument('--resource-interval', type=float, default=3.0,
 		help='seconds between hardware samples (default: %(default)s)')
+	parser.add_argument('--skip-unchanged', action='store_true',
+		help='write state.json only when a scan changed it; for a page that '
+			'reads the scan time from resources.json (`writer.scanned`)')
 	args = parser.parse_args(argv)
 
 	logging.basicConfig(level=logging.INFO,
@@ -609,7 +674,8 @@ def main(argv=None):
 			running))
 
 	try:
-		run(args.root, out_dir, args.interval, args.resource_interval)
+		run(args.root, out_dir, args.interval, args.resource_interval,
+			args.skip_unchanged)
 	except Busy as error:
 		parser.error(str(error))
 

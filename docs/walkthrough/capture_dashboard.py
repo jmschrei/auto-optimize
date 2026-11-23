@@ -1,6 +1,6 @@
 """Screenshot a search's dashboard, opened in a private JupyterLab.
 
-	python3 capture_dashboard.py WORK OUTDIR --prefix NAME [--diff 3] [--node 3] [--log 3]
+	python3 capture_dashboard.py WORK OUTDIR --prefix NAME [--diff 3] [--node 3] [--log 3] [--redact OLD=NEW]
 
 WORK is the directory holding autooptimize/ and the dashboard.ipynb that
 `autoopt_monitor.py --start` wrote, with its publisher running. A JupyterLab
@@ -32,10 +32,11 @@ import urllib.request
 
 TOKEN = 'walkthrough-capture'
 
-REDACT = '''([home, host]) => {
+REDACT = '''([home, host, pairs]) => {
 	const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
 	for (let n = walk.nextNode(); n; n = walk.nextNode()) {
 		let t = n.nodeValue;
+		for (const [old, now] of pairs) if (t.includes(old)) t = t.split(old).join(now);
 		if (t.includes(home)) t = t.split(home).join('~');
 		if (host && t.includes(host)) t = t.split(host).join('host');
 		if (t !== n.nodeValue) n.nodeValue = t;
@@ -110,10 +111,14 @@ def main():
 	parser.add_argument('--node', type=int)
 	parser.add_argument('--log', type=int)
 	parser.add_argument('--scale', type=float, default=2)
+	parser.add_argument('--redact', action='append', default=[],
+		metavar='OLD=NEW', help='also write OLD as NEW in every picture, '
+		'before the home directory is written as ~ (repeatable)')
 	args = parser.parse_args()
 
 	work, out = os.path.abspath(args.work), os.path.abspath(args.out)
 	home, host = os.path.expanduser('~'), socket.getfqdn()
+	pairs = [item.split('=', 1) for item in args.redact if '=' in item]
 	notebook = os.path.join(work, 'dashboard.ipynb')
 	if not os.path.isfile(notebook) or not work.startswith(home + os.sep):
 		raise SystemExit('need {} under {}'.format(notebook, home))
@@ -155,7 +160,7 @@ def main():
 			page.wait_for_timeout(800)
 
 			def redact():
-				page.evaluate(REDACT, [home, host])
+				page.evaluate(REDACT, [home, host, pairs])
 				page.wait_for_timeout(300)
 
 			page.evaluate('''() => { for (const n of document.querySelectorAll(

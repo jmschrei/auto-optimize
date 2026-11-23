@@ -23,13 +23,13 @@ own except to repair one post.
   no closing period, stored beside the body as `body.title`. Nothing is put in
   front of it.
 - **A body that is rendered, never edited.** A script writes the tables, the
-  writer writes `prose.md` (fields that each start with `=== <field>`), and
+  document writer writes `prose.md` (fields that each start with `=== <field>`), and
   the renderer joins them; the same inputs give the same bytes. A change goes
   to the tables or the prose and is rendered again. Prose writes a
-  `{{token}}` where it needs a number a table gives; a renderer refuses the
-  number typed.
+  `{{token}}` where it needs a number a table gives; the optimization PR's
+  renderer refuses the number typed.
 - **Nothing about how it was written.** No renderer adds a line naming the
-  tool, the model or the lab; the writer adds none either.
+  tool, the model or the lab; the document writer adds none either.
 
 ## What no document says
 

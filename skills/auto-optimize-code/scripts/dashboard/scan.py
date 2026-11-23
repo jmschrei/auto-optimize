@@ -424,7 +424,7 @@ class RunScanner:
 
 	def after(self):
 		"""The search's own account of where it stands: `ended` (ended.json
-		and final.json; None while the search runs) and the five `stages`.
+		and final.json; None while the search runs) and the six `stages`.
 		A part that raises is None and named in `errors`."""
 
 		work = os.path.dirname(self.root)

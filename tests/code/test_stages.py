@@ -21,6 +21,7 @@ SCRIPTS = os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, 'skills',
 sys.path.insert(0, SCRIPTS)
 
 import autoopt
+import ship
 import stages
 import test_runner as tr
 
@@ -154,7 +155,7 @@ def main():
 	put(os.path.join(root, 'ended.json'), {'ended_at': '2026-11-08T09:00:00',
 		'counts': {'rounds': 2, 'iterations': 7, 'winning_iterations': 3},
 		'medians': {'A0': 2.5, 'winner': 1.0, 'objective': 's', 'unit': 's'},
-		'paired': {}})
+		'paired': {}, 'winner': {'id': 3, 'label': 'A3'}})
 	rows = {name: (state, text) for name, state, text, _
 		in stages.collect(work)}
 	suite.equal('ended.json completes the search and the final',
@@ -182,6 +183,53 @@ def main():
 	put(os.path.join(work, 'ship', 'applied.json'), {'files': ['x.py']})
 	suite.equal('ship/applied.json completes it', status(work)['ship'],
 		'complete')
+	put(os.path.join(work, 'ship', 'applied.json'), {'id': 2, 'label': 'A2',
+		'files': ['x.py']})
+	rows = {name: (state, text) for name, state, text, _
+		in stages.collect(work)}
+	suite.check('a winner promoted after the apply runs the stage again, '
+		'naming both', rows['ship'][0] == 'running' and 'A2' in rows['ship'][1]
+		and 'A3' in rows['ship'][1], rows['ship'])
+	put(os.path.join(work, 'ship', 'applied.json'), {'id': 3, 'files': []})
+	suite.equal('the winner\'s own record completes it', status(work)['ship'],
+		'complete')
+
+	config['after'] = {'ship': 'branch', 'branch_prefix': 'no'}
+	put(os.path.join(root, 'config.json'), config)
+	name, kind, text = stages.next_action(work, stages.collect(work))
+	suite.check('a branch on a plain search is not offered: the question '
+		'again, not a command that refuses', status(work)['ship'] ==
+		'not started' and 'ship.py plan' in text, (status(work), text))
+
+	# A repository on GitHub with step 1's bugs, and no suite.
+	config['repo'] = {'path': '/x', 'commit': 'abc', 'remote_url':
+		'https://github.com/o/r.git'}
+	os.makedirs(os.path.join(work, 'tests', 'work', 'bugs', 'wrong-sum'))
+	put(os.path.join(root, 'config.json'), config)
+	name, kind, text = stages.next_action(work, stages.collect(work))
+	suite.check('the branch chosen on a repository search: its preview next',
+		status(work)['ship'] == 'running' and (name, kind) == ('ship',
+		'agent') and 'ship.py branch' in text, (status(work), text))
+	put(os.path.join(work, 'ship', 'branch.json'), {'id': 3, 'branch':
+		'optimized'})
+	suite.equal('ship/branch.json of the winner completes it',
+		status(work)['ship'], 'complete')
+	put(os.path.join(work, 'ship', 'branch.json'), {'id': 2, 'branch':
+		'optimized'})
+	suite.equal('and a branch of an earlier winner does not',
+		status(work)['ship'], 'running')
+
+	for after, why in (({'ship': 'apply'}, 'apply on a repository search'),
+			({'ship': 'github', 'branch_prefix': 'no', 'ship_documents': []},
+			'GitHub with no document checked'), ({'ship': 'github',
+			'branch_prefix': 'no', 'ship_documents': ['tests', 'optimization']},
+			'the unit-test PR without a suite from step 1')):
+		config['after'] = after
+		put(os.path.join(root, 'config.json'), config)
+		name, kind, text = stages.next_action(work, stages.collect(work))
+		suite.check('{} is no answer: the question again'.format(why),
+			status(work)['ship'] == 'not started' and 'ship.py plan' in text,
+			(status(work), text))
 
 	config['after'] = {'ship': 'github', 'ship_documents': ['bugs',
 		'optimization']}
@@ -193,6 +241,42 @@ def main():
 		text)
 	config['after']['branch_prefix'] = 'no'
 	put(os.path.join(root, 'config.json'), config)
+
+	def move():
+		return stages.next_action(work, stages.collect(work))[2]
+
+	text = move()
+	suite.check('nothing written yet: the brief, and the document writer it '
+		'spawns', ' brief ' in text and 'document writer' in text and
+		'*The document writer*' in text, text)
+	for folder in ('issue-bugs', 'pr-optimization'):
+		put(os.path.join(work, 'ship', folder, 'body.title'), 'A title\n')
+	text = move()
+	suite.check('every document rendered and no rehearsal: rehearse',
+		' rehearse ' in text and 'no rehearsal yet' in text, text)
+	after = stages.after_of(work)
+	digest = ship.inputs_digest(work, ['bugs', 'optimization'], after)
+	rehearsal = os.path.join(work, 'ship', 'rehearsal.json')
+	put(rehearsal, {'digest': digest, 'documents': ['bugs', 'optimization'],
+		'ok': True, 'branches': {}})
+	text = move()
+	suite.check('a rehearsal that holds: show the user, then post with its '
+		'digest', 'show the user' in text and 'post {} all --approved '
+		'--digest {}'.format(work, digest) in text and
+		'*Review, then post all*' in text, text)
+	put(os.path.join(work, 'ship', 'pr-optimization', 'body.title'), 'B\n')
+	text = move()
+	suite.check('inputs changed since: rehearse again', ' rehearse ' in text
+		and 'inputs changed' in text, text)
+	put(os.path.join(work, 'ship', 'pr-optimization', 'body.title'),
+		'A title\n')
+	put(rehearsal, {'digest': digest, 'documents': ['bugs', 'optimization'],
+		'ok': False, 'branches': {}})
+	text = move()
+	suite.check('a rehearsal with problems: rehearse again', ' rehearse ' in
+		text and 'had problems' in text, text)
+	put(rehearsal, {'digest': digest, 'documents': ['bugs', 'optimization'],
+		'ok': True, 'branches': {}})
 	put(os.path.join(work, 'ship', 'issue-bugs', 'filed.json'), {'url':
 		'https://github.com/o/r/issues/4', 'comments_left': 1})
 	suite.equal('an issue with a comment still to post is not posted',
@@ -201,24 +285,36 @@ def main():
 		'https://github.com/o/r/issues/4', 'comments_left': 0})
 	suite.equal('one of two chosen documents posted is still running',
 		status(work)['ship'], 'running')
+	text = move()
+	suite.check('and the move is the same post again, which skips it',
+		'1 of 2' in text and 'the same command again' in text and
+		'--digest {}'.format(digest) in text, text)
 	put(os.path.join(work, 'ship', 'pr-optimization', 'pr.json'), {'url':
 		'https://github.com/o/r/pull/5'})
 	suite.equal('every chosen document posted completes it',
 		status(work)['ship'], 'complete')
 
+	del config['repo']
 	config['after'] = {'ship': 'none'}
 	put(os.path.join(root, 'config.json'), config)
 	suite.equal('"not now" completes it', status(work)['ship'], 'complete')
 	name, kind, text = stages.next_action(work, stages.collect(work))
-	suite.check('then the finish, as a plain search\'s archive', (name,
-		kind) == ('finish', 'run') and ' archive ' in text, text)
+	suite.check('then the finish, as a plain search\'s archive, a command '
+		'that runs', (name, kind) == ('finish', 'run') and ' archive ' in text
+		and text.startswith('python3 '), text)
 	config['repo'] = {'path': '/x', 'commit': 'abc'}
 	put(os.path.join(root, 'config.json'), config)
 	name, kind, text = stages.next_action(work, stages.collect(work))
 	suite.check('a repository search finishes the same way, by the finish '
-		'step\'s reference', (name, kind) == ('finish', 'agent') and
-		'step6-finish.md' in text, text)
+		'step\'s reference, the archive named', (name, kind) == ('finish',
+		'agent') and 'step6-finish.md' in text and ' archive ' in text, text)
 
+	put(os.path.join(work, 'finish', 'final-report.md'), '# report\n\n'
+		'<<FILL: the gain by category>>\n')
+	name, kind, text = stages.next_action(work, stages.collect(work))
+	suite.check('the skeleton archive writes leaves the finish running',
+		status(work)['finish'] == 'running' and name == 'finish',
+		(status(work), text))
 	put(os.path.join(work, 'finish', 'final-report.md'), '# report\n')
 	suite.equal('a final report completes the finish', status(work)['finish'],
 		'complete')
@@ -239,6 +335,18 @@ def main():
 	suite.check('check_after keeps a key that is not its own as it is',
 		cleaned.get('theirs') == 'yes' and cleaned.get('another') == 3,
 		cleaned)
+
+	# A failed `end` is shown to the main session, not started again.
+	log = os.path.join(work, 'end.log')
+	with open(log, 'w') as out:
+		out.write('running final\nerror: final did not finish (1)\nexit 1\n')
+	suite.check('end_failure reads a failed end.log', 'exit 1' in (
+		stages.end_failure(log) or '') and 'final did not finish' in
+		stages.end_failure(log))
+	with open(log, 'w') as out:
+		out.write('done\nexit 0\n')
+	suite.equal('and passes over one that succeeded', stages.end_failure(log),
+		None)
 
 	shutil.rmtree(work, ignore_errors=True)
 	print('\n{} passed, {} failed'.format(len(suite.passed), len(suite.failed)))

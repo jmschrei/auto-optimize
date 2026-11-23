@@ -56,6 +56,11 @@ sys.path.insert(0, HERE)
 import autoopt
 from autoopt import OPS, fail, git, fmt, cache_dir
 
+# The least time, in seconds, a run's CPU idle share is sampled over; the
+# first run of a call waits for it, later ones measure the gap since the
+# run before.
+RUN_IDLE_SAMPLE = 0.2
+
 
 def check_lease(config):
 	"""Refuse to start without a GPU lease: `CUDA_VISIBLE_DEVICES` naming the
@@ -399,11 +404,13 @@ def measured_commit(run_dir):
 		return None
 
 
-def start_load(run_dir):
-	"""The one-minute load average when a stored run started, or None."""
+def start_load(run_dir, name='load'):
+	"""A number a stored run recorded when it started, or None: `idle`, the
+	percent of the CPUs idle just before it (/proc/stat); `load`, the
+	one-minute load average, which runs recorded before `idle` existed."""
 
 	try:
-		with open(os.path.join(run_dir, 'load')) as infile:
+		with open(os.path.join(run_dir, name)) as infile:
 			return float(infile.read().strip())
 	except (OSError, ValueError):
 		return None
@@ -427,6 +434,7 @@ def reusable(run_dir, config, commit):
 	if stored not in (None, commit):
 		return None
 
+	record['idle'] = start_load(run_dir, 'idle')
 	record['load'] = start_load(run_dir)
 
 	return record
@@ -546,7 +554,7 @@ def aggregate(root, config, meta, records, failures, stage, frontier_value,
 		'noise_band': band,
 		'best_run': best['dir'] if best else None,
 		'runs': [{key: record.get(key) for key in ('seed', 'dir', 'objective',
-			'seconds', 'gates', 'observers', 'note', 'load')}
+			'seconds', 'gates', 'observers', 'note', 'idle', 'load')}
 			for record in records],
 		'failures': failures,
 		'tests': tests,
@@ -655,8 +663,9 @@ def decide(config, median, frontier_value, band):
 
 def run_rows(result, config, parent, parent_label):
 	"""One line per run: its objective and each observer, the parent's run
-	of the same seed in brackets, any gate the run broke, and the load when it
-	started (this search's own runs included). What a subagent otherwise reads
+	of the same seed in brackets, any gate the run broke, and how idle the
+	CPUs were when it started (this search's own runs included; the load
+	average for a run recorded before that). What a subagent otherwise reads
 	out of every `metrics.json`."""
 
 	theirs = {run.get('seed'): run for run in (parent or {}).get('runs') or []}
@@ -679,7 +688,9 @@ def run_rows(result, config, parent, parent_label):
 					gate['threshold'], gate.get('tol')):
 				parts.append('{} {} BROKEN'.format(gate['name'], fmt(value)))
 
-		if run.get('load') is not None:
+		if run.get('idle') is not None:
+			parts.append('idle {:.0f}%'.format(run['idle']))
+		elif run.get('load') is not None:
 			parts.append('load {:.1f}'.format(run['load']))
 
 		rows.append((run, '  '.join(parts)))
@@ -781,6 +792,10 @@ def promote_on_keep(root, config, meta, result, no_promote=False):
 	if config.get('promote', 'orchestrator') != 'auto':
 		return ['keep: passes ({}); promotion is the orchestrator\'s '
 			'(config "promote")'.format(keep['why'])]
+	if meta.get('after_end'):
+		return ['keep: passes ({}); not promoted: an iteration made after the '
+			'end becomes the winner only by `promote --id`, on the user\'s '
+			'word (references/step4-final.md)'.format(keep['why'])]
 
 	head = autoopt.load_state(root)['root']
 
@@ -946,7 +961,8 @@ def main(argv=None):
 	if (config.get('checks') or {}).get('compare'):
 		autoopt.ensure_reference(root, config)
 
-	results = [r for r in autoopt.all_results(root) if r.get('id') != meta['id']]
+	everything = autoopt.all_results(root)
+	results = [r for r in everything if r.get('id') != meta['id']]
 	direction = config['objective']['direction']
 
 	state = autoopt.load_state(root)
@@ -956,8 +972,8 @@ def main(argv=None):
 	# Whether this iteration's earlier result already held the frontier. A
 	# re-run of it (to add --full-tests, say) is compared above against the
 	# runner-up, and must not announce that as a new frontier.
-	held = autoopt.search_frontier(root, autoopt.all_results(root),
-		direction)[1] == meta['id']
+	held = autoopt.search_frontier(root, everything, direction)[1] \
+		== meta['id']
 
 	# The band's reference spread is the root's, re-measured when each phase
 	# opens (`autoopt.py loop`): after a tenfold speedup the baseline's
@@ -1021,6 +1037,10 @@ def main(argv=None):
 
 	devices = leased_devices(config, config.get('gpus_per_agent', 1) or 1)
 
+	# How idle the CPUs were before each run, over the time since the one
+	# before it (at least RUN_IDLE_SAMPLE seconds), from /proc/stat.
+	sampler = autoopt.CpuSampler()
+
 	# A run takes a device off the queue and gives it back when it ends, so
 	# each GPU holds one run at a time, even when runs finish out of turn.
 	free = queue.Queue()
@@ -1045,7 +1065,8 @@ def main(argv=None):
 			shutil.rmtree(run_dir)
 
 		device = free.get()
-		load = os.getloadavg()[0] if hasattr(os, 'getloadavg') else None
+		machine = sampler.sample(RUN_IDLE_SAMPLE)
+		idle = machine['idle_pct'] if machine else None
 
 		try:
 			code, seconds = execute(config['command'], iteration, seed,
@@ -1069,12 +1090,12 @@ def main(argv=None):
 		with open(os.path.join(run_dir, 'commit'), 'w') as out:
 			out.write(meta['commit'] + '\n')
 
-		if load is not None:
-			with open(os.path.join(run_dir, 'load'), 'w') as out:
-				out.write('{:.2f}\n'.format(load))
+		if idle is not None:
+			with open(os.path.join(run_dir, 'idle'), 'w') as out:
+				out.write('{:.1f}\n'.format(idle))
 
 		record.update(seed=seed, dir=os.path.relpath(run_dir, iteration),
-			seconds=seconds, load=load)
+			seconds=seconds, idle=idle, load=None)
 
 		return record, None, '  seed {}: {} = {} in {:.1f} min'.format(seed,
 			config['objective']['name'], fmt(record['objective']),

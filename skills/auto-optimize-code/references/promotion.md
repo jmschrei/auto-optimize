@@ -15,8 +15,24 @@ does nothing.
 | `promoted to the root (…); round N closed` | it is the root; every iteration briefed after it forks from it |
 | `no, its median is within the noise band …` | kept out, for the reason given |
 | `passes (…); promotion is the orchestrator's (config "promote")` | `promote: orchestrator` |
+| `passes; already on the root's path` | it is the root or one of its ancestors already, as on a re-run of a promoted iteration |
+| `` passes (…); not promoted: an iteration made after the end becomes the winner only by `promote --id` `` | made with `--after-end`: its runner never promotes it (`references/step4-final.md`, *An iteration made after the end*) |
 | `passes (…); not promoted: <reason>` | `promote` refused it (*The preflight*, the toolchain scan, a root that moved): the subagent fixes what the reason names and runs `finish`; the orchestrator then runs `promote --id <it>` |
 | `passes (…); not promoted (--no-promote)` | the runner was told not to: a re-measurement |
+
+**A wider margin or a minimum gain stays with the runner.** "Keep only a
+change worth 2%" or "twice the noise band" is a setting, and `promote: auto`
+keeps working:
+
+```bash
+python3 $AO/autoopt.py config $WORK --set keep.min_gain_pct=2 --reason "<their words>"   # at least 2% of the parent's median
+python3 $AO/autoopt.py config $WORK --set keep.band_k=2 --reason "<their words>"        # beat the parent by twice the noise band
+```
+
+Both must hold; the defaults (`band_k` 1, `min_gain_pct` 0) are the default
+rule, and the `keep:` line names a setting only when it is not the default.
+Set them before the first iteration and record them in `spec.md`'s keep rule:
+a change mid-search judges later iterations by a rule earlier ones were not.
 
 **A keep rule in the user's own words**, such as a tie rule or a second
 measure that must not regress, is beyond the runner. Set it at step 0 with

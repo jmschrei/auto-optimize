@@ -31,6 +31,9 @@ import subprocess
 from . import __version__
 
 PREFIX = 'auto-optimize-'
+# The single skill this repository held before 0.1.0, cloned by hand into a
+# skills folder. It answers the same requests as auto-optimize-code.
+LEGACY = 'auto-optimize'
 MARKER = '.install.json'
 PLUGIN_ID = 'auto-optimize@auto-optimize'
 PYTHON_FLOOR = (3, 9)
@@ -351,6 +354,7 @@ def installations(start=None):
 	of name, version, scope, mode and path."""
 
 	found, seen = [], set()
+	shipped = set(bundled_skills())
 	user = user_skills_dir()
 	places = [('user', user)] + [('project', d) for d in project_dirs(start)
 		if os.path.abspath(d) != os.path.abspath(user)]
@@ -362,7 +366,21 @@ def installations(start=None):
 		for name in sorted(os.listdir(folder)):
 			path = os.path.join(folder, name)
 
-			if not name.startswith(PREFIX) or path in seen:
+			if path in seen or not os.path.isfile(os.path.join(path,
+					'SKILL.md')):
+				continue
+
+			if name == LEGACY and frontmatter_name(path) == LEGACY:
+				seen.add(path)
+				found.append({'name': LEGACY, 'version': None, 'scope': scope,
+					'mode': 'earlier copy (before 0.1.0)', 'path': path,
+					'legacy': True})
+				continue
+
+			# Another author's skill may share the prefix: only the shipped
+			# names, or a folder this installer wrote, are ours.
+			if not name.startswith(PREFIX) or (name not in shipped and
+					not os.path.exists(os.path.join(path, MARKER))):
 				continue
 
 			kind, _ = ownership(path, frontmatter_name(path) or name)
@@ -391,6 +409,15 @@ def installations(start=None):
 	return found
 
 
+def legacy_notes(found):
+	"""A note for each earlier copy of the skill found."""
+
+	return ['\nnote: {} holds the auto-optimize skill from before 0.1.0, '
+		'named {}. Claude Code loads it beside auto-optimize-code, and the two '
+		'answer the same requests; remove that folder.'.format(item['path'],
+			LEGACY) for item in found if item.get('legacy')]
+
+
 def duplicates(found):
 	"""Names installed more than once."""
 
@@ -414,6 +441,9 @@ def list_command(args):
 	for row in [header] + rows:
 		print('  '.join(row[i].ljust(widths[i]) for i in range(4)) + '  '
 			+ row[4])
+
+	for note in legacy_notes(found):
+		print(note)
 
 	for name in duplicates(found):
 		print('\nnote: {} is installed more than once. Claude Code loads every '
@@ -466,6 +496,24 @@ def run(words):
 	return done.returncode, done.stdout.strip()
 
 
+def skill_python3():
+	"""The python3 the skill will run: the first on PATH, passing over this
+	installer's own environment when uvx, pipx or `uv run` put it first, since
+	Claude Code does not run with it."""
+
+	own = os.path.realpath(os.path.join(sys.prefix, 'bin'))
+	active = os.environ.get('VIRTUAL_ENV')
+
+	if sys.prefix == sys.base_prefix or (active and os.path.realpath(active)
+			== os.path.realpath(sys.prefix)):
+		return shutil.which('python3')
+
+	path = os.pathsep.join(entry for entry in os.environ.get('PATH',
+		'').split(os.pathsep) if entry and os.path.realpath(entry) != own)
+
+	return shutil.which('python3', path=path)
+
+
 def doctor(args):
 	"""Check what the skill needs, in the python3 the skill runs (the one
 	on PATH, not this installer's), and every installed copy."""
@@ -481,7 +529,7 @@ def doctor(args):
 	report(sys.platform.startswith('linux'), 'Linux (this is {}); the '
 		'scripts read /proc and take file locks'.format(sys.platform))
 
-	python3 = shutil.which('python3')
+	python3 = skill_python3()
 	code, out = run([python3, '-c', 'import sys; print("%d.%d.%d" % '
 		'sys.version_info[:3])']) if python3 else (None, '')
 	version = tuple(int(part) for part in out.split('.')) if code == 0 else ()
@@ -512,9 +560,10 @@ def doctor(args):
 		'not on PATH'), required=False)
 
 	found = installations()
-	report(bool(found), 'installed skills: {}'.format(', '.join(
+	current = [item for item in found if not item.get('legacy')]
+	report(bool(current), 'installed skills: {}'.format(', '.join(
 		'{} ({}, {})'.format(item['name'], item['scope'], item['mode'])
-		for item in found) or 'none; `auto-optimize install`'))
+		for item in current) or 'none; `auto-optimize install`'))
 
 	print('\n'.join(lines))
 
@@ -522,7 +571,10 @@ def doctor(args):
 		print('\nfor the dashboard: {} -m pip install {}'.format(python3,
 			' '.join(missing)))
 
-	for name in duplicates(found):
+	for note in legacy_notes(found):
+		print(note)
+
+	for name in duplicates(current):
 		print('\nnote: {} is installed more than once; `auto-optimize list` '
 			'shows where'.format(name))
 

@@ -1951,6 +1951,8 @@ function renderMain() {
 		// which a log axis cannot draw, and the scale button says so.
 		xaxis: axis({ type: xType, ...logTicks(traces.flatMap((t) =>
 				t.type === 'scatter' ? t.x : []).filter((v) => !missing(v)), xType),
+			...iterationTicks(traces.flatMap((t) => t.type === 'scatter' ? t.x
+				: []), xType),
 			title: { text: 'iteration',
 			font: { size: 11, color: resolved('--text-faint') } } }),
 		yaxis: axis({ type: dense ? 'linear' : yType,
@@ -2020,7 +2022,7 @@ function renderMainLegend(dense, n) {
 		state.showStages ? el('span', { class: 'legend-item',
 			dataset: { key: 'stage-boundary' } }, [markerKey(resolved('--purple'), 'dashed'),
 			minedStages() ? 'stage boundary: the idea miner\'s next batch of ideas'
-				: 'stage boundary: the next generation of the search tree']) : null,
+				: 'depth boundary: the next level of the search tree']) : null,
 		el('span', { class: 'legend-item', dataset: { key: 'frontier-point' } }, [
 			el('span', { class: 'mark-key', style: 'display:inline-flex;width:12px;'
 				+ 'height:12px;align-items:center;justify-content:center' }, [
@@ -2093,7 +2095,8 @@ function renderObservers() {
 		draw(id, medianTraces(rows, (row) => row.observers[name].median, id),
 			plotLayout({
 				margin: { l: 58, r: 12, t: 8, b: 34 },
-				xaxis: axis({ title: { text: 'iteration', font: { size: 10, color: resolved('--text-faint') } } }),
+				xaxis: axis({ ...iterationTicks(rows.map((row) => row.id), 'linear'),
+					title: { text: 'iteration', font: { size: 10, color: resolved('--text-faint') } } }),
 				yaxis: axis({ type: yType, ...logTicks(ys, yType), title: { text: name + (unit ? ` (${unit})`
 					: '') + ', median', font: { size: 10, color: resolved('--text-faint') } } }),
 			}), { selectable: true, ids: rows.map((row) => row.id),
@@ -2626,9 +2629,23 @@ function setPinned(identifier, seed) {
 
 /* One fixed decimal count for a column of values, so the digits align: four
    significant figures of the largest. */
+// Decimals that give the column's smallest nonzero value four significant
+// figures (at most 6): after a large speedup the baseline's 1.671 and the
+// root's 0.002741 share a column, and decimals set by the largest value
+// would print both as 0.003.
+// Whole-number ticks on an iteration axis that spans few iterations, where
+// Plotly would otherwise tick at 0.5 or 0.2; wider spans tick in whole steps
+// already.
+function iterationTicks(xs, type) {
+	const top = Math.max(0, ...xs.filter((v) => !missing(v)));
+	return type !== 'log' && top <= 15 ? { tick0: 0, dtick: 1 } : {};
+}
+
 function columnDigits(values) {
-	const top = Math.max(0, ...values.filter((v) => !missing(v)).map(Math.abs));
-	return top ? Math.max(0, Math.min(6, 3 - Math.floor(Math.log10(top)))) : 3;
+	const sizes = values.filter((v) => !missing(v) && Number(v) !== 0)
+		.map((v) => Math.abs(Number(v)));
+	const low = sizes.length ? Math.min(...sizes) : 0;
+	return low ? Math.max(0, Math.min(6, 3 - Math.floor(Math.log10(low)))) : 3;
 }
 
 function logColumns() {
@@ -3043,8 +3060,7 @@ function scopedFrontier() {
 }
 
 /* The ending in the topbar and the stages as text, both from the
-   search's own state files. */
-const STAGE_WORD = { complete: 'done', running: 'running', 'not started': 'pending' };
+   search's own state files, in stages.py's own words. */
 
 function renderAfterLines(after) {
 	const ended = after.ended;
@@ -3061,7 +3077,7 @@ function renderAfterLines(after) {
 	const strip = $('stage-strip');
 	strip.hidden = !(after.stages || []).length;
 	strip.textContent = (after.stages || []).map(([name, status]) =>
-		`${name} ${STAGE_WORD[status] || status}`).join(' · ');
+		`${name} ${status}`).join(' · ');
 }
 
 function renderSummary() {
@@ -3071,7 +3087,7 @@ function renderSummary() {
 	const counts = snapshot.counts;
 	const plan = snapshot.plan;
 	const frontier = scopedFrontier();
-	const unit = snapshot.objective.unit ? ` ${snapshot.objective.unit}` : '';
+	const unit = snapshot.objective.unit ? ` (${snapshot.objective.unit})` : '';
 	const gpus = (state.lastGpus || {}).gpus || [];
 	const improved = !missing(frontier.total_gain) && frontier.total_gain !== 0
 		&& (frontier.total_gain > 0) === (snapshot.objective.direction === 'max');

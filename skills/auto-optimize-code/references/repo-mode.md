@@ -8,7 +8,8 @@ git repository as its base.
 - **The original is never written to.** `init --repo` makes a bare clone at
   `autooptimize/repo.git`, its objects hardlinked when on the same filesystem
   (almost no disk), and removes its `origin` remote, which is the original's
-  own directory. No command of this skill writes outside the search.
+  own directory. No command before step 5 writes outside the search; step 5
+  writes to the original only on the user's yes (`references/step5-ship.md`).
 - **Each branch is the path.** `autoopt/<id>` is the original's history up to
   the copied commit, followed by one commit per iteration on the path to
   `<id>` (*path* in `references/glossary.md`).
