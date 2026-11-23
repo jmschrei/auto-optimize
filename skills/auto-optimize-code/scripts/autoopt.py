@@ -9428,7 +9428,7 @@ def tests_branch(args):
 
 
 def archive(args):
-	"""Step 6, section 1: the winner's patch, code, README and result in one
+	"""Step 5, section 1: the winner's patch, code, README and result in one
 	folder, and the final report's skeleton with the sections the files
 	settle already written."""
 

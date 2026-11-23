@@ -45,6 +45,14 @@ it.
   chart, an iteration's README from the search tree, the end and what the
   search cost. The screenshots are in `docs/walkthrough/`.
 - `examples/one-hot/` replaces `examples/word-count/` as the example to try.
+- The README starts a first search with the commands that run the example,
+  says what to set in Claude Code before leaving a search to run (tool
+  permissions, `askUserQuestionTimeout`) and what the subagents run on the
+  machine, shows how to bring the winner into your own code (apply
+  `idea.patch`, or fetch the winner's branch into the repository and squash
+  it), and lists how to resume, stop or reopen a search.
+- Step 5 ends by giving the user those commands for the search, with its
+  paths and the winner's id written in.
 
 ### Claude Code skill
 
