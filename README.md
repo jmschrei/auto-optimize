@@ -1,4 +1,4 @@
-# auto-optimize
+<h1 align="center"><img src="docs/banner/banner.png" alt="auto-optimize" width="880"></h1>
 
 [![CI](https://github.com/jmschrei/auto-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/jmschrei/auto-optimize/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -14,11 +14,23 @@ the quality-of-life features I always wished I had in the past, including:
 
 - an interview at the beginning
 - separation of "runs" from "iterations", where each "iteration" is an idea and multiple "runs" can be done to establish performance distributions
-- external validations that can be run once per iteration, such as a unit test suite or a complete processing step, to ensure no drift
+- a unit-test gate run on every iteration, and an optional external validation, once a round, on inputs the search never measures, such as a complete processing step, to ensure no drift
 - observational measures that are also recorded each iteration but not used to decide (e.g., memory usage, first run compile time)
 - a pretty interactive dashboard to monitor progress
 - clean logging, formatting, usage of git worktrees, and documentation at each step, with instructions for future agents to build on top of what I have built here
 - clean division of work done by subagents and work done by deterministic scripts, to give consistent and robust results
+
+**See a finished search before you install anything.** Two pages show the
+dashboard of the search in the walkthrough below, which made a one-hot
+encoder 1,070 times faster:
+
+- [**The search's dashboard**](https://claude.ai/artifact/724GcNKDAktnrgNkGxwh2f):
+  the objective by iteration, the frontier, the search tree, every run, and
+  each iteration's code change and README, as the skill leaves them when a
+  search ends.
+- [**The same dashboard with its terms labeled**](https://claude.ai/artifact/S1nrSF1CSE3KLpZBEDxomB):
+  hover any part to see which term it shows (run, iteration, round, root,
+  frontier, noise band, …) and where else that term appears.
 
 Conceptually, there are many things that one may wish to auto-optimize. Each thing
 is shaped slightly differently, and so our approach will be to release skills for
@@ -151,8 +163,9 @@ code per iteration. Then, without you:
 
 The walkthrough below is a search on `examples/one-hot/`.
 
-**What it costs.** Every iteration is a subagent session, and so is each
-setup, mining and orchestration phase, so a search of a few dozen iterations
+**What it costs.** Every iteration is a subagent session, and so are the
+setup subagent, each idea-miner stage and each orchestrator phase, so a
+search of a few dozen iterations
 runs that many agent sessions. `autoopt.py tokens <work>` adds up what a
 search's agents spent, from Claude Code's transcripts; the walkthrough's
 numbers are at its end. Its 15 iterations took about two hours, so for a
@@ -177,9 +190,10 @@ things decide whether it can:
   least damage if it is wrong and records it in `ideas.md`. The skill offers
   this before a long search and does not change your settings itself.
 - **What runs on your machine.** The subagents write code and run it, and the
-  benchmark, as your user. The original code is never written to (a
-  repository is copied first), but run a search only on code and inputs you
-  trust, on a machine where long CPU or GPU jobs are acceptable.
+  benchmark, as your user. The search never writes to your code (a
+  repository is copied first); only step 5 does, after you choose how and
+  approve a preview. Run a search only on code and inputs you trust, on a
+  machine where long CPU or GPU jobs are acceptable.
 
 ## Walkthrough: a one-hot encoder, 1,070 times faster
 
@@ -207,7 +221,7 @@ def one_hot_encode(sequence, alphabet='ACGT', dtype=numpy.int8):
 
 ![The prompt in Claude Code](docs/walkthrough/01-prompt.png)
 
-**The interview.** Three rounds of questions pinned the search down. Every
+**The interview.** Three sets of questions pinned the search down. Every
 answer, and each default taken without asking, went into the search's
 `spec.md`, which every subagent reads.
 
@@ -243,7 +257,9 @@ minutes, so the main session took the answer that does the least damage if
 wrong, going on, and wrote it down in `ideas.md`. Four more idea-miner
 stages refilled the ideas as they ran out.
 
-The dashboard in JupyterLab, after the search ended:
+The dashboard in JupyterLab, after the search ended (the same dashboard is
+[online](https://claude.ai/artifact/724GcNKDAktnrgNkGxwh2f), to click
+through):
 
 ![The dashboard in JupyterLab](docs/walkthrough/02-dashboard.png)
 
@@ -254,7 +270,7 @@ of ideas:
 
 ![Objective by iteration](docs/walkthrough/03-objective.png)
 
-Three changes were kept, each forking the next generation: A1, the numba
+Three changes were kept, each the root of the next round: A1, the numba
 kernel; A3, which reads an ASCII string's own buffer in place of an `encode`
 copy (2.74 ms, and 9.5 MB less peak memory); and A7, which runs the kernel on
 4 threads over contiguous chunks above 2^20 positions (1.405 ms). The
@@ -334,6 +350,41 @@ processes, and each iteration's code change against its parent. At the end it
 writes a self-contained snapshot, `<work>/autooptimize/final/dashboard.html`,
 which opens in any browser.
 
+## Where things are
+
+Everything a search makes lives in the search directory you choose at the
+interview, `<work>` below (`~/auto-optimize/<YYYY-MM-DD>-<name>/` by
+default). Your own code is only read; step 5 writes to it only after you
+choose how and approve a preview. One folder per step, plain names:
+
+```
+<work>/
+  NOTES.md                 where the search stands: the six stages and the next command
+  dashboard.ipynb          the live dashboard; open it in JupyterLab
+  interview/               step 0: the interview, license terms on the inputs, bugs you already knew of
+  inputs/                  the data the benchmark reads
+  tests/                   step 1, repository mode: the new unit tests and the bugs they found
+  setup/                   step 2's scratch: the gate proofs and the concurrency measurement
+  autooptimize/            the search's own record
+    spec.md                the rules the search runs by, in your words
+    config.json            the objective, the gates, the observers and every setting
+    ideas.md               every idea, the tried ones struck through, and decisions taken while you were away
+    knowledge.md           what the subagents established, for the ones after them
+    iterations/<id>/       one per iteration: its code, notes.md, README.md, result.json and runs/
+    rounds/round-<N>.md    one summary per round
+    repo.git/              every iteration's code, one branch each (autoopt/<id>)
+    ended.md, ended.json   the result, once the search has ended
+    final/dashboard.html   the dashboard as a single file, written when the search ends
+  ship/                    step 5: the files applied, the branch made, or each GitHub document and its preview
+  finish/                  step 6: final-report.md, and archive/ with the winner's code and patch
+  scratch/                 anything disposable
+```
+
+An iteration's `README.md` says what it tried, what happened and every run;
+its `result.json` holds the numbers every table, chart and document reads.
+`skills/auto-optimize-code/references/layout.md` describes every file and
+field.
+
 ## Reading the results
 
 Ask Claude ("what did the search find?", "what did A7 try?"); the skill
@@ -387,7 +438,7 @@ open:
 | the unit-test PR | the suite written before the search, when you asked for one, with its coverage before and after; separate from the optimization PR, so the two merge in either order |
 | the bug report | one issue for the bugs that suite found, each with a reproduction the skill reran on your code |
 
-A writer subagent drafts the chosen documents from what the search recorded:
+A document-writer subagent drafts the chosen documents from what the search recorded:
 every number in them comes from the search's own measurements. They name no
 tool, and say nothing about checks the search did not run. You review all of
 them together (`ship.py rehearse` renders them and previews every push), and
@@ -401,7 +452,7 @@ pushes start with `auto-optimize/`; the documents themselves name no tool.
 from `<work>/finish/archive/` (`idea.patch` and the winner's files) after
 step 6.
 
-**Before you merge**, read the final report and the kept iterations'
+**Before you merge**, read the final report and the winning iterations'
 READMEs (`autoopt.py show <work> A7`). Their notes say what a change costs
 outside the benchmark: in the walkthrough, numba's compile on the first call
 and a slower 1 bp input. A change that adds a dependency, such as numba there,
@@ -439,6 +490,27 @@ judges it against its gates and the noise band, and `autoopt.py` keeps the
 search tree, the briefs, the promotions and the records. Only a median the
 runner computed counts as a result; no agent types a number in.
 
+## Changing what it does
+
+Most changes are settings a search already reads, set in the interview or
+later with `autoopt.py config <work> --set KEY=VALUE --reason "…"`:
+
+| To change | Setting |
+|---|---|
+| how outputs are compared, timed and profiled | `checks.compare`, `checks.time`, `checks.first_call`, `checks.profile` |
+| your package's tests as a gate on every iteration | `tests` |
+| keep only changes worth at least 2%, or twice the noise | `keep.min_gain_pct=2`, `keep.band_k=2` |
+| a keep rule in your own words | `promote=orchestrator`, and the rule in `spec.md` |
+| your cluster's GPU allocator | `gpu_command` (`srun --gres=gpu:1`) |
+| when another job counts as busy | `busy_percent` |
+| the model the iteration subagents use | `subagent_model` |
+| when to stop, the budget, how the winner ships | `after.*` |
+
+`skills/auto-optimize-code/references/extending.md` lists every setting,
+environment variable and code hook, and where to edit the code when no
+setting fits: the idea categories, the words a pull request may not use, the
+dashboard's colors.
+
 ## When it is the wrong tool
 
 - One measurement, not a search: timing a function once needs a benchmark
@@ -460,6 +532,7 @@ tests/
   package/               the installer and the shipped files (pytest)
 examples/one-hot/        the slow function the walkthrough optimizes
 docs/walkthrough/        the walkthrough's screenshots
+docs/banner/             the banner above, and make_banner.py, which draws it
 ```
 
 ## Development

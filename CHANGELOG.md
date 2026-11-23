@@ -69,14 +69,14 @@ it.
     one commit per kept change, each with its `## Commit message`.
   - On GitHub, the user checks which documents to open: the optimization PR,
     the unit-test PR (when step 1 wrote a suite) and the bug report (when
-    step 1 found bugs). One writer subagent drafts them (`ship.py brief`),
+    step 1 found bugs). One subagent, the document writer, drafts them (`ship.py brief`),
     `ship.py rehearse` renders and previews all of them, and `ship.py post`
     posts them only with the digest of the batch the user reviewed, filling
     each document's number into the next.
   - The documents are ported from an earlier, private version of this skill
     and rewritten to hold only what the search recorded. They carry no
     opening that names the tool or the lab and no title prefix, and
-    `lint_text.py` now refuses both in published text. Nor do they say how
+    `lint_text.py` now refuses both in posted text. Nor do they say how
     they were written: no line names the tool, the model or the lab.
   - The optimization PR (`opt_pr_tables.py`, `opt_pr_body.py`, `autoopt.py
     pr`) reports the medians and ranges of the objective and every
@@ -102,6 +102,67 @@ it.
   - Remote URLs are recorded as configured, before `insteadOf` rewrites.
   - `ended.json` records the machine the search ran on (`machine`).
   - `stages.py` reports six stages, `ship` between `final` and `finish`.
+  - `stages.py next` names the move at every point of step 5: the document
+    writer's brief, rehearsing, showing the user the batch and posting with
+    its digest, or running a stopped post again. It started `autoopt.py
+    archive` without `python3` under `--run`, which failed, and called
+    step 6 complete as soon as `archive` wrote the report's skeleton; the
+    finish stage now stays `running` while a `<<FILL` mark is left.
+  - An answer the search cannot ship (a route its mode lacks, a document
+    with nothing behind it) reads as no answer, and `next` asks again
+    rather than naming a command that refuses. `end --reopen` sets
+    `after.ship` back to `ask`.
+  - `apply --yes` records files that already hold the change, which left
+    the stage open for good, and applies an `--after-end` winner over an
+    earlier apply; the ship stage reopens when the winner changes after an
+    apply or a branch.
+  - The rehearsal's digest also covers the winner, `after.branch_prefix`,
+    `after.pr_remote` and `after.pr_head_owner`. `rehearse` and `post` take
+    `--branch optimization=NAME` or `tests=NAME` for a PR branch whose name
+    is taken, and a post that stopped after its push runs again cleanly.
+  - `tests_pr_push.py` finds `after.pr_remote` given as a remote of the
+    original, as `autoopt.py pr` does.
+  - `archive` fills the final report's *Where things are* from step 5's
+    records, and every step-5 command refreshes `NOTES.md`.
+  - A replacement document writer keeps and completes the inputs already
+    written.
+- The glossary defines every term the shipping step added (main session,
+  the original, step-1 suite, document writer, hold, `after`, target
+  branch, kept change, the six stages) and corrects three that disagreed
+  with the scripts: "in flight" includes a finishing iteration, which is
+  settled; the winner is an iteration, not a path; a winning iteration
+  changes the code. The step-5 subagent is "the document writer" everywhere,
+  so "writer" alone stays the dashboard's publisher, and shipping applies,
+  branches or posts; it no longer "publishes". The dashboard's stage strip
+  uses `stages.py`'s words (complete, running, not started).
+- `tests/package/test_skill_files.py` checks that every cited section,
+  `references/x.md`, *Heading*, in the skill's Markdown and in the scripts'
+  strings names a heading of that file. Nine citations named none.
+- `references/extending.md` lists every setting, environment variable and
+  code hook, and where to edit the code when none fits; the README gains a
+  short version and a map of the search directory.
+- The default keep rule takes two settings, `keep.band_k` (noise bands to
+  beat, default 1) and `keep.min_gain_pct` (least gain, default 0), so "keep
+  only a 2% gain" no longer needs `promote: orchestrator`. The defaults give
+  the same verdicts as before.
+- The machine checks read a short sample of the CPUs' idle share from
+  `/proc/stat` in place of the load average, which on a shared host counts
+  threads a container's quota holds back: `status`'s `machine:` line, each
+  run's `idle` in the report and `result.json`, `width`, and the dashboard's
+  host. `busy_percent` (default 110, percent of one core) sets when another
+  process counts as busy. Without `/proc` the busy and thread checks stop
+  with `needs /proc (Linux)`; they read a quiet machine before.
+- Past 15 earlier iterations on the same code, `brief`'s *Already tried*
+  lists the root path, the latest 15 on the idea's function and the latest
+  15 overall, and counts the rest by fate; at 500 iterations the brief went
+  from 57 KB to 5 KB. The files each change touched are cached in
+  `autooptimize/touched.json` (one `git diff-tree` call, not one `git diff`
+  per iteration), and each record is parsed once per process: `brief --next`
+  on 500 iterations went from 0.84 s to 0.37 s. `wait` reads only a log's
+  tail. `tokens` reads only the search's own transcripts (`--all-projects`
+  for every one), from `config.json`'s new `origin`.
+- The README opens with a banner (`docs/banner/`, drawn by
+  `make_banner.py`) and links to the walkthrough's dashboard as a web page.
 - `autoopt.py table` prints one row per iteration, in-flight ones included,
   filtered by status, category, round, parent, frontier or promotion, sorted
   and cut, as text, TSV or JSON with the columns asked for. `autoopt.py show`
