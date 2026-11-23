@@ -2,7 +2,7 @@
 
 Historically, the task of improving software has been performed by humans who knew
 too much about how computers worked. As punishment for learning too much about how 
-computers worked, they punished us by becoming better than us at this task.
+computers worked, the computers punished us by becoming better than us at this task.
 
 Auto-optimization is the process by which agents iteratively find improvements
 to a codebase which optimize a given performance measure (or set of such measures).
