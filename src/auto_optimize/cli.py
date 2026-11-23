@@ -31,7 +31,7 @@ import subprocess
 from . import __version__
 
 PREFIX = 'auto-optimize-'
-# The single skill this repository held before 0.1.0, cloned by hand into a
+# The single skill this repository held before 1.0.0, cloned by hand into a
 # skills folder. It answers the same requests as auto-optimize-code.
 LEGACY = 'auto-optimize'
 MARKER = '.install.json'
@@ -373,7 +373,7 @@ def installations(start=None):
 			if name == LEGACY and frontmatter_name(path) == LEGACY:
 				seen.add(path)
 				found.append({'name': LEGACY, 'version': None, 'scope': scope,
-					'mode': 'earlier copy (before 0.1.0)', 'path': path,
+					'mode': 'earlier copy (before 1.0.0)', 'path': path,
 					'legacy': True})
 				continue
 
@@ -412,7 +412,7 @@ def installations(start=None):
 def legacy_notes(found):
 	"""A note for each earlier copy of the skill found."""
 
-	return ['\nnote: {} holds the auto-optimize skill from before 0.1.0, '
+	return ['\nnote: {} holds the auto-optimize skill from before 1.0.0, '
 		'named {}. Claude Code loads it beside auto-optimize-code, and the two '
 		'answer the same requests; remove that folder.'.format(item['path'],
 			LEGACY) for item in found if item.get('legacy')]

@@ -99,7 +99,7 @@ copy it made itself; `--force` replaces anything else at that path.
 |---|---|
 | `auto-optimize install [--project [DIR] \| -d DIR] [--symlink] [-f]` | copy (or link) the skill into a skills folder |
 | `auto-optimize uninstall [--project [DIR] \| -d DIR] [-f]` | remove a copy the installer made |
-| `auto-optimize list` | every copy Claude Code would load from here: user, project and plugin, and a clone of this repository from before 0.1.0, which competes with the skill |
+| `auto-optimize list` | every copy Claude Code would load from here: user, project and plugin, and a clone of this repository from before 1.0.0, which competes with the skill |
 | `auto-optimize path` | the installed skill's folder |
 | `auto-optimize doctor` | check Linux, `python3`, git, tar, the dashboard's modules and the installed copies |
 
