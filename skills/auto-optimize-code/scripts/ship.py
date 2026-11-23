@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Step 5: ship an ended search (`references/step5-ship.md`).
 
-	python3 ship.py plan WORK                 # what this search can ship, and the question to ask
-	python3 ship.py apply WORK [--to DIR] [--yes]
-	python3 ship.py branch WORK [--name N] [--repo PATH] [--yes]
-	python3 ship.py brief WORK                # the writer agent's prompt for the GitHub documents
+	python3 ship.py plan WORK [--json]        # what this search can ship, and the question to ask
+	python3 ship.py apply WORK [--id N] [--to DIR] [--yes]
+	python3 ship.py branch WORK [--id N] [--name N] [--repo PATH] [--yes]
+	python3 ship.py brief WORK                # the document writer's prompt for the GitHub documents
 	python3 ship.py status WORK               # each chosen document: inputs, body, posted
 	python3 ship.py render WORK [--only bugs|tests|optimization]
-	python3 ship.py rehearse WORK             # render and preview every chosen document together
-	python3 ship.py post WORK all --approved --digest D [--other-owner]
+	python3 ship.py rehearse WORK [--branch DOC=NAME]   # render and preview every chosen document together
+	python3 ship.py post WORK all --approved --digest D [--branch DOC=NAME] [--other-owner]
 
 The user answers one question first: how to ship. `apply` writes a plain
 search's change into the original files; `branch` makes a branch in the
@@ -91,11 +91,26 @@ def read_bytes(path):
 # apply: a plain search's change, written into the original files
 ###
 
+def applied_record(work):
+	"""`ship/applied.json`, what an earlier `apply --yes` wrote, or None."""
+
+	try:
+		return autoopt.read_json(autoopt.work_path(work, 'ship',
+			'applied.json'))
+	except OSError:
+		return None
+
+
 def apply_plan(work, root, config, identifier, to):
 	"""What `apply` would do: `{'rows': [(path, destination, action)],
 	'skipped': [paths the search wrote], 'problems': [...]}`. A path is
 	applied where it came from: under `to`, else under the folder that held
-	the files `init --copy` took (`config['copied']`)."""
+	the files `init --copy` took (`config['copied']`).
+
+	A file may hold what the copy held, or what an earlier `apply --yes`
+	wrote (`ship/applied.json`), as when a winner promoted after the end
+	replaces the one applied; a file that earlier apply wrote and this
+	winner leaves as the copy had it goes back to the copy."""
 
 	bare = os.path.join(root, 'repo.git')
 	head = autoopt.branch_of(root, identifier)
@@ -104,6 +119,14 @@ def apply_plan(work, root, config, identifier, to):
 		line.strip()]
 	base_files = set(autoopt.git('-C', bare, 'ls-tree', '-r', '--name-only',
 		'autoopt/0').splitlines())
+	earlier = applied_record(work) or {}
+	prior = earlier.get('commit')
+
+	for row in (earlier.get('files') or []) + (earlier.get('already') or []):
+		if row.get('path') not in {path for _, path in changed}:
+			changed.append(('D' if show(bare, head, row['path'])[0] is None
+				else 'M', row['path']))
+
 	copied = config.get('copied') or []
 	names = [entry['as'] for entry in copied]
 	problems, rows, skipped, already = [], [], [], []
@@ -148,12 +171,16 @@ def apply_plan(work, root, config, identifier, to):
 		before = show(bare, 'autoopt/0', path)[0]
 		after = show(bare, head, path)[0] if status != 'D' else None
 		current = read_bytes(target)
+		# What the earlier apply left there (None: it left nothing).
+		applied = prior and current == show(bare, prior, path)[0]
 
 		if current == after:
-			already.append(target)
+			already.append((path, target))
 			continue
 
-		if status == 'A':
+		if applied:
+			pass
+		elif status == 'A':
 			if current is not None:
 				problems.append('{} exists already, and the change adds it'
 					.format(target))
@@ -208,7 +235,7 @@ def apply(args):
 		print('  not applied: {}, which the search wrote itself (it was not '
 			'copied from your files)'.format(path))
 
-	for target in plan['already']:
+	for path, target in plan['already']:
 		print('  already holds the change: {}'.format(target))
 
 	if stat:
@@ -217,12 +244,13 @@ def apply(args):
 	if plan['problems']:
 		fail('nothing was written:\n  ' + '\n  '.join(plan['problems']))
 
-	if not plan['rows'] and plan['already']:
-		print('\nthe change is applied already; nothing to write')
-		return 0
-
-	if not plan['rows']:
+	if not plan['rows'] and not plan['already']:
 		fail('the change touches none of the copied files; nothing to apply')
+
+	if not plan['rows'] and not args.yes:
+		print('\nthe change is applied already; nothing to write. `--yes` '
+			'records it as applied once the user has agreed.')
+		return 0
 
 	if not args.yes:
 		print('\npreview only: nothing was written. `--yes` writes these '
@@ -255,20 +283,53 @@ def apply(args):
 
 		os.replace(target + '.ship-tmp', target)
 
-	patch = autoopt.git('-C', bare, 'diff', '--binary', 'autoopt/0',
-		plan['head'], '--', *[path for path, _, _ in plan['rows']])
+	# The record, the hold on `end --reopen` and NOTES.md, also when every
+	# file held the change already: the stage is done either way.
 	folder = autoopt.work_path(work, 'ship')
+	record_path = os.path.join(folder, 'applied.json')
+	commit = autoopt.git('-C', bare, 'rev-parse', plan['head']).strip()
+
+	try:
+		earlier = autoopt.read_json(record_path)
+	except OSError:
+		earlier = None
+
+	# The same winner applied again, with nothing left to write: the first
+	# record already says what was written, so keep it as it is.
+	if not writes and earlier and earlier.get('commit') == commit:
+		autoopt.hold_reopen(root, 'apply', 'written into the original files')
+		autoopt.refresh_notes(root)
+		print('\nthe change is applied already, as {} records'.format(
+			record_path))
+		return 0
+
+	# The patch is the whole change the original files now hold: the files
+	# written now and those that held it already (an earlier apply's, or
+	# the user's own), so it stands alone after an --after-end winner.
+	held = [path for path, _, _ in plan['rows']] + [path for path, _ in
+		plan['already']]
+	patch = os.path.join(folder, 'applied.patch') if held else None
+
 	os.makedirs(folder, exist_ok=True)
-	publish.write(os.path.join(folder, 'applied.patch'), patch)
-	publish.write_json(os.path.join(folder, 'applied.json'), {'id': identifier,
-		'label': autoopt.label(root, identifier), 'commit': autoopt.git('-C',
-		bare, 'rev-parse', plan['head']).strip(), 'files': [{'path': path,
-		'destination': target, 'action': action} for path, target, action
-		in plan['rows']], 'skipped': plan['skipped'], 'patch': os.path.join(
-		folder, 'applied.patch'), 'at': autoopt.now()})
+
+	if patch:
+		publish.write(patch, autoopt.git('-C', bare, 'diff', '--binary',
+			'autoopt/0', plan['head'], '--', *held))
+
+	publish.write_json(record_path, {'id': identifier,
+		'label': autoopt.label(root, identifier), 'commit': commit,
+		'files': [{'path': path, 'destination': target, 'action': action}
+			for path, target, action in plan['rows']], 'already': [{'path':
+			path, 'destination': target} for path, target in plan['already']],
+		'skipped': plan['skipped'], 'patch': patch, 'at': autoopt.now()})
 	autoopt.hold_reopen(root, 'apply', 'written into the original files')
-	print('\nwrote {} file(s); the patch is {}'.format(len(writes),
-		os.path.join(folder, 'applied.patch')))
+	autoopt.refresh_notes(root)
+
+	if writes:
+		print('\nwrote {} file(s); the patch is {}'.format(len(writes), patch))
+	else:
+		print('\nthe change is applied already; recorded in {}, with the '
+			'patch {}'.format(record_path, patch))
 
 	return 0
 
@@ -378,6 +439,7 @@ def branch(args):
 		'branch': name, 'base': made['base'], 'tip': made['tip'],
 		'commits': [sha for _, sha in made['series']], 'at': autoopt.now()})
 	autoopt.hold_reopen(root, 'branch', 'branch {} in {}'.format(name, path))
+	autoopt.refresh_notes(root)
 	print('\nmade branch {} in {}: `git -C {} switch {}` checks it out'.format(
 		name, path, path, name))
 
@@ -398,11 +460,33 @@ def bug_folders(work):
 		return []
 
 
+def choices(work, config):
+	"""What step 5 offers this search, read from its files alone (no `gh`):
+	`{'mode', 'routes': [choice], 'documents': [document], 'original',
+	'slug', 'bugs'}`. `plan` asks from it; `stages.py` reads an answer
+	outside it as no answer, and `github()` refuses one."""
+
+	if not config.get('repo'):
+		return {'mode': 'plain', 'routes': ['apply', 'none'], 'documents': [],
+			'original': None, 'slug': None, 'bugs': []}
+
+	original = autoopt.original_of(work, config)
+	slug = autoopt.github_slug(original.get('remote_url'))
+	bugs = bug_folders(work)
+	documents = ['optimization'] + (['tests'] if original.get('suite') else
+		[]) + (['bugs'] if bugs else []) if slug else []
+
+	return {'mode': 'repository', 'routes': (['github'] if slug else []) +
+		['branch', 'none'], 'documents': documents, 'original': original,
+		'slug': slug, 'bugs': bugs}
+
+
 def offer(work, root, config):
 	"""`{'mode', 'routes': [(choice, label, description)], 'documents':
 	[(document, label, description)], 'facts': [lines]}`."""
 
 	facts, documents = [], []
+	found = choices(work, config)
 	ended = autoopt.load_ended(root) or {}
 	winner = ended.get('winner') or {}
 	medians = ended.get('medians') or {}
@@ -410,7 +494,7 @@ def offer(work, root, config):
 		'ended_at') or '?')[:10], winner.get('label', '?'), medians.get(
 		'objective', ''), medians.get('A0'), medians.get('winner')))
 
-	if not config.get('repo'):
+	if found['mode'] == 'plain':
 		copied = config.get('copied') or []
 		facts.append('plain mode; copied from: {}'.format(', '.join(entry[
 			'source'] for entry in copied) if copied else 'not recorded (apply '
@@ -423,10 +507,8 @@ def offer(work, root, config):
 			('none', 'Not now', 'nothing is written; the change stays in the '
 			'search, and step 6 copies it out')]}
 
-	original = autoopt.original_of(work, config)
-	slug = autoopt.github_slug(original.get('remote_url'))
+	original, slug, bugs = found['original'], found['slug'], found['bugs']
 	suite = original.get('suite')
-	bugs = bug_folders(work)
 	facts.append('repository mode: {} on {} at {}'.format(original.get('path')
 		or '(original folder not recorded)', original.get('branch'),
 		(original.get('commit') or '?')[:10]))
@@ -467,7 +549,7 @@ def offer(work, root, config):
 	routes.append(('branch', 'A branch in your local repository', 'one commit '
 		'per kept change, as a new branch in {}; nothing is pushed'.format(
 		original.get('path') or 'the original')))
-	routes.append(('none', 'Not now', 'nothing is published or written; the '
+	routes.append(('none', 'Not now', 'nothing is posted or written; the '
 		'change stays in the search'))
 
 	# The names step 5 would give, both ways: the optimization PR's comes
@@ -584,18 +666,27 @@ def github(work, config):
 		fail('after.ship_documents names no document: record the user\'s '
 			'checklist (`ship.py plan`)')
 
-	slug = autoopt.github_slug(autoopt.original_of(work, config).get(
-		'remote_url'))
+	found = choices(work, config)
+	slug = found['slug']
 
 	if not slug:
 		fail('the original\'s remote is not on GitHub')
+
+	extra = [one for one in documents if one not in found['documents']]
+
+	if extra:
+		fail('after.ship_documents names {}, which this search does not offer '
+			'(the unit-test PR needs a suite from step 1, the bug report the bugs '
+			'it recorded): record the user\'s checklist again (`ship.py plan`)'
+			.format(', '.join(NAMES[one] for one in extra)))
 
 	return after, documents, slug
 
 
 def allow_source(directory):
 	"""The `--allow-source` flags the unit-test PR is rendered and pushed
-	with: one path per line of `allow-source.txt`, when the writer kept one."""
+	with: one path per line of `allow-source.txt`, when the document writer
+	kept one."""
 
 	try:
 		with open(os.path.join(directory, 'allow-source.txt'),
@@ -622,10 +713,15 @@ def render_command(work, document):
 	return [os.path.join(HERE, 'opt_pr_body.py'), directory, '--out', out]
 
 
-def post_command(work, document, slug, post, other_owner):
+def post_command(work, document, slug, post, other_owner, names=None):
+	"""The preview (or, with `post`, the post) of `document`; `names` are the
+	`--branch DOC=NAME` flags, a pushed branch's name in place of its
+	default."""
+
 	directory = folder(work, document)
 	flags = (['--post'] if post else []) + (['--other-owner'] if other_owner
 		else [])
+	named = (names or {}).get(document)
 
 	if document == 'bugs':
 		return [os.path.join(HERE, 'issue_body.py'), 'file', directory,
@@ -633,9 +729,30 @@ def post_command(work, document, slug, post, other_owner):
 
 	if document == 'tests':
 		return [os.path.join(HERE, 'tests_pr_push.py'), directory, '--repo',
-			slug] + allow_source(directory) + flags
+			slug] + allow_source(directory) + (['--remote-branch', named] if
+			named else []) + flags
 
-	return [os.path.join(HERE, 'autoopt.py'), 'pr', work] + flags
+	return [os.path.join(HERE, 'autoopt.py'), 'pr', work] + (['--branch',
+		named] if named else []) + flags
+
+
+def branch_names(values):
+	"""`--branch DOC=NAME` flags as `{document: name}`: the name the
+	optimization PR's or the unit-test PR's branch is pushed under, when the
+	default is taken on the remote."""
+
+	names = {}
+
+	for value in values or []:
+		document, _, name = value.partition('=')
+
+		if document not in ('optimization', 'tests') or not name.strip():
+			fail('--branch takes optimization=NAME or tests=NAME; got {!r}'
+				.format(value))
+
+		names[document] = name.strip()
+
+	return names
 
 
 def call(command):
@@ -651,17 +768,28 @@ def render_document(work, document):
 	directory = folder(work, document)
 
 	if not os.path.exists(os.path.join(directory, 'body.title')):
-		return 1, ('{} has no body.title: the writer renders it once with '
-			'--title ({})'.format(directory, REFERENCES[document]))
+		return 1, ('{} has no body.title: the document writer renders it once '
+			'with --title ({})'.format(directory, REFERENCES[document]))
 
 	return call(render_command(work, document))
 
 
-def inputs_digest(work, documents):
-	"""A digest of everything the chosen documents are rendered from: every
-	file in their folders except what is rendered or posted from them."""
+# The answers that name the pushed branches and the fork, which the user
+# reviews with the documents.
+DIGEST_AFTER = ('branch_prefix', 'pr_remote', 'pr_head_owner')
 
+
+def inputs_digest(work, documents, after, names=None):
+	"""A digest of everything the chosen documents are rendered and pushed
+	from: every file in their folders except what is rendered or posted from
+	them, the `after` answers of DIGEST_AFTER, the `--branch` names, and the
+	winner, so a promotion after the rehearsal makes it stale."""
+
+	ended = autoopt.load_ended(os.path.join(work, 'autooptimize')) or {}
 	hasher = hashlib.sha256()
+	hasher.update(json.dumps([{key: after.get(key) for key in DIGEST_AFTER},
+		names or {}, (ended.get('winner') or {}).get('id')], sort_keys=True
+		).encode() + b'\0')
 
 	for document in documents:
 		base = folder(work, document)
@@ -696,14 +824,20 @@ def brief(args):
 	autoopt.require_ended(root, 'ship')
 	after, documents, slug = github(work, config)
 	original = autoopt.original_of(work, config)
-	lines = ['You write the GitHub documents for step 5 of the ended search in '
-		'{}: {}. Write their inputs and render them; post nothing, which the '
-		'user approves after one review of all of them.'.format(work,
+	lines = ['You are the document writer for step 5 of the ended search in '
+		'{}: you write {}. Write their inputs and render them; post nothing, '
+		'which the user approves after one review of all of them.'.format(work,
 		', '.join(NAMES[one] for one in documents)), '',
 		'AO={}'.format(HERE), 'WORK={}'.format(work), '',
 		'Read {}/../references/documents.md first, then each document\'s '
 		'reference before its work. They open on {} (branch {}).'.format(HERE,
-		slug, original.get('branch'))]
+		slug, original.get('branch')), '',
+		'Inputs already in a document\'s folder (its tables, prose.md, '
+		'messages/, bugs.tsv) are kept and completed, never regenerated over: '
+		'a document writer before you may have started them. Run '
+		'`opt_pr_body.py --template` only when prose.md does not exist yet, and '
+		'`opt_pr_tables.py` only when the folder has no branch.json or a '
+		'refusal asks for it (it keeps the messages/ files it finds).']
 
 	if 'bugs' in documents:
 		lines += ['', '**The bug report** ({}): turn each folder of {} into a '
@@ -722,11 +856,11 @@ def brief(args):
 
 	if 'optimization' in documents:
 		lines += ['', '**The optimization PR** ({}): `python3 $AO/opt_pr_tables.py '
-			'$WORK`, then `opt_pr_body.py {} --template` into prose.md, fill it '
-			'from the kept changes\' diffs and READMEs, write each '
-			'messages/<id>.txt the tables left as a skeleton, and render it '
-			'with a title.'.format(REFERENCES['optimization'], folder(work,
-			'optimization'))]
+			'$WORK`, then, when there is no prose.md yet, `opt_pr_body.py {} '
+			'--template` into prose.md; fill it from the kept changes\' diffs '
+			'and READMEs, write each messages/<id>.txt the tables left as a '
+			'skeleton, and render it with a title.'.format(REFERENCES[
+			'optimization'], folder(work, 'optimization'))]
 
 	lines += ['', 'Rules: every number comes from a table, so prose writes a '
 		'token where it needs one; no document names the tool, the lab, or the '
@@ -775,7 +909,7 @@ def status(args):
 		print('{:20} {}'.format(NAMES[document], state))
 
 	if record:
-		current = inputs_digest(work, documents)
+		current = inputs_digest(work, documents, after, record.get('branches'))
 		print('rehearsal: digest {}{}{}'.format(record['digest'], '' if
 			record.get('ok') else ', with problems', '' if current == record[
 			'digest'] else '; the inputs changed since (rehearse again)'))
@@ -812,6 +946,7 @@ def rehearse(args):
 	autoopt.require_ended(root, 'ship')
 	after, documents, slug = github(work, config)
 	prefix_problem(config)
+	names = branch_names(args.branch)
 	scratch = autoopt.work_path(work, 'ship', 'rehearsal')
 	os.makedirs(scratch, exist_ok=True)
 	problems, lines = [], []
@@ -821,7 +956,8 @@ def rehearse(args):
 		code, out = render_document(work, document)
 
 		if code == 0:
-			code, out = call(post_command(work, document, slug, False, False))
+			code, out = call(post_command(work, document, slug, False, False,
+				names))
 
 		publish.write(os.path.join(scratch, '{}.txt'.format(document)), out +
 			'\n')
@@ -839,10 +975,11 @@ def rehearse(args):
 		elif autoopt.ship_posted(work, document):
 			lines.append('  posted already')
 
-	digest = inputs_digest(work, documents)
+	digest = inputs_digest(work, documents, after, names)
 	publish.write_json(rehearsal_path(work), {'digest': digest, 'documents':
-		documents, 'ok': not problems, 'problems': problems, 'at':
-		autoopt.now()})
+		documents, 'branches': names, 'ok': not problems, 'problems': problems,
+		'at': autoopt.now()})
+	autoopt.refresh_notes(root)
 	print('\n'.join(lines))
 
 	if problems:
@@ -851,9 +988,11 @@ def rehearse(args):
 		return 1
 
 	print('\nShow the user every document above together. Once they ask for '
-		'posting, `python3 {} post {} all --approved --digest {}` posts them '
+		'posting, `python3 {} post {} all --approved --digest {}{}` posts them '
 		'in this order, filling each number into the next.'.format(
-		os.path.join(HERE, 'ship.py'), work, digest))
+		os.path.join(HERE, 'ship.py'), work, digest, ''.join(
+		' --branch {}={}'.format(document, name) for document, name in
+		sorted(names.items()))))
 	return 0
 
 
@@ -861,10 +1000,7 @@ def post(args):
 	work, root, config = search(args.work)
 	autoopt.require_ended(root, 'ship')
 	after, documents, slug = github(work, config)
-
-	if args.which != 'all':
-		fail('`post all` posts every chosen document, after one review of all '
-			'of them')
+	names = branch_names(args.branch)
 
 	if not args.approved or not args.digest:
 		fail('posting needs --approved and the --digest of the rehearsal the '
@@ -884,9 +1020,17 @@ def post(args):
 	if not record.get('ok'):
 		fail('the last rehearsal had problems; fix them and rehearse again')
 
-	if inputs_digest(work, documents) != args.digest:
+	if (record.get('branches') or {}) != names:
+		fail('--branch {} is not what the rehearsal the user reviewed pushed '
+			'({}): give the same --branch flags, or rehearse again with these'
+			.format(' '.join('{}={}'.format(*item) for item in sorted(
+			names.items())) or '(none)', ' '.join('{}={}'.format(*item) for item
+			in sorted((record.get('branches') or {}).items())) or 'none'))
+
+	if inputs_digest(work, documents, after, names) != args.digest:
 		fail('the documents\' inputs changed since the rehearsal the user '
-			'reviewed: rehearse again and show them the new batch')
+			'reviewed (their files, or after.branch_prefix, after.pr_remote or '
+			'after.pr_head_owner): rehearse again and show them the new batch')
 
 	if record.get('documents') != documents:
 		fail('the chosen documents changed since the rehearsal: rehearse again')
@@ -903,15 +1047,18 @@ def post(args):
 
 		if code == 0:
 			code, out = call(post_command(work, document, slug, True,
-				args.other_owner))
+				args.other_owner, names))
 
 		print('{}:\n{}'.format(NAMES[document], out))
 
 		if code:
+			autoopt.refresh_notes(root)
 			fail('{} was not posted; fix the cause and run the same command '
 				'again: what was posted is skipped'.format(NAMES[document]))
 
 		autoopt.hold_reopen(root, 'step 5', 'GitHub documents posted')
+
+	autoopt.refresh_notes(root)
 
 	return 0
 
@@ -921,26 +1068,44 @@ def main(argv=None):
 		formatter_class=argparse.RawDescriptionHelpFormatter)
 	commands = parser.add_subparsers(dest='command', required=True)
 
-	for name, function, text in (('brief', brief, 'the writer agent\'s prompt '
-			'for the chosen GitHub documents'), ('status', status, 'where each '
-			'chosen document stands'), ('rehearse', rehearse, 'render every '
-			'chosen document and preview it; posts nothing')):
+	branch_help = ('DOC=NAME: push the optimization PR\'s (optimization=NAME) '
+		'or the unit-test PR\'s (tests=NAME) branch under NAME instead of its '
+		'default, when that is taken on the remote; repeatable, and the same '
+		'for rehearse and post')
+	id_help = 'the iteration to ship (default best: ended.json\'s winner)'
+
+	for name, function, text in (('brief', brief, 'the document writer\'s '
+			'prompt for the chosen GitHub documents'), ('status', status, 'where '
+			'each chosen document stands')):
 		sub = commands.add_parser(name, help=text)
 		sub.add_argument('work')
 		sub.set_defaults(func=function)
 
+	sub = commands.add_parser('rehearse', help='render every chosen document '
+		'and preview it; posts nothing')
+	sub.add_argument('work')
+	sub.add_argument('--branch', action='append', default=[],
+		metavar='DOC=NAME', help=branch_help)
+	sub.set_defaults(func=rehearse)
+
 	sub = commands.add_parser('render', help='render every chosen document '
 		'again, in posting order')
 	sub.add_argument('work')
-	sub.add_argument('--only', choices=ORDER)
+	sub.add_argument('--only', choices=ORDER, help='render this document '
+		'alone')
 	sub.set_defaults(func=render)
 
 	sub = commands.add_parser('post', help='post every chosen document, once '
 		'the user approved the rehearsal')
 	sub.add_argument('work')
-	sub.add_argument('which', choices=('all',))
-	sub.add_argument('--approved', action='store_true')
-	sub.add_argument('--digest')
+	sub.add_argument('which', choices=('all',), help='every chosen document; '
+		'none is posted on its own')
+	sub.add_argument('--approved', action='store_true', help='the user asked '
+		'for posting after seeing every document of the rehearsal')
+	sub.add_argument('--digest', help='the digest the rehearsal the user '
+		'reviewed printed')
+	sub.add_argument('--branch', action='append', default=[],
+		metavar='DOC=NAME', help=branch_help)
 	sub.add_argument('--other-owner', action='store_true', help='confirm a '
 		'repository another account owns, once the user has seen it')
 	sub.set_defaults(func=post)
@@ -948,23 +1113,25 @@ def main(argv=None):
 	sub = commands.add_parser('plan', help='what this search can ship, and '
 		'the question to ask the user')
 	sub.add_argument('work')
-	sub.add_argument('--json', action='store_true')
+	sub.add_argument('--json', action='store_true', help='print the facts, '
+		'routes, documents and branch names as JSON')
 	sub.set_defaults(func=plan)
 
 	sub = commands.add_parser('apply', help='a plain search: write the '
 		'change into the original files (preview without --yes)')
 	sub.add_argument('work')
-	sub.add_argument('--id', default='best')
+	sub.add_argument('--id', default='best', help=id_help)
 	sub.add_argument('--to', help='the folder the change applies under, for a '
 		'search that does not record where its files came from')
-	sub.add_argument('--yes', action='store_true', help='write the files')
+	sub.add_argument('--yes', action='store_true', help='write the files (or '
+		'record them as applied, when they hold the change already)')
 	sub.set_defaults(func=apply)
 
 	sub = commands.add_parser('branch', help='a repository search: a branch '
 		'in the original with one commit per kept change (preview without '
 		'--yes)')
 	sub.add_argument('work')
-	sub.add_argument('--id', default='best')
+	sub.add_argument('--id', default='best', help=id_help)
 	sub.add_argument('--name', help='the branch (default optimized-<date>)')
 	sub.add_argument('--repo', help='the original repository, when the '
 		'search does not record it')

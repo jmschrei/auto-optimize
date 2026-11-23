@@ -4219,8 +4219,9 @@ def require_open(root, what, after_end=False):
 
 	if ended is not None and not after_end:
 		fail('the search ended on {}, so it cannot {}: `end --reopen` '
-			'reopens it (refused once the winner is published), and an iteration '
-			'made after the end takes --after-end (references/step4-final.md)'
+			'reopens it (refused once step 5 has shipped the winner), and an '
+			'iteration made after the end takes --after-end '
+			'(references/step4-final.md)'
 			.format(ended.get('ended_at'), what))
 
 
@@ -4587,7 +4588,7 @@ def end(args):
 
 def machine_record():
 	"""The machine `end` runs on, which is the one the search measured on:
-	what a published document says the numbers came from. Linux files are
+	what a posted document says the numbers came from. Linux files are
 	read where they exist; a value that cannot be read is None."""
 
 	def first(path, prefix, separator):
@@ -4617,8 +4618,8 @@ def reopen_lock_path(root):
 
 def reopen_holds(root):
 	"""Why the ended search may no longer be reopened: the `holds` of
-	`reopen-lock.json`, each `{"by", "reason"}`. Whatever published the
-	winner writes it (`hold_reopen`); [] with no file."""
+	`reopen-lock.json`, each `{"by", "reason"}`. Whatever step 5 shipped
+	the winner with writes it (`hold_reopen`); [] with no file."""
 
 	try:
 		with open(reopen_lock_path(root)) as handle:
@@ -4628,7 +4629,7 @@ def reopen_holds(root):
 
 
 def hold_reopen(root, by, reason):
-	"""Record that `by` published the winner, so `end --reopen` refuses;
+	"""Record that `by` shipped the winner, so `end --reopen` refuses;
 	a `reason` of None withdraws `by`'s hold."""
 
 	holds = [hold for hold in reopen_holds(root) if hold.get('by') != by]
@@ -4645,7 +4646,7 @@ def hold_reopen(root, by, reason):
 def end_reopen(root, config):
 	"""Undo the ending: archive ended.json as `ended-<n>.json`, restart the
 	publisher, and let `loop`, `brief` and `new` work again. Refused once a
-	winner is published (`reopen-lock.json`). The clean-up is not undone
+	winner is shipped (`reopen-lock.json`). The clean-up is not undone
 	(`restore --id`)."""
 
 	ended = load_ended(root)
@@ -4673,11 +4674,33 @@ def end_reopen(root, config):
 	if os.path.exists(summary):
 		os.replace(summary, os.path.join(root, 'ended-{}.md'.format(number)))
 
+	# How to ship was answered for the winner just set aside: step 5 asks
+	# again once the search ends on the next one. No hold means nothing was
+	# shipped, so the answer is all that goes.
+	shipped = None
+
+	with Lock(root):
+		raw = read_json(os.path.join(root, 'config.json'))
+		after = raw.get('after') or {}
+
+		if after.get('ship') not in (None, 'ask'):
+			shipped = after['ship']
+			after['ship'] = 'ask'
+			raw['after'] = after
+			write_json(os.path.join(root, 'config.json'), raw)
+
 	code, output = run_dashboard(root, '--start')
 	print('reopened: ended.json is now ended-{}.json; the publisher {}. The '
 		'clean-up is not undone: `restore --id` brings a checkout back.'.format(
 		number, 'is running' if code == 0 else 'did not start ({})'.format(
 		output[-120:])))
+
+	if shipped:
+		print('after.ship was {}, the answer for the winner set aside; it is '
+			'ask again, so step 5 asks how to ship once the search ends '
+			'again.'.format(shipped))
+
+	refresh_notes(root)
 
 	return 0
 
@@ -6418,6 +6441,8 @@ def config_change(args):
 
 	print('recorded in {}, *Rules added during the search*'.format(
 		spec_path(root)))
+	# `after.ship` and the other answers move the stages.
+	refresh_notes(root)
 
 	if any(key.startswith('gates.') for key, _, _ in changes):
 		print('a gate changed: every earlier pass and FAIL was judged under '
@@ -9943,7 +9968,7 @@ def fill_commits(body, shas, slug):
 
 
 def measured_problem(root, config, identifier):
-	"""Why `identifier` cannot be published, or None: it passed every gate,
+	"""Why `identifier` cannot be shipped, or None: it passed every gate,
 	its branch is the commit the runner measured, and its checkout holds no
 	edit that was never measured."""
 
@@ -9951,7 +9976,7 @@ def measured_problem(root, config, identifier):
 
 	if result is None or result.get('status') != 'ok':
 		return ('{} is {}; only an iteration that passed every gate can be '
-			'published'.format(label(root, identifier), (result or {}).get(
+			'shipped'.format(label(root, identifier), (result or {}).get(
 			'status', 'unfinished')))
 
 	head = git('-C', os.path.join(root, 'repo.git'), 'rev-parse', branch_of(
@@ -9963,7 +9988,7 @@ def measured_problem(root, config, identifier):
 			.format(branch_of(root, identifier), head[:10], label(root,
 			identifier), result['commit'][:10]))
 
-	# What is published is the commit; an edit left in a repository-mode
+	# What is shipped is the commit; an edit left in a repository-mode
 	# checkout (`src/`, which holds nothing else) is one the subagent never
 	# measured, so it is named. A plain-mode iteration's folder also holds
 	# its records, which are no edit.
@@ -10315,8 +10340,12 @@ def pr(args):
 
 		return 0
 
-	if git('-C', bare, 'ls-remote', '--heads', push_url, 'refs/heads/' +
-			branch_name).strip():
+	# A branch that holds these very commits is this PR's own, pushed by a
+	# post that stopped before `gh pr create`: it is opened, not pushed again.
+	there = git('-C', bare, 'ls-remote', '--heads', push_url, 'refs/heads/' +
+		branch_name).split()[:1]
+
+	if there and there != [made['tip']]:
 		fail('branch {} already exists on {}; nothing was pushed. Pass '
 			'--branch with a name that is not taken.'.format(branch_name,
 			push_slug))
@@ -10327,8 +10356,10 @@ def pr(args):
 	if problem:
 		fail('{}; nothing was pushed'.format(problem))
 
-	git('-C', bare, 'push', '-q', push_url, '{}:refs/heads/{}'.format(
-		made['tip'], branch_name))
+	if not there:
+		git('-C', bare, 'push', '-q', push_url, '{}:refs/heads/{}'.format(
+			made['tip'], branch_name))
+
 	hold_reopen(root, 'the optimization PR', 'pushed to {} as {}'.format(
 		push_slug, branch_name))
 
@@ -10340,8 +10371,9 @@ def pr(args):
 			posted_path], capture_output=True, text=True)
 
 	if opened.returncode != 0:
-		fail('pushed {} but gh could not open the PR: {}\nOpen it with: gh pr '
-			'create --repo {} --base {} --head {}'.format(branch_name,
+		fail('pushed {} but gh could not open the PR: {}\nThe same command '
+			'again opens it on the branch already pushed (or: gh pr create '
+			'--repo {} --base {} --head {})'.format(branch_name,
 			opened.stderr.strip(), slug, target_branch, head_ref))
 
 	link = opened.stdout.strip().splitlines()[-1]
@@ -10559,14 +10591,62 @@ def archive(args):
 			'## What produced the gains', '', '<<FILL: the gain by category>>',
 			'', '## What was tried and failed', '', '<<FILL>>', '',
 			'## Compute', '', '<<FILL>>', '', '## Where things are', '',
-			'Code and patch: `{}`.'.format(dest), ''])
+			'Code and patch: `{}`.'.format(dest), ''] + [part for line in
+			shipped_lines(work) for part in (line, '')])
 		with open(report, 'w') as out:
 			out.write(text)
 
 		print('wrote {}'.format(report))
 
 	print('archived {} to {}'.format(label(root, identifier), dest))
+	refresh_notes(root)
 	return 0
+
+
+SHIP_NAMES = {'bugs': 'The bug report', 'tests': 'The unit-test PR',
+	'optimization': 'The optimization PR'}
+
+
+def shipped_lines(work):
+	"""What step 5 did, for the final report's *Where things are*, read from
+	its records: the files `ship.py apply` wrote, the branch `ship.py branch`
+	made, and the URL of each document posted; a `<<FILL` naming them when
+	it recorded none."""
+
+	lines = []
+
+	for name in ('applied.json', 'branch.json'):
+		try:
+			record = read_json(work_path(work, 'ship', name))
+		except OSError:
+			continue
+
+		where = work_path(work, 'ship', name)
+
+		if name == 'branch.json':
+			lines.append('Branch `{}` in `{}`: {} commit(s), up to {} (record '
+				'`{}`).'.format(record.get('branch'), record.get('repo'),
+				len(record.get('commits') or []), record.get('label'), where))
+		else:
+			names = lambda rows: ', '.join('`{}`'.format(row.get(
+				'destination')) for row in rows)
+			written = record.get('files') or []
+			already = record.get('already') or []
+			parts = (['written: ' + names(written)] if written else []) + (
+				['holding it already: ' + names(already)] if already else [])
+			lines.append('{} applied to the original files; {} (record `{}`, '
+				'patch `{}`).'.format(record.get('label'), '; '.join(parts),
+				where, record.get('patch')))
+
+	for document in SHIP_DOCUMENTS:
+		posted = ship_posted(work, document)
+
+		if posted:
+			lines.append('{}: {}'.format(SHIP_NAMES[document], posted['url']))
+
+	return lines or ['<<FILL: what step 5 did: the files it wrote '
+		'(ship/applied.json), the branch it made (ship/branch.json), the URL of '
+		'each document it posted, or that the user chose not to ship>>']
 
 
 def path(args):
@@ -12431,7 +12511,7 @@ def build_parser():
 		'timing can take minutes)')
 	ender.add_argument('--reopen', action='store_true', help='undo the '
 		'ending: archive ended.json as ended-<n>.json, restart the '
-		'publisher; refused once the winner is published '
+		'publisher; refused once step 5 has shipped the winner '
 		'(reopen-lock.json). The clean-up stays')
 	ender.set_defaults(func=end)
 

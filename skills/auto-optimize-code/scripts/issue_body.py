@@ -973,7 +973,7 @@ def render_command(args):
 				numbers), len(text), args.limit))
 
 	# The body and its title, after the title and vocabulary checks every
-	# published document gets; a problem from either writes nothing.
+	# posted document gets; a problem from either writes nothing.
 	if publish.emit('issue_body', body, problems, title, args.out):
 		return 1
 

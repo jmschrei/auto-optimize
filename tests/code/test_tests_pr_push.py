@@ -287,6 +287,22 @@ def checks(suite, root):
 		and '--other-owner' in err and branches(upstream) == ['main']
 		and 'pr create' not in calls(), err)
 
+	print('\na fork the original knows and the clone does not')
+	git(os.path.join(root, 'original'), 'remote', 'add', 'myfork',
+		'https://github.com/me/pkg.git')
+	write_json(config, {'after': {'pr_remote': 'myfork', 'pr_head_owner': 'me',
+		'branch_prefix': 'yes'}})
+	code, out, err = push()
+	suite.check('after.pr_remote names a remote of the original: the preview '
+		'reads its URL there, as autoopt.py pr does', code == 0 and '-> {} on '
+		'remote myfork (https://github.com/me/pkg.git, from after.pr_remote), '
+		'head me:{}'.format(BRANCH, BRANCH) in out, err + out)
+	code, out, err = push('--post')
+	suite.check('and --post pushes to that URL', code == 0 and BRANCH in
+		branches(fork) and branches(upstream) == ['main'], err + out)
+	os.remove(os.path.join(ship, 'pr.json'))
+	git(fork, 'branch', '-D', BRANCH)
+
 	print('\nposting through a fork')
 	git(suite_dir, 'remote', 'add', 'fork', 'https://github.com/me/pkg.git')
 	write_json(config, {'after': {'pr_remote': 'fork', 'pr_head_owner': 'me',

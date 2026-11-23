@@ -1383,12 +1383,12 @@ def check_after_page(root, work, args=None):
 			check('its tooltip carries the paired timing',
 				'paired-9of9' in (page.get_attribute('#ended-line', 'title') or ''))
 			strip = page.inner_text('#stage-strip')
-			words = [part.rsplit(' ', 1) for part in strip.split(' · ')]
+			words = [part.split(' ', 1) for part in strip.split(' · ')]
 			equal('six stages, in order', [name for name, _ in words],
 				['interview', 'setup', 'search', 'final', 'ship', 'finish'])
-			check('each with one status word', all(word in ('done', 'running',
-				'pending') for _, word in words) and 'finish pending' in strip,
-				strip)
+			check('each with its status in stages.py\'s words', all(word in (
+				'complete', 'running', 'not started') for _, word in words)
+				and 'finish not started' in strip, strip)
 			boxes = page.evaluate("""() => ['ended-line', 'stage-strip'].map((id) => {
 				const node = document.getElementById(id);
 				const box = node.getBoundingClientRect();
@@ -2136,7 +2136,9 @@ def run(base, snapshot, resources, exported, args):
 				return [xs, legend]; }''')
 			equal('a search begun before the miner falls back to tree generations',
 				fallback[0], generations)
-			check('and says so in the legend', 'generation' in fallback[1], fallback[1])
+			check('and says so in the legend, as the tree\'s depth',
+				'depth boundary: the next level of the search tree' in fallback[1],
+				fallback[1])
 
 		hues = page.evaluate('''() => {
 			const s = autooptDashboard.state.snapshot, c = autooptDashboard.colour;

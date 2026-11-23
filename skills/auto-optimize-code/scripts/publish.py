@@ -1,4 +1,4 @@
-"""What the scripts that write and publish a document share: `issue_body.py`,
+"""What the scripts that write and post a document share: `issue_body.py`,
 `tests_pr_body.py`, `tests_pr_push.py`, `opt_pr_body.py`, `ship.py` and
 `autoopt.py pr`. Not run on its own.
 
@@ -216,7 +216,7 @@ def link_files(paths, placeholder, value):
 
 
 def account_problem(repo, other_owner):
-	"""Why `repo` (OWNER/REPO) may not be published to yet, or None: `gh` must
+	"""Why `repo` (OWNER/REPO) may not be posted to yet, or None: `gh` must
 	answer, and an owner other than the logged-in account needs `other_owner`,
 	set once the user has confirmed it."""
 

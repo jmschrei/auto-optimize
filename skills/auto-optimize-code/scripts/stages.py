@@ -147,12 +147,42 @@ PENDING = {'apply': 'the change is not applied yet',
 	'branch': 'the branch is not made yet'}
 
 
+def unoffered(work, after):
+	"""Why the user's answer is none step 5 offers this search (a route of
+	the other mode, a document without its source), or None."""
+
+	import ship
+
+	config = read(os.path.join(work, 'autooptimize', 'config.json'), {})
+
+	try:
+		found = ship.choices(work, config)
+	except (RuntimeError, OSError, ValueError, KeyError):
+		return None
+
+	if after.get('ship') not in found['routes']:
+		return 'after.ship is {}, which this search does not offer'.format(
+			after.get('ship'))
+
+	documents = after.get('ship_documents') or []
+	extra = [one for one in documents if one not in found['documents']]
+
+	if after.get('ship') == 'github' and (extra or not documents):
+		return 'after.ship_documents {}'.format('names {}, which this search '
+			'does not offer'.format(', '.join(extra)) if extra else 'is empty')
+
+	return None
+
+
 def ship(work, root, state):
 	"""Step 5. `after.ship` is the user's answer; the step is complete when
-	what it asked for is done: `ship/applied.json`, `ship/branch.json`, or
-	every chosen GitHub document posted."""
+	what it asked for is done: `ship/applied.json` or `ship/branch.json` of
+	the winner `ended.json` names, or every chosen GitHub document posted. An
+	answer this search is not offered is no answer."""
 
-	if not autoopt.load_ended(root):
+	ended = autoopt.load_ended(root)
+
+	if not ended:
 		return NOT_STARTED, '', {}
 
 	after = after_of(work)
@@ -162,14 +192,28 @@ def ship(work, root, state):
 			after.get('branch_prefix') not in ('yes', 'no')):
 		return NOT_STARTED, 'ask the user how to ship', {}
 
+	wrong = unoffered(work, after)
+
+	if wrong:
+		return NOT_STARTED, 'ask the user how to ship: {}'.format(wrong), {}
+
 	if choice == 'none':
 		return COMPLETE, SHIPPED['none'], {}
 
 	if choice in ('apply', 'branch'):
 		record = autoopt.work_path(work, 'ship', '{}.json'.format('applied'
 			if choice == 'apply' else 'branch'))
+		shipped = read(record)
+		winner = (ended.get('winner') or {}).get('id')
 
-		if exists(record):
+		if shipped and shipped.get('id', winner) != winner:
+			return RUNNING, '{} {}; the winner is now {}'.format(
+				'the original files hold' if choice == 'apply' else 'the '
+				'branch holds', shipped.get('label') or shipped.get('id'), (
+				ended.get('winner') or {}).get('label') or winner), {choice:
+				record}
+
+		if shipped is not None:
 			return COMPLETE, SHIPPED[choice], {choice: record}
 
 		return RUNNING, PENDING[choice], {}
@@ -187,12 +231,22 @@ def ship(work, root, state):
 
 
 def finish(work, root, state):
+	"""Step 6: complete once the final report holds no `<<FILL` mark;
+	`archive` writes it with several."""
+
 	report = autoopt.work_path(work, 'finish', 'final-report.md')
 
-	if exists(report):
-		return COMPLETE, mtime(report) or '', {'report': report}
+	try:
+		with open(report, encoding='utf-8') as handle:
+			marks = handle.read().count('<<FILL')
+	except OSError:
+		return NOT_STARTED, '', {}
 
-	return NOT_STARTED, '', {}
+	if marks:
+		return RUNNING, 'final-report.md has {} <<FILL mark(s) left'.format(
+			marks), {'report': report}
+
+	return COMPLETE, mtime(report) or '', {'report': report}
 
 
 STAGES = (('interview', interview), ('setup', setup), ('search', search),
@@ -247,18 +301,66 @@ NEXT = {
 		'<log>',
 	'ship': 'references/step5-ship.md: python3 {ao}/ship.py plan {w}, then '
 		'ask the user how to ship',
-	'finish': 'references/step6-finish.md: the final report, then prune',
+	'finish': 'references/step6-finish.md: python3 {ao}/autoopt.py archive {w} '
+		'if it has not run, the final report (every <<FILL mark), then prune',
 }
 
-# Step 5 once the user has answered, by `after.ship`.
+# Step 5 once the user has answered, by `after.ship`; `github` is
+# `github_move`'s.
 SHIP_NEXT = {
 	'apply': 'python3 {ao}/ship.py apply {w}: show the user the preview, then '
 		'--yes on their word',
 	'branch': 'python3 {ao}/ship.py branch {w}: show the user the preview, '
 		'then --yes on their word',
-	'github': 'python3 {ao}/ship.py status {w}: the documents, then '
-		'references/step5-ship.md, *Review, then post all*',
 }
+REVIEW = '(`references/step5-ship.md`, *Review, then post all*)'
+
+
+def github_move(work, after):
+	"""The next move of the GitHub route, from `ship/rehearsal.json` and
+	what is posted: the document writer, a rehearsal, the user's review, or
+	the post (again, when one stopped part way)."""
+
+	import ship
+
+	documents = [one for one in autoopt.SHIP_DOCUMENTS if one in (after.get(
+		'ship_documents') or [])]
+	posted = [one for one in documents if autoopt.ship_posted(work, one)]
+	record = read(autoopt.work_path(work, 'ship', 'rehearsal.json'))
+	command = 'python3 {}'.format(os.path.join(HERE, 'ship.py'))
+	current = record and record.get('ok') and record.get('documents') == \
+		documents and record.get('digest') == ship.inputs_digest(work,
+		documents, after, record.get('branches'))
+	post = '{} post {} all --approved --digest {}{}'.format(command, work,
+		(record or {}).get('digest'), ''.join(' --branch {}={}'.format(*item)
+		for item in sorted(((record or {}).get('branches') or {}).items())))
+
+	if posted and current:
+		return ('{} of {} document(s) posted and the post stopped: fix its '
+			'cause, then the same command again, which skips what was posted '
+			'(add --other-owner if the user confirmed the repository): {} {}'
+			.format(len(posted), len(documents), post, REVIEW))
+
+	if current:
+		return ('show the user every document of the rehearsal together '
+			'(ship/<folder>/body.md and ship/rehearsal/<document>.txt; {} '
+			'status {}), then, once they ask for posting: {} {}'.format(command,
+			work, post, REVIEW))
+
+	rendered = all(os.path.exists(os.path.join(ship.folder(work, one),
+		'body.title')) for one in documents)
+
+	if not rendered and not record:
+		return ('{} brief {}: spawn the document writer from its prompt, unless '
+			'one is at work; it reports once `ship.py rehearse` exits 0 '
+			'(`references/step5-ship.md`, *The document writer*)'.format(command,
+			work))
+
+	return ('{} rehearse {}: {}; fix what it lists, or send it to the document '
+		'writer (spawn one from `ship.py brief` if none is at work), then show '
+		'the user the new batch {}'.format(command, work, 'no rehearsal yet' if
+		not record else 'the last rehearsal had problems' if not record.get(
+		'ok') else 'the inputs changed since the last rehearsal', REVIEW))
 
 
 def after_of(work):
@@ -427,10 +529,14 @@ def next_action(work, rows):
 			return name, 'agent', SHIP_NEXT[after['ship']].format(ao=HERE,
 				w=work)
 
+		if name == 'ship' and status != NOT_STARTED and after.get('ship') == \
+				'github':
+			return name, 'agent', github_move(work, after)
+
 		if name == 'finish' and not config.get('repo') and not exists(
 				autoopt.work_path(work, 'finish', 'archive', 'idea.patch')):
-			return name, 'run', '{} archive {}'.format(os.path.join(HERE,
-				'autoopt.py'), work)
+			return name, 'run', 'python3 {} archive {}'.format(os.path.join(
+				HERE, 'autoopt.py'), work)
 
 		return name, 'agent', NEXT[name].format(ao=HERE, w=work)
 

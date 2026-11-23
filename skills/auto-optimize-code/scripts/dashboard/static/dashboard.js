@@ -2020,7 +2020,7 @@ function renderMainLegend(dense, n) {
 		state.showStages ? el('span', { class: 'legend-item',
 			dataset: { key: 'stage-boundary' } }, [markerKey(resolved('--purple'), 'dashed'),
 			minedStages() ? 'stage boundary: the idea miner\'s next batch of ideas'
-				: 'stage boundary: the next generation of the search tree']) : null,
+				: 'depth boundary: the next level of the search tree']) : null,
 		el('span', { class: 'legend-item', dataset: { key: 'frontier-point' } }, [
 			el('span', { class: 'mark-key', style: 'display:inline-flex;width:12px;'
 				+ 'height:12px;align-items:center;justify-content:center' }, [
@@ -3043,8 +3043,7 @@ function scopedFrontier() {
 }
 
 /* The ending in the topbar and the stages as text, both from the
-   search's own state files. */
-const STAGE_WORD = { complete: 'done', running: 'running', 'not started': 'pending' };
+   search's own state files, in stages.py's own words. */
 
 function renderAfterLines(after) {
 	const ended = after.ended;
@@ -3061,7 +3060,7 @@ function renderAfterLines(after) {
 	const strip = $('stage-strip');
 	strip.hidden = !(after.stages || []).length;
 	strip.textContent = (after.stages || []).map(([name, status]) =>
-		`${name} ${STAGE_WORD[status] || status}`).join(' · ');
+		`${name} ${status}`).join(' · ');
 }
 
 function renderSummary() {
