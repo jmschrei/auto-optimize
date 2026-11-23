@@ -9,7 +9,7 @@
 			"name": "auto-optimize",
 			"source": "./",
 			"description": "Search for a faster, leaner or smaller implementation of code by running many small measured experiments, each in its own git worktree, and keeping what survives.",
-			"version": "0.1.0"
+			"version": "1.0.0"
 		}
 	]
 }

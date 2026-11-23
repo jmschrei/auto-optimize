@@ -224,11 +224,11 @@ def test_installations_finds_user_project_and_plugin_copies(home):
 		'.claude' / 'skills'), symlink=True)
 
 	plugin = home / 'plugins' / 'cache' / 'auto-optimize' / 'auto-optimize' / \
-		'0.1.0'
+		'1.0.0'
 	make_skill(str(plugin / 'skills' / 'auto-optimize-code'))
 	(home / 'plugins' / 'installed_plugins.json').write_text(json.dumps(
 		{'version': 2, 'plugins': {cli.PLUGIN_ID: [{'scope': 'user',
-			'installPath': str(plugin), 'version': '0.1.0'}]}}))
+			'installPath': str(plugin), 'version': '1.0.0'}]}}))
 
 	found = cli.installations()
 	modes = sorted((item['scope'], item['mode']) for item in found)
@@ -262,11 +262,11 @@ def test_an_earlier_copy_named_auto_optimize_is_flagged(home, capsys):
 		('auto-optimize', True)]
 
 	assert cli.main(['list']) == 0
-	assert 'before 0.1.0' in capsys.readouterr().out
+	assert 'before 1.0.0' in capsys.readouterr().out
 
 	cli.main(['doctor'])
 	out = capsys.readouterr().out
-	assert 'installed skills: none' in out and 'before 0.1.0' in out
+	assert 'installed skills: none' in out and 'before 1.0.0' in out
 
 
 def test_doctor_passes_over_the_installers_own_environment(tmp_path,

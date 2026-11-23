@@ -1,6 +1,6 @@
 {
 	"name": "auto-optimize",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"description": "Search for a faster, leaner or smaller implementation of code by running many small measured experiments, each in its own git worktree, and keeping what survives.",
 	"author": {
 		"name": "Jacob Schreiber",
