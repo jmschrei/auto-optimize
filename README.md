@@ -3,51 +3,46 @@
 [![CI](https://github.com/jmschrei/auto-optimize/actions/workflows/ci.yml/badge.svg)](https://github.com/jmschrei/auto-optimize/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+[[Example Dashboard](https://claude.ai/artifact/724GcNKDAktnrgNkGxwh2f)] [[Glossay-Annotated Dashboard](https://claude.ai/artifact/S1nrSF1CSE3KLpZBEDxomB)]
+
 Historically, the task of improving software has been performed by humans who knew
 too much about how computers worked. As punishment for learning too much about how 
-computers worked, the computers punished us by becoming better than us at this task.
+computers worked, the computers become better than us at this task (and soon 
+everything).
 
 Auto-optimization is the process by which agents iteratively find improvements
 to a codebase which optimize a given performance measure (or set of such measures).
-This repository is a Claude Code skill that implements auto-optimization with all
-the quality-of-life features I always wished I had in the past, including:
+Almost all agentic systems can perform the core mechanics of auto-optimization via 
+simple looping without the need for a skill, but the details of the process and
+logging will change run-to-run. This repository implements auto-optimization with
+all of the quality-of-life features I always wished I had in the past to force
+more robust statistics, deterministic behavior, logging of each step, and pretty
+dashboards.
 
-- an interview at the beginning: the number to improve, what must not change and how strictly (bitwise, a tolerance, a correlation), and a budget in iterations, batches of ideas or hours
-- separation of "runs" from "iterations", where each "iteration" is an idea and multiple "runs" can be done to establish performance distributions; a change is kept only when its median beats its parent's by more than the noise band
-- a setup subagent that writes the benchmark and proves that each gate catches a planted fault before the baseline is measured
-- a unit-test gate run on every iteration, and an optional external validation, once a round, on inputs the search never measures, such as a complete processing step, to ensure no drift
-- observational measures that are also recorded each iteration but not used to decide (e.g., memory usage, first run compile time, timings on tiny or very large inputs)
-- an idea miner that reads the profile and writes ideas by category, one subagent per idea in its own git worktree, and each kept change becoming the root the next ideas build on
-- the winner timed against the baseline in alternating, separate processes at the end
-- a pretty interactive dashboard to monitor progress
-- repository mode: a copy of a git repository is searched, optionally after a new unit-test suite is written for it, and the original is never touched
-- shipping the winner into your files, as a branch, or as GitHub pull requests and a bug report that you review before anything is posted
-- clean logging, formatting, usage of git worktrees, and documentation at each step, with instructions for future agents to build on top of what I have built here
-- clean division of work done by subagents and work done by deterministic scripts, to give consistent and robust results
+Conceptually, there are many things you may wish to auto-optimize, with performance
+of a machine learning model being the most popular. Each thing has a slightly
+different shape and so will have a separate skill. Currently, this repository only
+ships with `auto-optimize-code`, which focuses on optimizing the speed and memory
+usage of code (including model inference!) subject to identical outputs or other
+reasonable relaxed gates. As a random note, I have found that Sonnet 5.5 is very
+good at this task and produced better outputs much faster than Opus 5.5 with xhigh
+thinking. This may depend on your setup though. More will be coming soon!
 
-**See a finished search before you install anything.** Two pages show the
-dashboard of the search in the walkthrough below, which made a one-hot
-encoder 1,070 times faster:
+An interesting thing about optimizing code speed in this way is that *overfitting
+is good!* Now, instead of having to produce a general-purpose implementation that
+works for everyone, regardless of compiler and hardware (including GPU), you can
+fit the software to your specific device. As long as the outputs are identical,
+using a different set of CUDA kernels or in-lined sets of functions is no
+problem.
 
-- [**The search's dashboard**](https://claude.ai/artifact/724GcNKDAktnrgNkGxwh2f):
-  the objective by iteration, the frontier, the search tree, every run, and
-  each iteration's code change and README, as the skill leaves them when a
-  search ends.
-- [**The same dashboard with its terms labeled**](https://claude.ai/artifact/S1nrSF1CSE3KLpZBEDxomB):
-  hover any part to see which term it shows (run, iteration, round, root,
-  frontier, noise band, …) and where else that term appears.
+This skill comes with hooks and comprehensive logging to enable you to extend it
+however you would like, including building an entirely new dashboard, integrating
+it with your code, adding in custom steps wherever you would like, and much more.
 
-Conceptually, there are many things that one may wish to auto-optimize. Each thing
-is shaped slightly differently, and so our approach will be to release skills for
-each kind of thing one can auto-optimize that perfectly fits that setting.
-
-(1) auto-optimize-code: the focus of this skill is optimizing the runtime and memory
-usage of code while keeping its outputs identical, or within a tolerance you set. Hence, things like unit tests, running
-small real examples at each iteration, and comparison of outputs at the byte-level
-are relevant. This can be run on functions in a code-base, command-line tools, or
-entire end-to-end algorithms or multi-step procedures.
-
-(More to come.)
+You are free to use the outputs of this process however you would like, including
+for commercial use, without requirements for attribution. However, finding a way 
+to support our work, even in small ways such as shout-outs, is always appreciated 
+so we can continue to do this in the future.
 
 Developed at the [Programmable Genomics Laboratory](https://programmable-genomics.github.io) @ UMass Chan Medical School.
 
@@ -122,6 +117,17 @@ Install it one way only: Claude Code loads every copy it finds, and two copies
 of one skill compete for the same requests. `auto-optimize list` shows them.
 
 ## A first search
+
+auto-optimize is build for two main use-cases: your code is in a Git
+repository that can accept pull requests, or it is just a stand-alone
+piece of code. In each case, the overall process is the same: write a
+prompt along the lines of "auto-optimize <this function or pipeline>",
+answer a series of interview questions, let the search run, and then ship
+the results. If you are working on a Git repository, shipping the results
+means opening a PR (or two PRs if you also had it write unit tests) as
+well as a bug report issue with everything that it found along the way.
+If you are working with an individual script, shipping means just applying
+the changes to a new copy of the code.
 
 The quickest test is the example in this repository, a correct and slow
 one-hot encoder:
@@ -512,16 +518,6 @@ remove `<work>`.
 | An error or a refusal | ask Claude: `references/symptoms.md` maps the skill's messages to their fixes |
 | A bug | open an issue with the output of `auto-optimize doctor` and `autoopt.py status <work> --brief`, and the message |
 
-## How it works
-
-`skills/auto-optimize-code/SKILL.md` is what Claude reads. It defines the
-words (a **run** is one seed, an **iteration** one idea measured over several
-runs, a **round** the iterations forked from one root), the rules that hold
-throughout, and routes each step to a file in `references/`. The scripts in
-`scripts/` keep every number: `run_iteration.py` measures an iteration and
-judges it against its gates and the noise band, and `autoopt.py` keeps the
-search tree, the briefs, the promotions and the records. Only a median the
-runner computed counts as a result; no agent types a number in.
 
 ## Changing what it does
 
@@ -545,14 +541,6 @@ environment variable and code hook, and where to edit the code when no
 setting fits: the idea categories, the words a pull request may not use, the
 dashboard's colors.
 
-## When it is the wrong tool
-
-- One measurement, not a search: timing a function once needs a benchmark
-  alone.
-- No measurable objective: if no script can emit it as a number, that comes
-  first.
-- Improving a model's accuracy or training recipe: this skill optimizes code,
-  with its outputs gated.
 
 ## Repository layout
 
