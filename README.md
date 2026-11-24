@@ -143,10 +143,7 @@ claude
 Then ask:
 
 > Use auto-optimize-code to make one_hot_encode in onehot.py faster on a 10
-> Mbp DNA sequence. Its output must stay bitwise identical.
-
-On your own code, ask in plain words: "Optimize `count_kmers` in `kmers.py`
-for speed. The output must stay identical."
+> Mbp DNA sequence. 
 
 The skill starts with an interview: what number to improve and in which
 direction, what must not change and how strictly (bitwise, a tolerance, a
@@ -185,28 +182,6 @@ first try give the interview a smaller budget, such as 4 or 5 iterations, and
 a smaller model for the iteration subagents, as the [shorter
 examples](#more-examples) do.
 
-### Before you leave it running
-
-A search is meant to go on without you once the interview is over. Three
-things decide whether it can:
-
-- **Tool permissions.** The subagents run `python3` and `git` commands and
-  write files in the search directory, which sits outside your project. Each
-  call your permission settings do not allow waits for your approval, and the
-  search waits with it. Approve them for the session as they come up, or allow
-  them ahead of time with `/permissions`, and add the search directory with
-  `/add-dir`.
-- **Unanswered questions.** The skill asks questions during setup and when a
-  result looks wrong. Claude Code's `askUserQuestionTimeout` setting
-  (`/config`, or `settings.json`: `60s`, `5m`, `10m` or `never`) lets an
-  unanswered question continue; the skill then takes the answer that does the
-  least damage if it is wrong and records it in `ideas.md`. The skill offers
-  this before a long search and does not change your settings itself.
-- **What runs on your machine.** The subagents write code and run it, and the
-  benchmark, as your user. The search never writes to your code (a
-  repository is copied first); only step 5 does, after you choose how and
-  approve a preview. Run a search only on code and inputs you trust, on a
-  machine where long CPU or GPU jobs are acceptable.
 
 ## Walkthrough: a one-hot encoder, 1,070 times faster
 
