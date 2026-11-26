@@ -13,11 +13,15 @@ everything).
 Auto-optimization is the process by which agents iteratively find improvements
 to a codebase which optimize a given performance measure (or set of such measures).
 Almost all agentic systems can perform the core mechanics of auto-optimization via 
-simple looping without the need for a skill, but the details of the process and
-logging will change run-to-run. This repository implements auto-optimization with
-all of the quality-of-life features I always wished I had in the past to force
-more robust statistics, deterministic behavior, logging of each step, and pretty
-dashboards.
+simple looping without the need for a skill, but the specifics of the process, the
+logging, and the monitoring, will change run to run. Accordingly, the majority of
+this skill is not about optimization itself, but everything surrounding that
+process, e.g., setting up a consistent file system and drafting a PR with the
+changes. This repository implements auto-optimization with all of the 
+quality-of-life features I always wished I had in the past to force robust statistics, 
+deterministic behavior, layout + logging + hooks, and pretty dashboards. These
+features also focus on making the skill extensible to work in whatever systems you
+already have in place, e.g., your own dashboards for monitoring processes.
 
 Conceptually, there are many things you may wish to auto-optimize, with performance
 of a machine learning model being the most popular. Each thing has a slightly
@@ -26,18 +30,14 @@ ships with `auto-optimize-code`, which focuses on optimizing the speed and memor
 usage of code (including model inference!) subject to identical outputs or other
 reasonable relaxed gates. As a random note, I have found that Sonnet 5.5 is very
 good at this task and produced better outputs much faster than Opus 5.5 with xhigh
-thinking. This may depend on your setup though. More will be coming soon!
+thinking. This may depend on your setup, though. More will be coming soon!
 
-An interesting thing about optimizing code speed in this way is that *overfitting
+An interesting note about optimizing code speed via auto-optimize is that *overfitting
 is good!* Now, instead of having to produce a general-purpose implementation that
-works for everyone, regardless of compiler and hardware (including GPU), you can
+works for everyone, regardless of compiler and hardware (including GPU type), you can
 fit the software to your specific device. As long as the outputs are identical,
-using a different set of CUDA kernels or in-lined sets of functions is no
-problem.
-
-This skill comes with hooks and comprehensive logging to enable you to extend it
-however you would like, including building an entirely new dashboard, integrating
-it with your code, adding in custom steps wherever you would like, and much more.
+using a different set of CUDA kernels optimized for your specific GPU, or inlined
+functions that work with your specific compiler, is no problem.
 
 You are free to use the outputs of this process however you would like, including
 for commercial use, without requirements for attribution. However, finding a way 
@@ -118,7 +118,7 @@ of one skill compete for the same requests. `auto-optimize list` shows them.
 
 ## A first search
 
-auto-optimize is build for two main use-cases: your code is in a Git
+auto-optimize is built for two main use-cases: your code is in a Git
 repository that can accept pull requests, or it is just a stand-alone
 piece of code. In each case, the overall process is the same: write a
 prompt along the lines of "auto-optimize <this function or pipeline>",
@@ -515,37 +515,6 @@ later with `autoopt.py config <work> --set KEY=VALUE --reason "…"`:
 environment variable and code hook, and where to edit the code when no
 setting fits: the idea categories, the words a pull request may not use, the
 dashboard's colors.
-
-
-## Repository layout
-
-```
-.claude-plugin/          the plugin manifest and its one-plugin marketplace
-skills/
-  auto-optimize-code/    the skill: SKILL.md, references/, scripts/, LICENSE, VERSION
-src/auto_optimize/       the installer (standard library only)
-tests/
-  code/                  the skill's script suites; dashboard/ holds the browser tests
-  package/               the installer and the shipped files (pytest)
-examples/                one-hot/, the walkthrough's slow function, and three shorter examples
-docs/walkthrough/        the walkthrough's screenshots, and the scripts that captured them
-docs/banner/             the banner above, and make_banner.py, which draws it
-```
-
-## Development
-
-```bash
-python3 tests/code/run_tests.py                  # every script suite, one line each (a few minutes)
-python3 tests/code/run_tests.py test_reading     # one suite
-uv run pytest                                    # the installer and the shipped files
-python3 tests/code/dashboard/test_frontend.py    # the dashboard in headless Chromium (needs playwright)
-python3 tests/code/dashboard/test_notebook.py    # the dashboard mounted in JupyterLab
-```
-
-`tests/code/dashboard/README.md` describes the dashboard's suites. The
-version is `__version__` in `src/auto_optimize/__init__.py`; the skill's
-`VERSION` file and both plugin manifests carry the same number, which
-`tests/package/test_skill_files.py` checks.
 
 ## License
 
